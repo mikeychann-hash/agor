@@ -1,9 +1,11 @@
 import { Task } from '../../types';
-import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, LoadingOutlined } from '@ant-design/icons';
+import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, LoadingOutlined, GithubOutlined, ToolOutlined, MessageOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Space, Tag, Typography, Tooltip, List, theme, Spin } from 'antd';
 
 const { Text } = Typography;
 const { useToken } = theme;
+
+const TRUNCATION_LENGTH = 120;
 
 interface TaskListItemProps {
   task: Task;
@@ -31,16 +33,16 @@ const TaskListItem = ({ task, onClick, compact = false }: TaskListItemProps) => 
   const messageCount = task.message_range.end_index - task.message_range.start_index + 1;
   const hasReport = !!task.report;
 
-  // Truncate description if too long
-  const MAX_LENGTH = 60;
-  const description = task.description || task.full_prompt || 'Untitled task';
-  const isTruncated = description.length > MAX_LENGTH;
-  const displayDescription = isTruncated
-    ? description.substring(0, MAX_LENGTH) + '...'
-    : description;
+  // Check if git state is dirty
+  const isDirty = task.git_state.sha_at_end?.endsWith('-dirty');
+  const cleanSha = task.git_state.sha_at_end?.replace('-dirty', '');
 
-  // Use full_prompt for tooltip if available, otherwise use description
-  const tooltipText = task.full_prompt || (isTruncated ? description : null);
+  // Truncate description if too long
+  const description = task.description || task.full_prompt || 'Untitled task';
+  const isTruncated = description.length > TRUNCATION_LENGTH;
+  const displayDescription = isTruncated
+    ? description.substring(0, TRUNCATION_LENGTH) + '...'
+    : description;
 
   return (
     <List.Item
@@ -54,33 +56,37 @@ const TaskListItem = ({ task, onClick, compact = false }: TaskListItemProps) => 
       <div style={{ width: '100%' }}>
         <div style={{ marginBottom: 4 }}>
           <Space size={8}>
-            {getStatusIcon()}
-            {tooltipText ? (
-              <Tooltip title={<div style={{ whiteSpace: 'pre-wrap' }}>{tooltipText}</div>}>
-                <Text style={{ fontSize: compact ? 13 : 14, fontWeight: 500 }}>{displayDescription}</Text>
-              </Tooltip>
-            ) : (
-              <Text style={{ fontSize: compact ? 13 : 14, fontWeight: 500 }}>{displayDescription}</Text>
-            )}
+            <Tooltip title={<div style={{ whiteSpace: 'pre-wrap' }}>{task.full_prompt}</div>}>
+              {getStatusIcon()}
+            </Tooltip>
+            <Text style={{ fontSize: compact ? 13 : 14, fontWeight: 500 }}>{displayDescription}</Text>
           </Space>
         </div>
 
         <div style={{ marginLeft: compact ? 20 : 24 }}>
           <Space size={4} wrap>
-            <Tag icon={<span>💬</span>} color="default">
-              {messageCount} {messageCount === 1 ? 'msg' : 'msgs'}
+            <Tag icon={<MessageOutlined />} color="default">
+              {messageCount}
+            </Tag>
+            <Tag icon={<ToolOutlined />} color="default">
+              {task.tool_use_count}
             </Tag>
             {hasReport && (
-              <Tag icon={<span>📄</span>} color="blue">
+              <Tag icon={<FileTextOutlined />} color="blue">
                 report
               </Tag>
             )}
-            {!compact && task.git_state.sha_at_end && task.git_state.sha_at_start !== task.git_state.sha_at_end && (
-              <Tag color="purple">
-                <Text style={{ fontSize: 11, fontFamily: 'monospace' }}>
-                  {task.git_state.sha_at_start.substring(0, 7)} → {task.git_state.sha_at_end.substring(0, 7)}
-                </Text>
-              </Tag>
+            {!compact && cleanSha && (
+              <Tooltip title={isDirty ? 'Uncommitted changes' : 'Clean git state'}>
+                <Tag icon={<GithubOutlined />} color={isDirty ? 'orange' : 'purple'}>
+                  <Space size={4}>
+                    <Text style={{ fontSize: 11, fontFamily: 'monospace' }}>
+                      {cleanSha.substring(0, 7)}
+                    </Text>
+                    {isDirty && <EditOutlined style={{ fontSize: 10 }} />}
+                  </Space>
+                </Tag>
+              </Tooltip>
             )}
           </Space>
         </div>

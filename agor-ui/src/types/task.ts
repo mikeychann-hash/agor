@@ -4,9 +4,8 @@ export type TaskStatus = 'created' | 'running' | 'completed' | 'failed';
 export interface Task {
   task_id: string;
   session_id: string;
-  description: string; // Short summary or auto-generated title
-  full_prompt?: string; // Original user prompt (can be multi-line)
-  auto_generated_title?: boolean; // True if description was LLM-generated
+  full_prompt: string; // Original user prompt (can be multi-line)
+  description?: string; // Optional: LLM-generated short summary
   status: TaskStatus;
 
   // Message range
@@ -16,6 +15,9 @@ export interface Task {
     start_timestamp: string;
     end_timestamp?: string;
   };
+
+  // Tool usage
+  tool_use_count: number;
 
   // Git state
   git_state: {

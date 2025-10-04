@@ -37,6 +37,7 @@ export interface Session {
   // Tasks
   tasks: string[];
   message_count: number;
+  tool_use_count: number;
 
   // UI metadata
   description?: string;

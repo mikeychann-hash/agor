@@ -18,8 +18,8 @@ import './SessionCanvas.css';
 interface SessionCanvasProps {
   sessions: Session[];
   tasks: Record<string, Task[]>;
-  onSessionSelect?: (sessionId: string) => void;
-  onTaskSelect?: (taskId: string) => void;
+  onSessionClick?: (sessionId: string) => void;
+  onTaskClick?: (taskId: string) => void;
 }
 
 interface SessionNodeData {
@@ -52,8 +52,8 @@ const nodeTypes = {
 const SessionCanvas = ({
   sessions,
   tasks,
-  onSessionSelect,
-  onTaskSelect,
+  onSessionClick,
+  onTaskClick,
 }: SessionCanvasProps) => {
   // Convert sessions to React Flow nodes
   const initialNodes: Node[] = useMemo(() => {
@@ -100,13 +100,13 @@ const SessionCanvas = ({
         data: {
           session,
           tasks: tasks[session.session_id] || [],
-          onTaskClick: onTaskSelect,
-          onSessionClick: () => onSessionSelect?.(session.session_id),
+          onTaskClick,
+          onSessionClick: () => onSessionClick?.(session.session_id),
           compact: false,
         },
       };
     });
-  }, [sessions, tasks, onSessionSelect, onTaskSelect]);
+  }, [sessions, tasks, onSessionClick, onTaskClick]);
 
   // Convert session relationships to React Flow edges
   const initialEdges: Edge[] = useMemo(() => {
@@ -158,9 +158,9 @@ const SessionCanvas = ({
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      onSessionSelect?.(node.id);
+      onSessionClick?.(node.id);
     },
-    [onSessionSelect]
+    [onSessionClick]
   );
 
   return (

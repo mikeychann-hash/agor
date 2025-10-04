@@ -1,6 +1,6 @@
 import { Session, Task } from '../../types';
 import { Drawer, Typography, Space, Badge, Tag, Divider, Timeline } from 'antd';
-import { BranchesOutlined, ForkOutlined, ClockCircleOutlined, CodeOutlined, FileTextOutlined } from '@ant-design/icons';
+import { BranchesOutlined, ForkOutlined, ClockCircleOutlined, CodeOutlined, FileTextOutlined, GithubOutlined, ToolOutlined, MessageOutlined, EditOutlined } from '@ant-design/icons';
 import './SessionDrawer.css';
 
 const { Title, Text, Paragraph } = Typography;
@@ -70,6 +70,10 @@ const SessionDrawer = ({ session, tasks, open, onClose }: SessionDrawerProps) =>
   const isForked = !!session.genealogy.forked_from_session_id;
   const isSpawned = !!session.genealogy.parent_session_id;
 
+  // Check if git state is dirty
+  const isDirty = session.git_state.current_sha.endsWith('-dirty');
+  const cleanSha = session.git_state.current_sha.replace('-dirty', '');
+
   return (
     <Drawer
       title={
@@ -127,7 +131,12 @@ const SessionDrawer = ({ session, tasks, open, onClose }: SessionDrawerProps) =>
             Base SHA: <Text code>{session.git_state.base_sha}</Text>
           </Text>
           <Text>
-            Current SHA: <Text code>{session.git_state.current_sha}</Text>
+            Current SHA: <Text code>{cleanSha}</Text>
+            {isDirty && (
+              <Tag icon={<EditOutlined />} color="orange" style={{ marginLeft: 8 }}>
+                uncommitted changes
+              </Tag>
+            )}
           </Text>
         </Space>
       </div>
@@ -177,45 +186,40 @@ const SessionDrawer = ({ session, tasks, open, onClose }: SessionDrawerProps) =>
                 <div className="task-timeline-header">
                   <Space size={8}>
                     <span className="task-status-icon">{getTaskStatusIcon(task.status)}</span>
-                    <Text strong>{task.description}</Text>
-                    {task.auto_generated_title && (
-                      <Tag color="purple" style={{ fontSize: 10 }}>AUTO</Tag>
-                    )}
+                    <Text strong>{task.description || 'User Prompt'}</Text>
                   </Space>
                 </div>
 
-                {task.full_prompt && (
-                  <div className="task-full-prompt">
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      Full prompt:
-                    </Text>
-                    <Paragraph
-                      ellipsis={{ rows: 3, expandable: true, symbol: 'show more' }}
-                      style={{
-                        marginTop: 4,
-                        padding: 8,
-                        background: 'rgba(0, 0, 0, 0.02)',
-                        borderRadius: 4,
-                        fontSize: 13,
-                        fontFamily: 'monospace',
-                        whiteSpace: 'pre-wrap'
-                      }}
-                    >
-                      {task.full_prompt}
-                    </Paragraph>
-                  </div>
-                )}
+                <div className="task-full-prompt">
+                  <Paragraph
+                    ellipsis={{ rows: 3, expandable: true, symbol: 'show more' }}
+                    style={{
+                      marginTop: 4,
+                      padding: 8,
+                      background: 'rgba(0, 0, 0, 0.02)',
+                      borderRadius: 4,
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                      whiteSpace: 'pre-wrap'
+                    }}
+                  >
+                    {task.full_prompt}
+                  </Paragraph>
+                </div>
 
                 <Space size={16} style={{ marginTop: 8 }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    💬 {task.message_range.end_index - task.message_range.start_index + 1} messages
+                    <MessageOutlined /> {task.message_range.end_index - task.message_range.start_index + 1}
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    <ToolOutlined /> {task.tool_use_count}
                   </Text>
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     🤖 {task.model}
                   </Text>
                   {task.git_state.sha_at_end && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      📝 {task.git_state.sha_at_start.substring(0, 7)} → {task.git_state.sha_at_end.substring(0, 7)}
+                      <GithubOutlined /> {task.git_state.sha_at_end.substring(0, 7)}
                     </Text>
                   )}
                   {task.report && (
@@ -257,6 +261,10 @@ const SessionDrawer = ({ session, tasks, open, onClose }: SessionDrawerProps) =>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Text type="secondary">Total Messages:</Text>
             <Text>{session.message_count}</Text>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Text type="secondary">Tool Uses:</Text>
+            <Text>{session.tool_use_count}</Text>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Text type="secondary">Created:</Text>

@@ -1,1 +1,1 @@
-export { default } from './SessionCanvas';
+export { default as SessionCanvas } from './SessionCanvas';

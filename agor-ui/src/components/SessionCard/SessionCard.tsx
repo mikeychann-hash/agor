@@ -1,26 +1,27 @@
-import { Session, Task, SessionViewMode } from '../../types';
-import { Card, Badge, Tag, Space, Typography, Divider, Button } from 'antd';
+import { Session, Task } from '../../types';
+import { Collapse, Badge, Tag, Space, Typography, Button, Spin, theme } from 'antd';
 import {
   BranchesOutlined,
   ForkOutlined,
   PlusCircleOutlined,
   ExpandOutlined,
-  ShrinkOutlined
+  LoadingOutlined,
+  EditOutlined
 } from '@ant-design/icons';
 import TaskListItem from '../TaskListItem';
-import SessionHeader from '../SessionHeader';
 import './SessionCard.css';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
+const { useToken } = theme;
+
+const SESSION_CARD_MAX_WIDTH = 480;
 
 interface SessionCardProps {
   session: Session;
   tasks: Task[];
   onTaskClick?: (taskId: string) => void;
   onSessionClick?: () => void;
-  viewMode?: SessionViewMode;
-  onViewModeChange?: (mode: SessionViewMode) => void;
-  compact?: boolean; // Deprecated: use viewMode='collapsed' instead
+  defaultExpanded?: boolean;
 }
 
 const SessionCard = ({
@@ -28,12 +29,9 @@ const SessionCard = ({
   tasks,
   onTaskClick,
   onSessionClick,
-  viewMode = 'expanded',
-  onViewModeChange,
-  compact = false
+  defaultExpanded = true
 }: SessionCardProps) => {
-  // Support legacy compact prop
-  const actualViewMode = compact ? 'collapsed' : viewMode;
+  const { token } = useToken();
 
   const getAgentIcon = () => {
     const agentIcons: Record<string, string> = {
@@ -45,45 +43,81 @@ const SessionCard = ({
     return agentIcons[session.agent] || '🤖';
   };
 
-  // Collapsed view: use SessionHeader component
-  if (actualViewMode === 'collapsed') {
-    return (
-      <Card
-        className="session-card session-card-collapsed"
-        onClick={onSessionClick}
-        hoverable={!!onSessionClick}
-      >
-        <SessionHeader
-          session={session}
-          onClick={onViewModeChange ? () => onViewModeChange('expanded') : undefined}
-        />
-      </Card>
-    );
-  }
-
-  // Expanded view: show tasks
-  // Prioritize showing running tasks, then most recent
-  const runningTasks = tasks.filter(t => t.status === 'running');
-  const otherTasks = tasks.filter(t => t.status !== 'running');
-  const recentTasks = otherTasks.slice(-10 + runningTasks.length);
-  const visibleTasks = [...runningTasks, ...recentTasks].slice(-10);
+  // Show last 5 tasks (oldest to newest)
+  const visibleTasks = tasks.slice(-5);
   const hiddenTaskCount = tasks.length - visibleTasks.length;
 
   const isForked = !!session.genealogy.forked_from_session_id;
   const isSpawned = !!session.genealogy.parent_session_id;
 
+  // Check if git state is dirty
+  const isDirty = session.git_state.current_sha.endsWith('-dirty');
+  const cleanSha = session.git_state.current_sha.replace('-dirty', '');
+
+  // Task list collapse header (just the "Tasks" label)
+  const taskListHeader = (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+      <Text strong>Tasks</Text>
+      {tasks.length > 5 && (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          (showing latest 5 of {tasks.length})
+        </Text>
+      )}
+    </div>
+  );
+
+  // Task list content (collapsible)
+  const taskListContent = (
+    <div>
+      {hiddenTaskCount > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <Button
+            type="text"
+            icon={<PlusCircleOutlined />}
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSessionClick?.();
+            }}
+          >
+            See {hiddenTaskCount} more {hiddenTaskCount === 1 ? 'task' : 'tasks'}
+          </Button>
+        </div>
+      )}
+
+      {visibleTasks.map((task) => (
+        <TaskListItem
+          key={task.task_id}
+          task={task}
+          onClick={() => onTaskClick?.(task.task_id)}
+        />
+      ))}
+    </div>
+  );
+
   return (
-    <Card
-      className="session-card session-card-expanded"
-      onClick={onSessionClick}
-      hoverable={!!onSessionClick}
+    <div
+      style={{
+        background: token.colorBgContainer,
+        borderRadius: token.borderRadiusLG,
+        border: `1px solid ${token.colorBorder}`,
+        padding: 16,
+        maxWidth: SESSION_CARD_MAX_WIDTH,
+      }}
     >
-      {/* Header with view controls */}
-      <div className="session-header">
+      {/* Session header - always visible */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <Space size={8} align="center">
           <span style={{ fontSize: 20 }}>{getAgentIcon()}</span>
           <Text strong>{session.agent}</Text>
-          <Badge status={session.status === 'running' ? 'processing' : session.status === 'completed' ? 'success' : session.status === 'failed' ? 'error' : 'default'} text={session.status.toUpperCase()} />
+          {session.status === 'running' ? (
+            <Spin indicator={<LoadingOutlined spin style={{ fontSize: 14 }} />} />
+          ) : (
+            <Badge
+              status={session.status === 'completed' ? 'success' : session.status === 'failed' ? 'error' : 'default'}
+              text={session.status.toUpperCase()}
+            />
+          )}
         </Space>
 
         <Space size={4}>
@@ -97,50 +131,42 @@ const SessionCard = ({
               SPAWN
             </Tag>
           )}
-          {onViewModeChange && (
-            <>
-              <Button
-                type="text"
-                size="small"
-                icon={<ShrinkOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewModeChange('collapsed');
-                }}
-                title="Collapse"
-              />
-              <Button
-                type="text"
-                size="small"
-                icon={<ExpandOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewModeChange('drawer');
-                }}
-                title="Open in drawer"
-              />
-            </>
+          {onSessionClick && (
+            <Button
+              type="text"
+              size="small"
+              icon={<ExpandOutlined />}
+              onClick={onSessionClick}
+              title="Open in drawer"
+            />
           )}
         </Space>
       </div>
 
-      {/* Description */}
+      {/* Description - always visible */}
       {session.description && (
-        <Title level={5} className="session-description">
+        <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 8 }}>
           {session.description}
-        </Title>
+        </Text>
       )}
 
-      {/* Git State */}
-      <div className="git-state">
-        <Text type="secondary">
-          📍 {session.git_state.ref} @ {session.git_state.current_sha.substring(0, 7)}
-        </Text>
+      {/* Git State - always visible */}
+      <div style={{ marginBottom: 8 }}>
+        <Space size={4}>
+          <Text type="secondary">
+            📍 {session.git_state.ref} @ {cleanSha.substring(0, 7)}
+          </Text>
+          {isDirty && (
+            <Tag icon={<EditOutlined />} color="orange" style={{ fontSize: 11 }}>
+              uncommitted
+            </Tag>
+          )}
+        </Space>
       </div>
 
-      {/* Concepts */}
+      {/* Concepts - always visible */}
       {session.concepts.length > 0 && (
-        <div className="concepts">
+        <div style={{ marginBottom: 12 }}>
           <Space size={4} wrap>
             <Text type="secondary">📦</Text>
             {session.concepts.map((concept) => (
@@ -152,53 +178,27 @@ const SessionCard = ({
         </div>
       )}
 
-      <Divider style={{ margin: '12px 0' }} />
+      {/* Tasks - collapsible */}
+      <Collapse
+        defaultActiveKey={defaultExpanded ? ['tasks'] : []}
+        items={[
+          {
+            key: 'tasks',
+            label: taskListHeader,
+            children: taskListContent,
+          },
+        ]}
+        ghost
+        style={{ marginTop: 8 }}
+      />
 
-      {/* Tasks */}
-      <div className="tasks-section">
-        <div className="tasks-header">
-          <Text strong>Tasks</Text>
-          {tasks.length > 10 && (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              (showing latest 10 of {tasks.length})
-            </Text>
-          )}
-        </div>
-
-        <div className="tasks-list">
-          {visibleTasks.map((task) => (
-            <TaskListItem
-              key={task.task_id}
-              task={task}
-              onClick={() => onTaskClick?.(task.task_id)}
-            />
-          ))}
-
-          {hiddenTaskCount > 0 && (
-            <div className="more-tasks">
-              <Button
-                type="text"
-                icon={<PlusCircleOutlined />}
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewModeChange?.('drawer');
-                }}
-              >
-                {hiddenTaskCount} more {hiddenTaskCount === 1 ? 'task' : 'tasks'}
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Footer metadata */}
-      <div className="session-footer">
+      {/* Footer metadata - always visible */}
+      <div style={{ marginTop: 12 }}>
         <Text type="secondary" style={{ fontSize: 12 }}>
           💬 {session.message_count} messages
         </Text>
       </div>
-    </Card>
+    </div>
   );
 };
 

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import TaskListItem from './TaskListItem';
-import { mockTask001, mockTask002, mockTask004, mockTasksPending, mockTaskLongPrompt } from '../../mocks/tasks';
+import { mockTask001, mockTask002, mockTask004, mockTask005, mockTaskLongPrompt, mockTaskWithSummary001 } from '../../mocks/tasks';
 
 const meta = {
   title: 'Components/TaskListItem',
@@ -28,7 +28,7 @@ export const Running: Story = {
 
 export const Pending: Story = {
   args: {
-    task: mockTasksPending,
+    task: mockTask005,
   },
 };
 
@@ -62,5 +62,11 @@ export const LongPromptCompact: Story = {
   args: {
     task: mockTaskLongPrompt,
     compact: true,
+  },
+};
+
+export const WithAISummary: Story = {
+  args: {
+    task: mockTaskWithSummary001,
   },
 };

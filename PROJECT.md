@@ -510,102 +510,279 @@ export const mockSessionTree = [mockSessionA, mockSessionB, ...];
 
 ---
 
-## Progress Update (October 2025)
+## Implementation Status (January 2025)
 
-### Completed
-- ✅ Full TypeScript type system (Session, Task, Concept)
-- ✅ TaskListItem component with smart truncation (60 chars)
-- ✅ SessionCard component showing inline task list
-- ✅ SessionCanvas with React Flow for tree visualization
-- ✅ Dark/Light theme toggle in Storybook
-- ✅ Comprehensive mock data including long user prompts
-- ✅ Unit tests with Vitest + React Testing Library
-- ✅ Background colors using Ant Design tokens
+### Core Components Completed
+- ✅ **SessionHeader** - Collapsed view for canvas overview with task/message/tool counts
+- ✅ **SessionCard** - Expanded view with inline task list (shows latest 10, prioritizes running tasks)
+- ✅ **SessionDrawer** - Full session detail drawer with task timeline
+- ✅ **TaskListItem** - Compact task rows with truncation (120 chars) and metadata badges
+- ✅ **SessionCanvas** - React Flow-based infinite canvas for session trees
 
-### Key Decisions Made
-1. **Task Description Strategy**: Added `full_prompt` field to Task type to store original user input, while `description` is truncated/summarized
-2. **Theme System**: Implemented Ant Design's ConfigProvider with dark/light algorithm toggle
-3. **Truncation**: 60-character limit with tooltip showing full prompt on hover
-4. **Testing**: All components render correctly, types work in Vitest (Storybook module resolution issue noted)
+### Type System
+- ✅ **Task**: `full_prompt` (required), `description` (optional for AI summaries), `tool_use_count`
+- ✅ **Session**: Added `tool_use_count` for aggregate metrics
+- ✅ **Three view modes**: `collapsed | expanded | drawer`
+
+### Theming & UI Standards
+- ✅ **Strict Ant Design usage** - No custom CSS, only Ant Design components/props/tokens
+- ✅ **Dark mode by default** - ConfigProvider with theme.darkAlgorithm
+- ✅ **Icon consistency** - MessageOutlined, ToolOutlined, GithubOutlined instead of emojis
+- ✅ **Tooltip strategy** - Full prompt tooltip on status icon hover (not on text)
+
+### Mock Data Strategy
+- **Default tasks**: Use `full_prompt` only (realistic - no AI summaries available)
+- **Future ideal**: `mockTaskWithSummary001/002` demonstrate AI-generated descriptions
+- **18+ realistic user prompts**: Multi-line, conversational, representative of real usage
+- **Tool counts**: All tasks/sessions include `tool_use_count` for metrics
+
+### Key Design Decisions
+1. **No custom CSS files** - Removed index.css, rely entirely on Ant Design theming
+2. **Status icon tooltip** - User hovers status icon to see full prompt (less visual clutter)
+3. **Truncation length** - Increased from 60 to 120 chars (const `TRUNCATION_LENGTH`)
+4. **Task display** - Show last 5 tasks chronologically (oldest → newest), "See more" button at top
+5. **Separator consistency** - Use Ant Design Divider component throughout
+6. **Collapsible sessions** - SessionCard uses Ant Design Collapse for task list only (header/metadata always visible)
+7. **Card width** - `SESSION_CARD_MAX_WIDTH = 480` for consistent, readable cards
+8. **Git SHA display** - Show only current SHA (e.g., `abc3214`), not transition arrows (follows `git describe` conventions)
+
+### Storybook Coverage
+- TaskListItem: 8 stories (including WithAISummary for future state)
+- SessionCard: Multiple stories (collapsed, expanded, with drawer, many tasks)
+- SessionHeader: Multiple states (running, completed, forked, spawned)
+- SessionDrawer: Full integration demos
+
+### Recent Updates (Latest Session)
+- ✅ Added tool counts (`tool_use_count`) to Task and Session types
+- ✅ Replaced emojis with Ant Design icons (MessageOutlined, ToolOutlined, GithubOutlined)
+- ✅ Refactored SessionCard to use Collapse component (only task list collapses)
+- ✅ Reduced visible tasks from 10 to 5, "See more" button moved to top
+- ✅ Simplified git SHA display (removed transition arrows, show only end SHA)
+- ✅ Added max width constant for SessionCard (480px)
+
+### Next: App-Level Components
+
+#### 1. NewSessionButton Component
+**Purpose**: Floating action button to create new sessions
+
+**Layout:**
+```
+┌─────────────────────────────────────┐
+│                                  ⊕  │  ← Top-right corner overlay
+│                                     │
+│         Canvas Area                 │
+│                                     │
+└─────────────────────────────────────┘
+```
+
+**Features:**
+- Large round button (FloatButton from Ant Design)
+- Fixed position: top-right corner of canvas
+- Icon: PlusOutlined or RobotOutlined
+- onClick: Opens NewSessionModal
+
+**Props:**
+```typescript
+interface NewSessionButtonProps {
+  onCreateSession?: () => void;
+}
+```
 
 ---
 
-## Next Steps: Multi-View Session System
+#### 2. NewSessionModal Component
+**Purpose**: Form to configure and start a new coding session
 
-### Real-World User Prompts
-Current mocks use clean titles like "Design JWT flow". Reality: user prompts are long and conversational (10+ lines). Need representative mock data:
-
-```typescript
-// Example real prompt
-full_prompt: `wow, very cool. Now what I call Task is really "user prompt",
-I know in claude code, at times after a user prompt the agent will label
-what it's doing based on that prompt, though I doubt the SDK would expose
-that for us to use, so most likely we'd need to either have a way to
-summarize the user prompt (through an LLM)...`
-
-description: "Improve task display and session views" // LLM-generated or manual
+**Layout:**
+```
+┌─────────────────────────────────────────────┐
+│  Create New Session                    ✕    │
+├─────────────────────────────────────────────┤
+│                                             │
+│  Select Coding Agent                        │
+│  ┌─────────────────────────────────────┐   │
+│  │ ● Claude Code (installed)           │   │ ← Radio/Card selection
+│  │   Latest version: 1.2.3             │   │
+│  └─────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────┐   │
+│  │ ● Codex (installed)                 │   │
+│  │   Latest version: 0.5.1             │   │
+│  └─────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────┐   │
+│  │ ○ Cursor (not installed)      [+]  │   │ ← Install option
+│  └─────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────┐   │
+│  │ ○ Gemini (not installed)      [+]  │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Initial Prompt (optional)                  │
+│  ┌─────────────────────────────────────┐   │
+│  │ What should this session work on?   │   │ ← TextArea
+│  │                                     │   │
+│  │                                     │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Advanced Options                      ▼    │ ← Collapsible
+│                                             │
+│           [Cancel]  [Create Session]        │
+└─────────────────────────────────────────────┘
 ```
 
-### Three View Modes for Sessions
+**Features:**
+- **Agent selection**: Radio cards showing installed vs available agents
+- **Install button**: For non-installed agents, triggers installation flow
+- **Initial prompt**: Optional TextArea for starting task
+- **Advanced options** (collapsed):
+  - Git branch to use
+  - Worktree management
+  - Model selection (if agent supports multiple)
+- **Validation**: Require agent selection
+- **onCreate callback**: Returns selected agent + config
 
-#### Mode 1: Collapsed (Canvas Overview)
-**Component**: `SessionHeader` (new)
-- Session title
-- Agent icon + type
-- Task count (e.g., "5 tasks")
-- Message count (e.g., "47 msgs")
-- Status badge
-- **Purpose**: Dense canvas view showing many sessions at once
+**Props:**
+```typescript
+interface Agent {
+  id: string;
+  name: string;
+  icon: string;
+  installed: boolean;
+  version?: string;
+  description?: string;
+}
 
-#### Mode 2: Expanded with Task List (Current)
-**Component**: `SessionCard` (current implementation)
-- Full SessionHeader
-- Scrollable task list (latest 10 tasks)
-- Each task shows: truncated user prompt (60 chars), status icon, metadata
-- "Show more" to expand full task list
-- **Purpose**: Medium detail, ~1/6 screen width panel
+interface NewSessionModalProps {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (config: {
+    agent: string;
+    initialPrompt?: string;
+    gitBranch?: string;
+    createWorktree?: boolean;
+  }) => void;
+  availableAgents: Agent[];
+}
+```
 
-#### Mode 3: Full Session Detail (Future)
-**Component**: `SessionDrawer` (new) + X Ant Design Conversations
-- Right-side Drawer (Ant Design)
-- Full conversation view using [@ant-design/x Conversations](https://x.ant.design/components/conversations)
-- Shows complete message history, tool calls, code diffs
-- Task boundaries visible
-- **Purpose**: Deep dive into session, full screen experience
+**Agent Installation Flow:**
+- Click `[+]` button next to non-installed agent
+- Shows installation modal/drawer with progress
+- Uses Ant Design Steps component to show install progress
+- On completion, updates agent to `installed: true`
 
-### Implementation Plan
+**Storybook Stories:**
+- Default view (2 installed, 2 not installed)
+- All agents installed
+- No agents installed
+- With initial prompt pre-filled
+- Advanced options expanded
 
-1. **Create SessionHeader Component**
-   - Extract header logic from SessionCard
-   - Standalone collapsed view
-   - Click to expand/open drawer
+---
 
-2. **Add View Mode State**
-   - `collapsed | expanded | drawer` modes
-   - Toggle controls on SessionCard
-   - Wire up click handlers
+#### 3. App Component (Main Canvas View)
+**Purpose**: Top-level component orchestrating canvas + UI controls
 
-3. **Build SessionDrawer Component**
-   - Use Ant Design Drawer component
-   - Integrate X Ant Design Conversations for rich message display
-   - Show full task history with message threads
+**Layout:**
+```
+┌───────────────────────────────────────────────┐
+│  Agor                              [≡] [⚙]   │ ← Header
+├───────────────────────────────────────────────┤
+│                                            ⊕  │ ← NewSessionButton
+│   ┌─────────┐                                │
+│   │Session A│                                │
+│   │ ├─ ✓ Task 1                             │
+│   │ ├─ ⚡ Task 2                             │
+│   │ └─ ○ Task 3                             │
+│   └─────────┘                                │
+│        ↓ fork                                │
+│   ┌─────────┐    ┌─────────┐                │
+│   │Session B│    │Session C│                │
+│   └─────────┘    └─────────┘                │
+│                                              │
+│              Canvas Area                     │
+│          (SessionCanvas component)           │
+│                                              │
+└───────────────────────────────────────────────┘
+```
 
-4. **Enhanced Mock Data**
-   - Create realistic user prompts (multi-line, conversational)
-   - Add more tasks per session (15-20) to test scrolling
-   - Mock message history for drawer view
+**Features:**
+- Header with app title, menu, settings
+- SessionCanvas taking full viewport
+- NewSessionButton as overlay
+- NewSessionModal (controlled by state)
 
-5. **LLM Summarization (Future)**
-   - API design for auto-generating task titles
-   - `auto_generated_title: true` flag in Task type (already added)
-   - User can manually edit summaries
-   - Document but don't implement yet
+**State Management:**
+- Sessions list
+- Active session (for drawer)
+- Modal open/closed
+- Selected agents/tasks
+
+---
+
+### Implementation Priority
+
+1. **NewSessionButton** - Simple FloatButton wrapper (30 min)
+2. **NewSessionModal** - Form with agent selection (2-3 hours)
+3. **Mock agent data** - Available agents list (30 min)
+4. **App component** - Wire everything together (1-2 hours)
+5. **Agent installation flow** - Modal with Steps component (2 hours)
 
 ### Technical Notes
-- Use Ant Design Drawer for full session view
-- SessionHeader should be reusable across all view modes
-- Canvas needs click handler to switch between modes
-- Consider state management for active session/view mode (local state for now)
+- Use Ant Design FloatButton for new session button
+- Use Modal + Form components for session creation
+- Radio.Group with Card layout for agent selection
+- Consider using Ant Design Steps for installation progress
+- Mock the agent installation API (async function returning Promise)
+
+### Mock Data Needed
+```typescript
+// src/mocks/agents.ts
+export interface Agent {
+  id: string;
+  name: 'claude-code' | 'cursor' | 'codex' | 'gemini';
+  icon: string;
+  installed: boolean;
+  version?: string;
+  description?: string;
+  installable: boolean; // Can Agor install this?
+}
+
+export const mockAgents: Agent[] = [
+  {
+    id: 'claude-code',
+    name: 'claude-code',
+    icon: '🤖',
+    installed: true,
+    version: '1.2.3',
+    description: 'Anthropic Claude Code agent',
+    installable: true,
+  },
+  {
+    id: 'codex',
+    name: 'codex',
+    icon: '💻',
+    installed: true,
+    version: '0.5.1',
+    description: 'OpenAI Codex agent',
+    installable: true,
+  },
+  {
+    id: 'cursor',
+    name: 'cursor',
+    icon: '✏️',
+    installed: false,
+    description: 'Cursor AI agent',
+    installable: true,
+  },
+  {
+    id: 'gemini',
+    name: 'gemini',
+    icon: '💎',
+    installed: false,
+    description: 'Google Gemini agent',
+    installable: true,
+  },
+];
+```
 
 ---
 

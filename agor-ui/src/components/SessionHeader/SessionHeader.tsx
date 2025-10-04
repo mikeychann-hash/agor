@@ -1,6 +1,6 @@
 import { Session } from '../../types';
-import { Badge, Tag, Space, Typography } from 'antd';
-import { BranchesOutlined, ForkOutlined } from '@ant-design/icons';
+import { Badge, Tag, Space, Typography, Spin } from 'antd';
+import { BranchesOutlined, ForkOutlined, LoadingOutlined, ToolOutlined, MessageOutlined } from '@ant-design/icons';
 import './SessionHeader.css';
 
 const { Text } = Typography;
@@ -45,7 +45,11 @@ const SessionHeader = ({ session, onClick, showCounts = true }: SessionHeaderPro
         <Space size={8} align="center">
           <span className="agent-icon">{getAgentIcon()}</span>
           <Text strong className="agent-name">{session.agent}</Text>
-          <Badge status={getStatusColor()} text={session.status.toUpperCase()} />
+          {session.status === 'running' ? (
+            <Spin indicator={<LoadingOutlined spin style={{ fontSize: 12 }} />} />
+          ) : (
+            <Badge status={getStatusColor()} text={session.status.toUpperCase()} />
+          )}
         </Space>
 
         <Space size={4}>
@@ -71,10 +75,13 @@ const SessionHeader = ({ session, onClick, showCounts = true }: SessionHeaderPro
       {showCounts && (
         <Space size={12} className="session-counts">
           <Text type="secondary" className="count-item">
-            📋 {session.tasks.length} {session.tasks.length === 1 ? 'task' : 'tasks'}
+            📋 {session.tasks.length}
           </Text>
           <Text type="secondary" className="count-item">
-            💬 {session.message_count} {session.message_count === 1 ? 'msg' : 'msgs'}
+            <MessageOutlined /> {session.message_count}
+          </Text>
+          <Text type="secondary" className="count-item">
+            <ToolOutlined /> {session.tool_use_count}
           </Text>
         </Space>
       )}

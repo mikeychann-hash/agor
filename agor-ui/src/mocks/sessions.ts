@@ -12,7 +12,7 @@ export const mockSessionA: Session = {
   git_state: {
     ref: 'feature/auth',
     base_sha: 'a4f2e91',
-    current_sha: 'b3e4d12',
+    current_sha: 'b3e4d12-dirty',
   },
   worktree: {
     path: '../my-project-auth',
@@ -24,6 +24,7 @@ export const mockSessionA: Session = {
   },
   tasks: ['task-001', 'task-002', 'task-005'],
   message_count: 37,
+  tool_use_count: 145,
 };
 
 // Fork example
@@ -52,6 +53,7 @@ export const mockSessionB: Session = {
   },
   tasks: ['task-003'],
   message_count: 15,
+  tool_use_count: 56,
 };
 
 // Spawn example
@@ -76,6 +78,7 @@ export const mockSessionC: Session = {
   },
   tasks: ['task-004'],
   message_count: 10,
+  tool_use_count: 42,
 };
 
 // Full session tree
