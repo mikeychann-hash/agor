@@ -110,7 +110,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
       throw new AmbiguousIdError(
         'Session',
         id,
-        results.map(r => formatShortId(r.session_id))
+        results.map((r) => formatShortId(r.session_id))
       );
     }
 
@@ -174,7 +174,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
   async findAll(): Promise<Session[]> {
     try {
       const rows = await this.db.select().from(sessions).all();
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find all sessions: ${error instanceof Error ? error.message : String(error)}`,
@@ -190,7 +190,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
     try {
       const rows = await this.db.select().from(sessions).where(eq(sessions.status, status)).all();
 
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find sessions by status: ${error instanceof Error ? error.message : String(error)}`,
@@ -210,7 +210,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
 
       // For now, return all sessions (board filtering will be done at service layer)
       // TODO: Add board_id as materialized column if frequently filtered
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find sessions by board: ${error instanceof Error ? error.message : String(error)}`,
@@ -238,7 +238,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
         )
         .all();
 
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find child sessions: ${error instanceof Error ? error.message : String(error)}`,
@@ -354,10 +354,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
    */
   async count(): Promise<number> {
     try {
-      const result = await this.db
-        .select({ count: sql<number>`count(*)` })
-        .from(sessions)
-        .get();
+      const result = await this.db.select({ count: sql<number>`count(*)` }).from(sessions).get();
 
       return result?.count ?? 0;
     } catch (error) {

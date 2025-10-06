@@ -60,7 +60,7 @@ const SessionCanvas = ({ sessions, tasks, onSessionClick, onTaskClick }: Session
 
     // First pass: identify root sessions (no parent, no forked_from)
     const rootSessions = sessions.filter(
-      s => !s.genealogy.parent_session_id && !s.genealogy.forked_from_session_id
+      (s) => !s.genealogy.parent_session_id && !s.genealogy.forked_from_session_id
     );
 
     // Recursive function to layout session and its children
@@ -70,7 +70,7 @@ const SessionCanvas = ({ sessions, tasks, onSessionClick, onTaskClick }: Session
 
       // Layout children (both spawned and forked)
       const children = sessions.filter(
-        s =>
+        (s) =>
           s.genealogy.parent_session_id === session.session_id ||
           s.genealogy.forked_from_session_id === session.session_id
       );
@@ -86,7 +86,7 @@ const SessionCanvas = ({ sessions, tasks, onSessionClick, onTaskClick }: Session
     });
 
     // Convert to React Flow nodes
-    return sessions.map(session => {
+    return sessions.map((session) => {
       const position = nodeMap.get(session.session_id) || { x: 0, y: 0 };
       return {
         id: session.session_id,
@@ -107,7 +107,7 @@ const SessionCanvas = ({ sessions, tasks, onSessionClick, onTaskClick }: Session
   const initialEdges: Edge[] = useMemo(() => {
     const edges: Edge[] = [];
 
-    sessions.forEach(session => {
+    sessions.forEach((session) => {
       // Fork relationship (dashed line)
       if (session.genealogy.forked_from_session_id) {
         edges.push({
@@ -176,7 +176,7 @@ const SessionCanvas = ({ sessions, tasks, onSessionClick, onTaskClick }: Session
         <Background />
         <Controls />
         <MiniMap
-          nodeColor={node => {
+          nodeColor={(node) => {
             const session = node.data.session as Session;
             switch (session.status) {
               case 'running':

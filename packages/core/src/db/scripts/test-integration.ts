@@ -320,7 +320,7 @@ async function testGenealogy(db: ReturnType<typeof createDatabase>) {
     throw new Error(`Expected 2 children, got ${children.length}`);
   }
 
-  const childIds = children.map(c => c.session_id).sort();
+  const childIds = children.map((c) => c.session_id).sort();
   const expectedIds = [fork.session_id, spawn.session_id].sort();
 
   if (JSON.stringify(childIds) !== JSON.stringify(expectedIds)) {

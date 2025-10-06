@@ -69,7 +69,7 @@ export function resolveShortId<T extends { id: string }>(shortId: string, entiti
   const normalized = shortId.replace(/-/g, '').toLowerCase();
 
   // Find matches (prefix matching)
-  const matches = entities.filter(entity => {
+  const matches = entities.filter((entity) => {
     const entityId = entity.id.replace(/-/g, '').toLowerCase();
     return entityId.startsWith(normalized);
   });
@@ -87,7 +87,7 @@ export function resolveShortId<T extends { id: string }>(shortId: string, entiti
     `Ambiguous ID prefix: ${shortId} (${matches.length} matches found)`,
     'ambiguous',
     shortId,
-    matches.map(m => ({ id: m.id }))
+    matches.map((m) => ({ id: m.id }))
   );
 }
 

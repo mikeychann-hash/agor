@@ -10,7 +10,9 @@ import express, { rest } from '@feathersjs/express';
 import type { Params } from '@feathersjs/feathers';
 import { feathers } from '@feathersjs/feathers';
 import socketio from '@feathersjs/socketio';
+import type { CorsOptions } from 'cors';
 import { createBoardsService } from './services/boards';
+import { createMessagesService } from './services/messages';
 import { createReposService } from './services/repos';
 import { createSessionsService } from './services/sessions';
 import { createTasksService } from './services/tasks';
@@ -34,9 +36,17 @@ const app = express(feathers());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configure REST and Socket.io
+// Configure REST and Socket.io with CORS
 app.configure(rest());
-app.configure(socketio());
+app.configure(
+  socketio({
+    cors: {
+      origin: 'http://localhost:5173',
+      methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+      credentials: true,
+    },
+  })
+);
 
 // Initialize database
 console.log(`📦 Connecting to database: ${DB_PATH}`);
@@ -45,8 +55,17 @@ const db = createDatabase({ url: DB_PATH });
 // Register services
 app.use('/sessions', createSessionsService(db));
 app.use('/tasks', createTasksService(db));
+const messagesService = createMessagesService(db);
+app.use('/messages', messagesService);
 app.use('/boards', createBoardsService(db));
 app.use('/repos', createReposService(db));
+
+// Configure custom route for bulk message creation
+app.use('/messages/bulk', {
+  async create(data: unknown[]) {
+    return messagesService.createMany(data);
+  },
+});
 
 // Configure custom methods for sessions service
 const sessionsService = app.service('sessions');
@@ -76,6 +95,14 @@ app.use('/sessions/:id/genealogy', {
 
 // Configure custom methods for tasks service
 const tasksService = app.service('tasks');
+
+// Configure custom route for bulk task creation
+app.use('/tasks/bulk', {
+  async create(data: unknown[]) {
+    return tasksService.createMany(data);
+  },
+});
+
 app.use('/tasks/:id/complete', {
   async create(
     data: { git_state?: { sha_at_end?: string; commit_message?: string } },
@@ -131,6 +158,7 @@ app.listen(PORT).then(() => {
   console.log(`   Services:`);
   console.log(`     - /sessions`);
   console.log(`     - /tasks`);
+  console.log(`     - /messages`);
   console.log(`     - /boards`);
   console.log(`     - /repos`);
 });

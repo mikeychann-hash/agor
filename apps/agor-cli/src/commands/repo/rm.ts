@@ -1,0 +1,195 @@
+/**
+ * `agor repo rm <id>` - Remove a registered repository
+ *
+ * Removes the repository from the database (does not delete files).
+ */
+
+import { createClient, isDaemonRunning } from '@agor/core/api';
+import type { Repo } from '@agor/core/types';
+import { Args, Command, Flags } from '@oclif/core';
+import chalk from 'chalk';
+import inquirer from 'inquirer';
+
+export default class RepoRm extends Command {
+  static description = 'Remove a registered repository';
+
+  static examples = [
+    '<%= config.bin %> <%= command.id %> 3a7f2b',
+    '<%= config.bin %> <%= command.id %> superset --delete-files',
+  ];
+
+  static args = {
+    id: Args.string({
+      description: 'Repository ID (short or full UUID) or slug',
+      required: true,
+    }),
+  };
+
+  static flags = {
+    'delete-files': Flags.boolean({
+      description: 'Also delete the local repository files',
+      default: false,
+    }),
+    force: Flags.boolean({
+      char: 'f',
+      description: 'Skip confirmation prompt',
+      default: false,
+    }),
+  };
+
+  async run(): Promise<void> {
+    const { args, flags } = await this.parse(RepoRm);
+
+    // Check if daemon is running
+    const daemonUrl = process.env.AGOR_DAEMON_URL || 'http://localhost:3030';
+    const running = await isDaemonRunning(daemonUrl);
+
+    if (!running) {
+      this.error(
+        `Daemon not running. Start it with: ${chalk.cyan('cd apps/agor-daemon && pnpm dev')}`
+      );
+    }
+
+    try {
+      const client = createClient(daemonUrl);
+      const reposService = client.service('repos');
+
+      // First, fetch the repo to show details and confirm
+      let repo: Repo | null = null;
+
+      try {
+        // Try as ID first
+        // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
+        repo = await (reposService as any).get(args.id);
+      } catch {
+        // Try as slug
+        // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
+        const result = await (reposService as any).find({ query: { slug: args.id } });
+        const repos = Array.isArray(result) ? result : result.data;
+
+        if (repos.length > 0) {
+          repo = repos[0];
+        }
+      }
+
+      if (!repo) {
+        this.error(`Repository not found: ${args.id}`);
+      }
+
+      // Show what will be removed
+      this.log('');
+      this.log(chalk.bold.red('⚠ Repository to be removed:'));
+      this.log(`  ${chalk.cyan('ID')}: ${repo.repo_id}`);
+      this.log(`  ${chalk.cyan('Slug')}: ${repo.slug}`);
+      this.log(`  ${chalk.cyan('Path')}: ${repo.local_path}`);
+
+      // Show worktrees if any
+      if (repo.worktrees && repo.worktrees.length > 0) {
+        this.log(`  ${chalk.cyan('Worktrees')}: ${repo.worktrees.length}`);
+        for (const wt of repo.worktrees) {
+          this.log(chalk.dim(`    - ${wt.name} (${wt.path})`));
+        }
+      }
+      this.log('');
+
+      if (flags['delete-files']) {
+        this.log(chalk.yellow('⚠ WARNING: Local files will also be deleted:'));
+        this.log(chalk.yellow(`  Main repo: ${repo.local_path}`));
+        if (repo.worktrees && repo.worktrees.length > 0) {
+          this.log(chalk.yellow(`  Worktrees: ${repo.worktrees.length} worktree(s)`));
+        }
+        this.log('');
+      } else {
+        this.log(chalk.dim('(Local files will NOT be deleted)'));
+        this.log('');
+      }
+
+      // Confirm unless --force
+      if (!flags.force) {
+        const { confirmed } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirmed',
+            message: 'Remove repository from database?',
+            default: false,
+          },
+        ]);
+
+        if (!confirmed) {
+          this.log(chalk.dim('Cancelled.'));
+          client.io.close();
+          process.exit(0);
+          return;
+        }
+      }
+
+      // Delete from database
+      // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
+      await (reposService as any).remove(repo.repo_id);
+
+      this.log(chalk.green('✓') + ' Repository removed from database');
+
+      // Ask about deleting local files (unless --delete-files flag was passed)
+      let deleteFiles = flags['delete-files'];
+
+      if (!deleteFiles && !flags.force) {
+        const { shouldDelete } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'shouldDelete',
+            message: 'Do you want to remove the local folders (repo + worktrees)?',
+            default: false,
+          },
+        ]);
+        deleteFiles = shouldDelete;
+      }
+
+      // Delete files if confirmed
+      if (deleteFiles) {
+        // Import fs dynamically
+        const fs = await import('node:fs/promises');
+
+        // Delete main repo
+        try {
+          await fs.rm(repo.local_path, { recursive: true, force: true });
+          this.log(chalk.green('✓') + ' Main repo deleted: ' + chalk.dim(repo.local_path));
+        } catch (error) {
+          this.warn(
+            `Failed to delete main repo: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+
+        // Delete worktrees
+        if (repo.worktrees && repo.worktrees.length > 0) {
+          for (const wt of repo.worktrees) {
+            try {
+              await fs.rm(wt.path, { recursive: true, force: true });
+              this.log(chalk.green('✓') + ' Worktree deleted: ' + chalk.dim(wt.name));
+            } catch (error) {
+              this.warn(
+                `Failed to delete worktree ${wt.name}: ${error instanceof Error ? error.message : String(error)}`
+              );
+            }
+          }
+        }
+      } else {
+        this.log(chalk.dim('Local files preserved:'));
+        this.log(chalk.dim('  Main repo: ') + repo.local_path);
+        if (repo.worktrees && repo.worktrees.length > 0) {
+          for (const wt of repo.worktrees) {
+            this.log(chalk.dim(`  Worktree ${wt.name}: `) + wt.path);
+          }
+        }
+      }
+
+      this.log('');
+
+      client.io.close();
+      process.exit(0);
+    } catch (error) {
+      this.error(
+        `Failed to remove repository: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+}

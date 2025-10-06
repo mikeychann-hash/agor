@@ -64,7 +64,7 @@ export const sessions = sqliteTable(
       }>()
       .notNull(),
   },
-  table => ({
+  (table) => ({
     statusIdx: index('sessions_status_idx').on(table.status),
     agentIdx: index('sessions_agent_idx').on(table.agent),
     boardIdx: index('sessions_board_idx').on(table.board_id),
@@ -105,7 +105,7 @@ export const tasks = sqliteTable(
       }>()
       .notNull(),
   },
-  table => ({
+  (table) => ({
     sessionIdx: index('tasks_session_idx').on(table.session_id),
     statusIdx: index('tasks_status_idx').on(table.status),
     createdIdx: index('tasks_created_idx').on(table.created_at),
@@ -136,7 +136,7 @@ export const boards = sqliteTable(
       }>()
       .notNull(),
   },
-  table => ({
+  (table) => ({
     nameIdx: index('boards_name_idx').on(table.name),
     slugIdx: index('boards_slug_idx').on(table.slug),
   })
@@ -166,7 +166,7 @@ export const repos = sqliteTable(
       }>()
       .notNull(),
   },
-  table => ({
+  (table) => ({
     slugIdx: index('repos_slug_idx').on(table.slug),
   })
 );

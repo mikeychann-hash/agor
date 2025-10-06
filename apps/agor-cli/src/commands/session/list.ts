@@ -7,10 +7,17 @@
 import { createClient, isDaemonRunning } from '@agor/core/api';
 import { formatShortId } from '@agor/core/db';
 import type { Session } from '@agor/core/types';
-import type { Paginated } from '@feathersjs/feathers';
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import Table from 'cli-table3';
+
+// Type for paginated responses
+interface Paginated<T> {
+  total: number;
+  limit: number;
+  skip: number;
+  data: T[];
+}
 
 export default class SessionList extends Command {
   static description = 'List all sessions';
@@ -129,8 +136,11 @@ export default class SessionList extends Command {
 
       // Fetch sessions
       const sessionsService = client.service('sessions');
-      const result = await sessionsService.find({ query });
+      // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
+      const result = await (sessionsService as any).find({ query });
+      const isPaginated = !Array.isArray(result);
       const sessions = Array.isArray(result) ? result : (result as Paginated<Session>).data;
+      const total = isPaginated ? (result as Paginated<Session>).total : sessions.length;
 
       if (!Array.isArray(sessions) || sessions.length === 0) {
         this.log(chalk.dim('No sessions found.'));
@@ -168,7 +178,8 @@ export default class SessionList extends Command {
           32
         );
         const taskCount = session.tasks?.length || 0;
-        const completedTasks = session.tasks?.filter(t => t.status === 'completed').length || 0;
+        const completedTasks =
+          session.tasks?.filter((t: { status: string }) => t.status === 'completed').length || 0;
         const gitRef = session.git_state?.ref || '-';
         const modified = this.formatRelativeTime(session.last_updated || session.created_at);
 
@@ -187,11 +198,19 @@ export default class SessionList extends Command {
       this.log('');
       this.log(table.toString());
       this.log('');
-      this.log(chalk.dim(`Showing ${sessions.length} session(s)`));
+      if (isPaginated && total > sessions.length) {
+        this.log(chalk.dim(`Showing ${sessions.length} of ${total} session(s)`));
+      } else {
+        this.log(chalk.dim(`Showing ${sessions.length} session(s)`));
+      }
       this.log('');
 
-      // Close socket connection to allow process to exit
-      client.io.close();
+      // Close socket connection and wait for it to close
+      await new Promise<void>((resolve) => {
+        client.io.on('disconnect', resolve);
+        client.io.close();
+        setTimeout(resolve, 1000); // Fallback timeout
+      });
       process.exit(0);
     } catch (error) {
       this.error(

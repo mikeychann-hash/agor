@@ -21,7 +21,7 @@ const meta = {
     layout: 'fullscreen',
   },
   decorators: [
-    Story => (
+    (Story) => (
       <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
         <Story />
       </ConfigProvider>
@@ -45,7 +45,7 @@ export const Default: Story = {
     tasks: mockTasksMap,
     availableAgents: mockAgents,
     boards: mockBoards,
-    onCreateSession: config => console.log('Create session:', config),
+    onCreateSession: (config) => console.log('Create session:', config),
     onSettingsClick: () => console.log('Settings clicked'),
   },
 };
@@ -58,7 +58,7 @@ export const SingleSession: Story = {
     },
     availableAgents: mockAgents,
     boards: mockBoards,
-    onCreateSession: config => alert(`Creating session with agent: ${config.agent}`),
+    onCreateSession: (config) => alert(`Creating session with agent: ${config.agent}`),
     onSettingsClick: () => alert('Settings clicked'),
   },
 };
@@ -69,7 +69,7 @@ export const EmptyCanvas: Story = {
     tasks: {},
     availableAgents: mockAgents,
     boards: mockBoards,
-    onCreateSession: config => console.log('Create session:', config),
+    onCreateSession: (config) => console.log('Create session:', config),
     onSettingsClick: () => console.log('Settings clicked'),
   },
 };
@@ -78,9 +78,9 @@ export const AllAgentsInstalled: Story = {
   args: {
     sessions: [mockSessionA, mockSessionB],
     tasks: mockTasksMap,
-    availableAgents: mockAgents.map(agent => ({ ...agent, installed: true })),
+    availableAgents: mockAgents.map((agent) => ({ ...agent, installed: true })),
     boards: mockBoards,
-    onCreateSession: config => console.log('Create session:', config),
+    onCreateSession: (config) => console.log('Create session:', config),
     onSettingsClick: () => console.log('Settings clicked'),
   },
 };

@@ -17,7 +17,6 @@ export interface Session {
   last_updated: string;
 
   // Repository context (required)
-  // Every session must have a working directory
   repo: SessionRepoContext;
 
   // Git state

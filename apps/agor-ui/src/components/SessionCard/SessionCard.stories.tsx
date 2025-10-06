@@ -97,7 +97,7 @@ export const WithDrawer = () => {
         session={mockSessionA}
         tasks={mockTasksBySession.abc123}
         onDrawerOpen={() => setDrawerOpen(true)}
-        onTaskClick={taskId => alert(`Task clicked: ${taskId}`)}
+        onTaskClick={(taskId) => alert(`Task clicked: ${taskId}`)}
       />
 
       <SessionDrawer

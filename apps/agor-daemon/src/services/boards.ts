@@ -81,7 +81,7 @@ export class BoardsService extends DrizzleService<Board, Partial<Board>, BoardPa
     return this.patch(
       id,
       {
-        sessions: sessions.filter(sid => sid !== sessionId),
+        sessions: sessions.filter((sid) => sid !== sessionId),
       },
       params
     ) as Promise<Board>;

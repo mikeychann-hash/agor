@@ -4,7 +4,7 @@
  * Type-safe CRUD operations for sessions with short ID support.
  */
 
-import type { Session } from '@agor/core/types';
+import type { Session, UUID } from '@agor/core/types';
 import { eq, like, or, sql } from 'drizzle-orm';
 import type { Database } from '../client';
 import { formatShortId, generateId } from '../ids';
@@ -26,21 +26,39 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
    * Convert database row to Session type
    */
   private rowToSession(row: SessionRow): Session {
+    const genealogyData = row.data.genealogy || { children: [] };
+    const repoData = row.data.repo;
+
     return {
-      session_id: row.session_id,
+      session_id: row.session_id as UUID,
       status: row.status,
       agent: row.agent,
-      board_id: row.board_id ?? undefined,
       created_at: new Date(row.created_at).toISOString(),
       last_updated: row.updated_at
         ? new Date(row.updated_at).toISOString()
         : new Date(row.created_at).toISOString(),
       ...row.data,
+      tasks: row.data.tasks.map((id) => id as UUID),
+      repo: repoData
+        ? {
+            ...repoData,
+            repo_id: repoData.repo_id as UUID | undefined,
+            repo_slug: repoData.repo_slug,
+            worktree_name: repoData.worktree_name,
+            cwd: repoData.cwd,
+            managed_worktree: repoData.managed_worktree,
+          }
+        : {
+            // Default for imported sessions without repo context
+            cwd: process.cwd(),
+            managed_worktree: false,
+          },
       genealogy: {
-        ...row.data.genealogy,
-        parent_session_id: row.parent_session_id ?? row.data.genealogy?.parent_session_id,
-        forked_from_session_id:
-          row.forked_from_session_id ?? row.data.genealogy?.forked_from_session_id,
+        parent_session_id: row.parent_session_id as UUID | undefined,
+        forked_from_session_id: row.forked_from_session_id as UUID | undefined,
+        fork_point_task_id: genealogyData.fork_point_task_id as UUID | undefined,
+        spawn_point_task_id: genealogyData.spawn_point_task_id as UUID | undefined,
+        children: genealogyData.children.map((id) => id as UUID),
       },
     };
   }
@@ -108,7 +126,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
       throw new AmbiguousIdError(
         'Session',
         id,
-        results.map(r => formatShortId(r.session_id))
+        results.map((r) => formatShortId(r.session_id))
       );
     }
 
@@ -172,7 +190,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
   async findAll(): Promise<Session[]> {
     try {
       const rows = await this.db.select().from(sessions).all();
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find all sessions: ${error instanceof Error ? error.message : String(error)}`,
@@ -188,7 +206,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
     try {
       const rows = await this.db.select().from(sessions).where(eq(sessions.status, status)).all();
 
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find sessions by status: ${error instanceof Error ? error.message : String(error)}`,
@@ -208,7 +226,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
 
       // For now, return all sessions (board filtering will be done at service layer)
       // TODO: Add board_id as materialized column if frequently filtered
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find sessions by board: ${error instanceof Error ? error.message : String(error)}`,
@@ -236,7 +254,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
         )
         .all();
 
-      return rows.map(row => this.rowToSession(row));
+      return rows.map((row) => this.rowToSession(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find child sessions: ${error instanceof Error ? error.message : String(error)}`,
@@ -352,10 +370,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
    */
   async count(): Promise<number> {
     try {
-      const result = await this.db
-        .select({ count: sql<number>`count(*)` })
-        .from(sessions)
-        .get();
+      const result = await this.db.select({ count: sql<number>`count(*)` }).from(sessions).get();
 
       return result?.count ?? 0;
     } catch (error) {

@@ -24,7 +24,7 @@ const meta = {
   title: 'Components/SessionCanvas',
   component: SessionCanvas,
   decorators: [
-    Story => (
+    (Story) => (
       <CanvasWrapper>
         <Story />
       </CanvasWrapper>

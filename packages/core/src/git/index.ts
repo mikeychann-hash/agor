@@ -66,6 +66,12 @@ export async function cloneRepo(options: CloneOptions): Promise<CloneResult> {
   // Ensure repos directory exists
   await mkdir(reposDir, { recursive: true });
 
+  // Check if target directory already exists
+  const { existsSync } = await import('node:fs');
+  if (existsSync(targetPath)) {
+    throw new Error(`Repository directory already exists: ${targetPath}`);
+  }
+
   // Configure git with progress tracking
   const git = simpleGit({
     progress: options.onProgress
@@ -140,7 +146,7 @@ export async function isClean(repoPath: string): Promise<boolean> {
 export async function getRemoteUrl(repoPath: string, remote: string = 'origin'): Promise<string> {
   const git = simpleGit(repoPath);
   const remotes = await git.getRemotes(true);
-  const remoteObj = remotes.find(r => r.name === remote);
+  const remoteObj = remotes.find((r) => r.name === remote);
   return remoteObj?.refs.fetch || '';
 }
 
@@ -269,5 +275,7 @@ export async function getRemoteBranches(
 ): Promise<string[]> {
   const git = simpleGit(repoPath);
   const branches = await git.branch(['-r']);
-  return branches.all.filter(b => b.startsWith(`${remote}/`)).map(b => b.replace(`${remote}/`, ''));
+  return branches.all
+    .filter((b) => b.startsWith(`${remote}/`))
+    .map((b) => b.replace(`${remote}/`, ''));
 }

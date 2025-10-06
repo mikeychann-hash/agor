@@ -47,5 +47,5 @@ export const mockAgents: Agent[] = [
   mockAgentGemini,
 ];
 
-export const mockInstalledAgents = mockAgents.filter(agent => agent.installed);
-export const mockNotInstalledAgents = mockAgents.filter(agent => !agent.installed);
+export const mockInstalledAgents = mockAgents.filter((agent) => agent.installed);
+export const mockNotInstalledAgents = mockAgents.filter((agent) => !agent.installed);

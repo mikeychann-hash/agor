@@ -4,7 +4,7 @@
  * Type-safe CRUD operations for git repositories with short ID support.
  */
 
-import type { Repo } from '@agor/core/types';
+import type { Repo, UUID } from '@agor/core/types';
 import { eq, like, sql } from 'drizzle-orm';
 import type { Database } from '../client';
 import { formatShortId, generateId } from '../ids';
@@ -27,7 +27,7 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
    */
   private rowToRepo(row: RepoRow): Repo {
     return {
-      repo_id: row.repo_id,
+      repo_id: row.repo_id as UUID,
       slug: row.slug,
       created_at: new Date(row.created_at).toISOString(),
       last_updated: row.updated_at
@@ -91,7 +91,7 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
       throw new AmbiguousIdError(
         'Repo',
         id,
-        results.map(r => formatShortId(r.repo_id))
+        results.map((r) => formatShortId(r.repo_id))
       );
     }
 
@@ -163,7 +163,7 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
   async findAll(): Promise<Repo[]> {
     try {
       const rows = await this.db.select().from(repos).all();
-      return rows.map(row => this.rowToRepo(row));
+      return rows.map((row) => this.rowToRepo(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find all repos: ${error instanceof Error ? error.message : String(error)}`,
@@ -183,7 +183,7 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
         .where(sql`json_extract(${repos.data}, '$.managed_by_agor') = 1`)
         .all();
 
-      return rows.map(row => this.rowToRepo(row));
+      return rows.map((row) => this.rowToRepo(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find managed repos: ${error instanceof Error ? error.message : String(error)}`,
@@ -265,7 +265,7 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
       }
 
       // Check if worktree with same name already exists
-      const existingIndex = repo.worktrees.findIndex(w => w.name === worktree.name);
+      const existingIndex = repo.worktrees.findIndex((w) => w.name === worktree.name);
       if (existingIndex >= 0) {
         // Update existing worktree
         repo.worktrees[existingIndex] = worktree;
@@ -295,7 +295,7 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
         throw new EntityNotFoundError('Repo', repoId);
       }
 
-      repo.worktrees = repo.worktrees.filter(w => w.name !== worktreeName);
+      repo.worktrees = repo.worktrees.filter((w) => w.name !== worktreeName);
       return this.update(repoId, { worktrees: repo.worktrees });
     } catch (error) {
       if (error instanceof RepositoryError) throw error;
@@ -312,10 +312,7 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
    */
   async count(): Promise<number> {
     try {
-      const result = await this.db
-        .select({ count: sql<number>`count(*)` })
-        .from(repos)
-        .get();
+      const result = await this.db.select({ count: sql<number>`count(*)` }).from(repos).get();
 
       return result?.count ?? 0;
     } catch (error) {

@@ -7,6 +7,7 @@ export default defineConfig({
     'db/index': 'src/db/index.ts',
     'git/index': 'src/git/index.ts',
     'api/index': 'src/api/index.ts',
+    'claude/index': 'src/claude/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

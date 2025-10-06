@@ -4,7 +4,7 @@
  * Type-safe CRUD operations for tasks with short ID support.
  */
 
-import type { Task } from '@agor/core/types';
+import type { Task, UUID } from '@agor/core/types';
 import { eq, like, sql } from 'drizzle-orm';
 import type { Database } from '../client';
 import { formatShortId, generateId } from '../ids';
@@ -27,8 +27,8 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
    */
   private rowToTask(row: TaskRow): Task {
     return {
-      task_id: row.task_id,
-      session_id: row.session_id,
+      task_id: row.task_id as UUID,
+      session_id: row.session_id as UUID,
       status: row.status,
       created_at: new Date(row.created_at).toISOString(),
       completed_at: row.completed_at ? new Date(row.completed_at).toISOString() : undefined,
@@ -98,7 +98,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
       throw new AmbiguousIdError(
         'Task',
         id,
-        results.map(r => formatShortId(r.task_id))
+        results.map((r) => formatShortId(r.task_id))
       );
     }
 
@@ -130,6 +130,34 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
   }
 
   /**
+   * Bulk create multiple tasks (for imports)
+   */
+  async createMany(taskList: Partial<Task>[]): Promise<Task[]> {
+    try {
+      const inserts = taskList.map((task) => this.taskToInsert(task));
+
+      // Bulk insert all tasks
+      await this.db.insert(tasks).values(inserts);
+
+      // Retrieve all inserted tasks
+      const taskIds = inserts.map((t) => t.task_id);
+      const rows = await this.db
+        .select()
+        .from(tasks)
+        .where(
+          sql`${tasks.task_id} IN ${sql.raw(`(${taskIds.map((id) => `'${id}'`).join(',')})`)}`
+        );
+
+      return rows.map((row) => this.rowToTask(row));
+    } catch (error) {
+      throw new RepositoryError(
+        `Failed to bulk create tasks: ${error instanceof Error ? error.message : String(error)}`,
+        error
+      );
+    }
+  }
+
+  /**
    * Find task by ID (supports short ID)
    */
   async findById(id: string): Promise<Task | null> {
@@ -154,7 +182,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
   async findAll(): Promise<Task[]> {
     try {
       const rows = await this.db.select().from(tasks).all();
-      return rows.map(row => this.rowToTask(row));
+      return rows.map((row) => this.rowToTask(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find all tasks: ${error instanceof Error ? error.message : String(error)}`,
@@ -175,7 +203,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
         .orderBy(tasks.created_at)
         .all();
 
-      return rows.map(row => this.rowToTask(row));
+      return rows.map((row) => this.rowToTask(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find tasks by session: ${error instanceof Error ? error.message : String(error)}`,
@@ -191,7 +219,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
     try {
       const rows = await this.db.select().from(tasks).where(eq(tasks.status, 'running')).all();
 
-      return rows.map(row => this.rowToTask(row));
+      return rows.map((row) => this.rowToTask(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find running tasks: ${error instanceof Error ? error.message : String(error)}`,
@@ -207,7 +235,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
     try {
       const rows = await this.db.select().from(tasks).where(eq(tasks.status, status)).all();
 
-      return rows.map(row => this.rowToTask(row));
+      return rows.map((row) => this.rowToTask(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find tasks by status: ${error instanceof Error ? error.message : String(error)}`,

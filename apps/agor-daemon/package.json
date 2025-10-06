@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "@agor/core": "workspace:*",
+    "@feathersjs/express": "^5.0.29",
     "@feathersjs/feathers": "^5.0.29",
     "@feathersjs/socketio": "^5.0.29",
-    "@feathersjs/express": "^5.0.29"
+    "@types/cors": "^2.8.19",
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

@@ -17,6 +17,9 @@ export interface AppProps {
   boards: Board[];
   initialBoardId?: string;
   onCreateSession?: (config: NewSessionConfig) => void;
+  onForkSession?: (sessionId: string, prompt: string) => void;
+  onSpawnSession?: (sessionId: string, prompt: string) => void;
+  onSendPrompt?: (sessionId: string, prompt: string) => void;
   onSettingsClick?: () => void;
 }
 
@@ -27,6 +30,9 @@ export const App: React.FC<AppProps> = ({
   boards,
   initialBoardId,
   onCreateSession,
+  onForkSession,
+  onSpawnSession,
+  onSendPrompt,
   onSettingsClick,
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
@@ -45,23 +51,29 @@ export const App: React.FC<AppProps> = ({
   };
 
   const handleSendPrompt = (prompt: string) => {
-    console.log('Sending prompt:', prompt);
+    if (selectedSessionId) {
+      onSendPrompt?.(selectedSessionId, prompt);
+    }
   };
 
   const handleFork = (prompt: string) => {
-    console.log('Forking session with prompt:', prompt);
+    if (selectedSessionId) {
+      onForkSession?.(selectedSessionId, prompt);
+    }
   };
 
   const handleSubtask = (prompt: string) => {
-    console.log('Creating subtask with prompt:', prompt);
+    if (selectedSessionId) {
+      onSpawnSession?.(selectedSessionId, prompt);
+    }
   };
 
-  const selectedSession = sessions.find(s => s.session_id === selectedSessionId) || null;
+  const selectedSession = sessions.find((s) => s.session_id === selectedSessionId) || null;
   const selectedSessionTasks = selectedSessionId ? tasks[selectedSessionId] || [] : [];
-  const currentBoard = boards.find(b => b.board_id === currentBoardId);
+  const currentBoard = boards.find((b) => b.board_id === currentBoardId);
 
   // Filter sessions by current board
-  const boardSessions = sessions.filter(session =>
+  const boardSessions = sessions.filter((session) =>
     currentBoard?.sessions.includes(session.session_id)
   );
 

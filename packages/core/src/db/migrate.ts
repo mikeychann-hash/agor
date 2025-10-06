@@ -29,7 +29,7 @@ async function tablesExist(db: Database): Promise<boolean> {
   try {
     const result = await db.run(sql`
       SELECT name FROM sqlite_master
-      WHERE type='table' AND name IN ('sessions', 'tasks', 'boards', 'repos')
+      WHERE type='table' AND name IN ('sessions', 'tasks', 'boards', 'repos', 'messages')
     `);
     return result.rows.length > 0;
   } catch (error) {
@@ -145,6 +145,36 @@ async function createInitialSchema(db: Database): Promise<void> {
 
     await db.run(sql`
       CREATE INDEX IF NOT EXISTS repos_slug_idx ON repos(slug)
+    `);
+
+    // Messages table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS messages (
+        message_id TEXT PRIMARY KEY,
+        created_at INTEGER NOT NULL,
+        session_id TEXT NOT NULL,
+        task_id TEXT,
+        type TEXT NOT NULL CHECK(type IN ('user', 'assistant', 'system', 'file-history-snapshot')),
+        role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
+        "index" INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        content_preview TEXT,
+        data TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+        FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE SET NULL
+      )
+    `);
+
+    await db.run(sql`
+      CREATE INDEX IF NOT EXISTS messages_session_id_idx ON messages(session_id)
+    `);
+
+    await db.run(sql`
+      CREATE INDEX IF NOT EXISTS messages_task_id_idx ON messages(task_id)
+    `);
+
+    await db.run(sql`
+      CREATE INDEX IF NOT EXISTS messages_session_index_idx ON messages(session_id, "index")
     `);
   } catch (error) {
     throw new MigrationError(

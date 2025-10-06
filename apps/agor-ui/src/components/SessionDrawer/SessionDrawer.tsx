@@ -225,7 +225,7 @@ const SessionDrawer = ({
         <div className="drawer-section">
           <Title level={5}>Loaded Concepts</Title>
           <Space size={8} wrap>
-            {session.concepts.map(concept => (
+            {session.concepts.map((concept) => (
               <Tag key={concept} color="geekblue">
                 📦 {concept}
               </Tag>
@@ -244,7 +244,7 @@ const SessionDrawer = ({
 
         <Timeline
           mode="left"
-          items={tasks.map(task => ({
+          items={tasks.map((task) => ({
             color: getTaskStatusColor(task.status),
             dot: task.status === 'running' ? <ClockCircleOutlined /> : undefined,
             children: (
@@ -372,10 +372,10 @@ const SessionDrawer = ({
         <Space.Compact style={{ width: '100%' }} direction="vertical" size={8}>
           <TextArea
             value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
+            onChange={(e) => setInputValue(e.target.value)}
             placeholder="Send a prompt, fork, or create a subtask..."
             autoSize={{ minRows: 2, maxRows: 6 }}
-            onPressEnter={e => {
+            onPressEnter={(e) => {
               if (e.shiftKey) {
                 // Allow Shift+Enter for new line
                 return;

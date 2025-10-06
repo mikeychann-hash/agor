@@ -16,8 +16,10 @@
     "@agor/core": "workspace:*",
     "@oclif/core": "^4.0.35",
     "@oclif/plugin-help": "^6.2.18",
+    "@types/inquirer": "^9.0.9",
     "chalk": "^5.6.2",
-    "cli-table3": "^0.6.5"
+    "cli-table3": "^0.6.5",
+    "inquirer": "^12.9.6"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -30,6 +32,9 @@
     "dirname": "agor",
     "commands": "./dist/commands",
     "topicSeparator": " ",
-    "helpClass": "./dist/lib/help.js"
+    "helpClass": "./dist/lib/help.js",
+    "hooks": {
+      "command_not_found": "./dist/hooks/command-not-found.js"
+    }
   }
 }

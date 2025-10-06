@@ -4,7 +4,7 @@
  * Type-safe CRUD operations for boards with short ID support.
  */
 
-import type { Board } from '@agor/core/types';
+import type { Board, UUID } from '@agor/core/types';
 import { eq, like } from 'drizzle-orm';
 import type { Database } from '../client';
 import { formatShortId, generateId } from '../ids';
@@ -26,13 +26,23 @@ export class BoardRepository implements BaseRepository<Board, Partial<Board>> {
    * Convert database row to Board type
    */
   private rowToBoard(row: BoardRow): Board {
+    const data = row.data as {
+      description?: string;
+      sessions: string[];
+      color?: string;
+      icon?: string;
+    };
+
     return {
-      board_id: row.board_id,
+      board_id: row.board_id as UUID,
+      name: row.name,
+      slug: row.slug || undefined,
       created_at: new Date(row.created_at).toISOString(),
       last_updated: row.updated_at
         ? new Date(row.updated_at).toISOString()
         : new Date(row.created_at).toISOString(),
-      ...row.data,
+      ...data,
+      sessions: data.sessions.map((s) => s as UUID),
     };
   }
 
@@ -85,7 +95,7 @@ export class BoardRepository implements BaseRepository<Board, Partial<Board>> {
       throw new AmbiguousIdError(
         'Board',
         id,
-        results.map(r => formatShortId(r.board_id))
+        results.map((r) => formatShortId(r.board_id))
       );
     }
 
@@ -161,7 +171,7 @@ export class BoardRepository implements BaseRepository<Board, Partial<Board>> {
   async findAll(): Promise<Board[]> {
     try {
       const rows = await this.db.select().from(boards).all();
-      return rows.map(row => this.rowToBoard(row));
+      return rows.map((row) => this.rowToBoard(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find all boards: ${error instanceof Error ? error.message : String(error)}`,
@@ -241,8 +251,8 @@ export class BoardRepository implements BaseRepository<Board, Partial<Board>> {
         throw new EntityNotFoundError('Board', boardId);
       }
 
-      if (!board.sessions.includes(sessionId)) {
-        board.sessions.push(sessionId);
+      if (!board.sessions.includes(sessionId as UUID)) {
+        board.sessions.push(sessionId as UUID);
         return this.update(boardId, { sessions: board.sessions });
       }
 
@@ -267,7 +277,7 @@ export class BoardRepository implements BaseRepository<Board, Partial<Board>> {
         throw new EntityNotFoundError('Board', boardId);
       }
 
-      board.sessions = board.sessions.filter(id => id !== sessionId);
+      board.sessions = board.sessions.filter((id) => id !== sessionId);
       return this.update(boardId, { sessions: board.sessions });
     } catch (error) {
       if (error instanceof RepositoryError) throw error;

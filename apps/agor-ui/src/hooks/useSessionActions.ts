@@ -1,0 +1,151 @@
+/**
+ * React hook for session CRUD operations
+ *
+ * Provides functions to create, update, fork, spawn sessions
+ */
+
+import type { AgorClient } from '@agor/core/api';
+import type { Session, SessionID } from '@agor/core/types';
+import { useState } from 'react';
+import type { NewSessionConfig } from '../components/NewSessionModal';
+
+interface UseSessionActionsResult {
+  createSession: (config: NewSessionConfig) => Promise<Session | null>;
+  forkSession: (sessionId: SessionID, prompt: string) => Promise<Session | null>;
+  spawnSession: (sessionId: SessionID, prompt: string) => Promise<Session | null>;
+  creating: boolean;
+  error: string | null;
+}
+
+/**
+ * Session action operations
+ *
+ * @param client - Agor client instance
+ * @returns Session action functions and state
+ */
+export function useSessionActions(client: AgorClient | null): UseSessionActionsResult {
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createSession = async (config: NewSessionConfig): Promise<Session | null> => {
+    if (!client) {
+      setError('Client not connected');
+      return null;
+    }
+
+    try {
+      setCreating(true);
+      setError(null);
+
+      // Create session with minimal required data
+      // The backend will generate IDs and defaults
+      const newSession = await client.service('sessions').create({
+        agent: config.agent as 'claude-code' | 'cursor' | 'codex' | 'gemini',
+        status: 'idle' as const,
+        description: config.initialPrompt || undefined,
+        // Note: Backend needs to handle repo/git_state defaults
+        // This is a placeholder until we add repo selection to the modal
+        repo: {
+          repo_id: 'default' as import('@agor/core/types').RepoID, // TODO: Get from repo selection
+          slug: 'default',
+          worktree_id: undefined,
+        },
+        git_state: {
+          ref: config.gitBranch || 'main',
+          base_sha: 'HEAD',
+          current_sha: 'HEAD',
+        },
+        concepts: [],
+        genealogy: {
+          children: [],
+        },
+        tasks: [],
+        message_count: 0,
+        tool_use_count: 0,
+      } as Partial<Session>);
+
+      return newSession;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create session';
+      setError(message);
+      console.error('Failed to create session:', err);
+      return null;
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const forkSession = async (sessionId: SessionID, prompt: string): Promise<Session | null> => {
+    if (!client) {
+      setError('Client not connected');
+      return null;
+    }
+
+    try {
+      setCreating(true);
+      setError(null);
+
+      // Call custom fork endpoint
+      const response = await fetch(`http://localhost:3030/sessions/${sessionId}/fork`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Fork failed: ${response.statusText}`);
+      }
+
+      const forkedSession = await response.json();
+      return forkedSession;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fork session';
+      setError(message);
+      console.error('Failed to fork session:', err);
+      return null;
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const spawnSession = async (sessionId: SessionID, prompt: string): Promise<Session | null> => {
+    if (!client) {
+      setError('Client not connected');
+      return null;
+    }
+
+    try {
+      setCreating(true);
+      setError(null);
+
+      // Call custom spawn endpoint
+      const response = await fetch(`http://localhost:3030/sessions/${sessionId}/spawn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Spawn failed: ${response.statusText}`);
+      }
+
+      const spawnedSession = await response.json();
+      return spawnedSession;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to spawn session';
+      setError(message);
+      console.error('Failed to spawn session:', err);
+      return null;
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return {
+    createSession,
+    forkSession,
+    spawnSession,
+    creating,
+    error,
+  };
+}

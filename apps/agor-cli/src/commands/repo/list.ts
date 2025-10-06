@@ -7,10 +7,17 @@
 import { createClient, isDaemonRunning } from '@agor/core/api';
 import { formatShortId } from '@agor/core/db';
 import type { Repo } from '@agor/core/types';
-import type { Paginated } from '@feathersjs/feathers';
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import Table from 'cli-table3';
+
+// Type for paginated responses
+interface Paginated<T> {
+  total: number;
+  limit: number;
+  skip: number;
+  data: T[];
+}
 
 export default class RepoList extends Command {
   static description = 'List all registered repositories';
@@ -58,8 +65,11 @@ export default class RepoList extends Command {
 
       // Fetch repos
       const reposService = client.service('repos');
-      const result = await reposService.find({ query });
+      // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
+      const result = await (reposService as any).find({ query });
+      const isPaginated = !Array.isArray(result);
       const repos = Array.isArray(result) ? result : (result as Paginated<Repo>).data;
+      const total = isPaginated ? (result as Paginated<Repo>).total : repos.length;
 
       if (!Array.isArray(repos) || repos.length === 0) {
         this.log(chalk.dim('No repositories found.'));
@@ -104,7 +114,11 @@ export default class RepoList extends Command {
       this.log('');
       this.log(table.toString());
       this.log('');
-      this.log(chalk.dim(`Showing ${repos.length} repo(s)`));
+      if (isPaginated && total > repos.length) {
+        this.log(chalk.dim(`Showing ${repos.length} of ${total} repo(s)`));
+      } else {
+        this.log(chalk.dim(`Showing ${repos.length} repo(s)`));
+      }
       this.log('');
 
       // Close socket connection to allow process to exit

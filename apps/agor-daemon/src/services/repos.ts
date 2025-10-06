@@ -63,7 +63,7 @@ export class ReposService extends DrizzleService<Repo, Partial<Repo>, RepoParams
     const worktrees = repo.worktrees || [];
 
     // Avoid duplicates
-    if (worktrees.some(wt => wt.name === worktree.name)) {
+    if (worktrees.some((wt) => wt.name === worktree.name)) {
       throw new Error(`Worktree '${worktree.name}' already exists`);
     }
 
@@ -96,7 +96,7 @@ export class ReposService extends DrizzleService<Repo, Partial<Repo>, RepoParams
     return this.patch(
       id,
       {
-        worktrees: worktrees.filter(wt => wt.name !== worktreeName),
+        worktrees: worktrees.filter((wt) => wt.name !== worktreeName),
       },
       params
     ) as Promise<Repo>;
@@ -106,6 +106,12 @@ export class ReposService extends DrizzleService<Repo, Partial<Repo>, RepoParams
    * Custom method: Clone repository
    */
   async cloneRepository(data: { url: string; slug: string }, params?: RepoParams): Promise<Repo> {
+    // Check if repo with this slug already exists in database
+    const existing = await this.repoRepo.findBySlug(data.slug);
+    if (existing) {
+      throw new Error(`Repository '${data.slug}' already exists in database`);
+    }
+
     // Clone using git-utils
     const result = await cloneRepo({ url: data.url });
 

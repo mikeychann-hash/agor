@@ -11,7 +11,7 @@ const meta = {
     layout: 'centered',
   },
   decorators: [
-    Story => (
+    (Story) => (
       <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
         <Story />
       </ConfigProvider>
@@ -36,7 +36,7 @@ const ModalWrapper = ({ args }: { args: any }) => {
         {...args}
         open={open}
         onClose={() => setOpen(false)}
-        onCreate={config => {
+        onCreate={(config) => {
           console.log('Created session with config:', config);
           alert(`Created session with agent: ${config.agent}`);
           setOpen(false);
@@ -47,23 +47,23 @@ const ModalWrapper = ({ args }: { args: any }) => {
 };
 
 export const Default: Story = {
-  render: args => <ModalWrapper args={args} />,
+  render: (args) => <ModalWrapper args={args} />,
   args: {
     availableAgents: mockAgents,
   },
 };
 
 export const AllAgentsInstalled: Story = {
-  render: args => <ModalWrapper args={args} />,
+  render: (args) => <ModalWrapper args={args} />,
   args: {
-    availableAgents: mockAgents.map(agent => ({ ...agent, installed: true })),
+    availableAgents: mockAgents.map((agent) => ({ ...agent, installed: true })),
   },
 };
 
 export const NoAgentsInstalled: Story = {
-  render: args => <ModalWrapper args={args} />,
+  render: (args) => <ModalWrapper args={args} />,
   args: {
-    availableAgents: mockAgents.map(agent => ({ ...agent, installed: false })),
+    availableAgents: mockAgents.map((agent) => ({ ...agent, installed: false })),
   },
 };
 
@@ -71,7 +71,7 @@ export const OpenByDefault: Story = {
   args: {
     open: true,
     onClose: () => console.log('Close modal'),
-    onCreate: config => console.log('Created session:', config),
+    onCreate: (config) => console.log('Created session:', config),
     availableAgents: mockAgents,
   },
 };
@@ -83,7 +83,7 @@ export const WithInitialPrompt: Story = {
       <NewSessionModal
         open={open}
         onClose={() => setOpen(false)}
-        onCreate={config => {
+        onCreate={(config) => {
           console.log('Created session:', config);
           setOpen(false);
         }}

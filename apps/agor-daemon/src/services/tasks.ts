@@ -100,6 +100,13 @@ export class TasksService extends DrizzleService<Task, Partial<Task>, TaskParams
   }
 
   /**
+   * Custom method: Bulk create tasks (for imports)
+   */
+  async createMany(taskList: Partial<Task>[]): Promise<Task[]> {
+    return this.taskRepo.createMany(taskList);
+  }
+
+  /**
    * Custom method: Complete a task
    */
   async complete(

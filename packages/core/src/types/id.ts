@@ -100,6 +100,17 @@ export type BoardID = UUID;
 export type AgentID = UUID;
 
 /**
+ * Message identifier
+ *
+ * Uniquely identifies a message in a conversation.
+ * Messages are scoped to sessions via the `session_id` foreign key.
+ *
+ * @example
+ * const messageId: MessageID = "0193d1e2-3f4a-7b5c-a8f3-9d2e1c4b5a6f";
+ */
+export type MessageID = UUID;
+
+/**
  * Note: Concepts and Reports use file paths as identifiers, not UUIDs.
  *
  * - Concepts: ConceptPath (e.g., "core.md", "explorations/cli.md")

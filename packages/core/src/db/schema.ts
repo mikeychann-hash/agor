@@ -1,4 +1,4 @@
-import type { Session, Task, WorktreeConfig } from '@agor/core/types';
+import type { Message, Session, Task, WorktreeConfig } from '@agor/core/types';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 /**
@@ -64,7 +64,7 @@ export const sessions = sqliteTable(
       }>()
       .notNull(),
   },
-  table => ({
+  (table) => ({
     statusIdx: index('sessions_status_idx').on(table.status),
     agentIdx: index('sessions_agent_idx').on(table.agent),
     boardIdx: index('sessions_board_idx').on(table.board_id),
@@ -105,10 +105,59 @@ export const tasks = sqliteTable(
       }>()
       .notNull(),
   },
-  table => ({
+  (table) => ({
     sessionIdx: index('tasks_session_idx').on(table.session_id),
     statusIdx: index('tasks_status_idx').on(table.status),
     createdIdx: index('tasks_created_idx').on(table.created_at),
+  })
+);
+
+/**
+ * Messages table - Conversation messages within sessions
+ *
+ * Stores individual messages (user, assistant, system) for full conversation replay.
+ * Messages are indexed by session_id, task_id, and position (index) for efficient queries.
+ */
+export const messages = sqliteTable(
+  'messages',
+  {
+    // Primary identity
+    message_id: text('message_id', { length: 36 }).primaryKey(),
+    created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+
+    // Foreign keys (materialized for indexes)
+    session_id: text('session_id', { length: 36 })
+      .notNull()
+      .references(() => sessions.session_id, { onDelete: 'cascade' }),
+    task_id: text('task_id', { length: 36 }).references(() => tasks.task_id, {
+      onDelete: 'set null',
+    }),
+
+    // Materialized for queries
+    type: text('type', {
+      enum: ['user', 'assistant', 'system', 'file-history-snapshot'],
+    }).notNull(),
+    role: text('role', {
+      enum: ['user', 'assistant', 'system'],
+    }).notNull(),
+    index: integer('index').notNull(), // Position in conversation (0-based)
+    timestamp: integer('timestamp', { mode: 'timestamp_ms' }).notNull(),
+    content_preview: text('content_preview'), // First 200 chars for list views
+
+    // Full data (JSON blob)
+    data: text('data', { mode: 'json' })
+      .$type<{
+        content: Message['content'];
+        tool_uses?: Message['tool_uses'];
+        metadata?: Message['metadata'];
+      }>()
+      .notNull(),
+  },
+  (table) => ({
+    // Indexes for efficient lookups
+    sessionIdx: index('messages_session_id_idx').on(table.session_id),
+    taskIdx: index('messages_task_id_idx').on(table.task_id),
+    sessionIndexIdx: index('messages_session_index_idx').on(table.session_id, table.index),
   })
 );
 
@@ -136,7 +185,7 @@ export const boards = sqliteTable(
       }>()
       .notNull(),
   },
-  table => ({
+  (table) => ({
     nameIdx: index('boards_name_idx').on(table.name),
     slugIdx: index('boards_slug_idx').on(table.slug),
   })
@@ -166,7 +215,7 @@ export const repos = sqliteTable(
       }>()
       .notNull(),
   },
-  table => ({
+  (table) => ({
     slugIdx: index('repos_slug_idx').on(table.slug),
   })
 );
@@ -178,6 +227,8 @@ export type SessionRow = typeof sessions.$inferSelect;
 export type SessionInsert = typeof sessions.$inferInsert;
 export type TaskRow = typeof tasks.$inferSelect;
 export type TaskInsert = typeof tasks.$inferInsert;
+export type MessageRow = typeof messages.$inferSelect;
+export type MessageInsert = typeof messages.$inferInsert;
 export type BoardRow = typeof boards.$inferSelect;
 export type BoardInsert = typeof boards.$inferInsert;
 export type RepoRow = typeof repos.$inferSelect;

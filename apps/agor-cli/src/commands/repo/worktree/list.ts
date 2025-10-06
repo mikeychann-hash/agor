@@ -6,10 +6,17 @@
 
 import { createClient, isDaemonRunning } from '@agor/core/api';
 import type { Repo } from '@agor/core/types';
-import type { Paginated } from '@feathersjs/feathers';
 import { Args, Command } from '@oclif/core';
 import chalk from 'chalk';
 import Table from 'cli-table3';
+
+// Type for paginated responses
+interface Paginated<T> {
+  total: number;
+  limit: number;
+  skip: number;
+  data: T[];
+}
 
 export default class WorktreeList extends Command {
   static description = 'List git worktrees';
@@ -77,7 +84,8 @@ export default class WorktreeList extends Command {
       }
 
       // Fetch repos
-      const result = await reposService.find({ query });
+      // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
+      const result = await (reposService as any).find({ query });
       const repos = Array.isArray(result) ? result : (result as Paginated<Repo>).data;
 
       if (!repos || repos.length === 0) {
@@ -95,7 +103,10 @@ export default class WorktreeList extends Command {
       }
 
       // Count total worktrees
-      const totalWorktrees = repos.reduce((sum, repo) => sum + repo.worktrees.length, 0);
+      const totalWorktrees = repos.reduce(
+        (sum: number, repo: Repo) => sum + repo.worktrees.length,
+        0
+      );
 
       if (totalWorktrees === 0) {
         this.log(chalk.dim('No worktrees found.'));

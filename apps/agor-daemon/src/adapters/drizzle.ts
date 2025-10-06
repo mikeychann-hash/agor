@@ -241,7 +241,7 @@ export class DrizzleService<T = any, D = Partial<T>, P extends Params = Params> 
   async create(data: D | D[], _params?: P): Promise<T | T[]> {
     if (Array.isArray(data)) {
       // Bulk create
-      return Promise.all(data.map(item => this.repository.create(item as Partial<T>)));
+      return Promise.all(data.map((item) => this.repository.create(item as Partial<T>)));
     }
 
     return this.repository.create(data as Partial<T>);
@@ -276,7 +276,7 @@ export class DrizzleService<T = any, D = Partial<T>, P extends Params = Params> 
       records = this.filterData(records, query);
 
       return Promise.all(
-        records.map(record =>
+        records.map((record) =>
           this.repository.update(
             (record as Record<string, unknown>)[this.id] as string,
             data as Partial<T>
@@ -310,7 +310,7 @@ export class DrizzleService<T = any, D = Partial<T>, P extends Params = Params> 
       records = this.filterData(records, query);
 
       // biome-ignore lint/suspicious/noExplicitAny: Need to access ID field dynamically
-      await Promise.all(records.map(record => this.repository.delete((record as any)[this.id])));
+      await Promise.all(records.map((record) => this.repository.delete((record as any)[this.id])));
 
       return records;
     }

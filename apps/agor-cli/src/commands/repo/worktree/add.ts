@@ -54,7 +54,8 @@ export default class WorktreeAdd extends Command {
       const reposService = client.service('repos');
 
       // Fetch repo by slug
-      const repos = await reposService.find({
+      // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
+      const repos = await (reposService as any).find({
         query: { slug: args.repoSlug, $limit: 1 },
       });
 
@@ -74,7 +75,7 @@ export default class WorktreeAdd extends Command {
       }
 
       // Check if worktree already exists
-      const existing = repo.worktrees.find(w => w.name === args.name);
+      const existing = repo.worktrees.find((w) => w.name === args.name);
       if (existing) {
         this.error(`Worktree '${args.name}' already exists at ${existing.path}`);
       }
@@ -105,7 +106,11 @@ export default class WorktreeAdd extends Command {
       }
 
       // Call daemon API to create worktree
-      const updatedRepo = (await client.service(`repos/${repo.repo_id}/worktrees`).create({
+      // biome-ignore lint/suspicious/noExplicitAny: Dynamic Feathers service route not in ServiceTypes
+      const updatedRepo = (await (
+        // biome-ignore lint/suspicious/noExplicitAny: Feathers service typing limitation for custom routes
+        client.service(`repos/${repo.repo_id}/worktrees` as any) as any
+      ).create({
         name: args.name,
         ref,
         createBranch,
@@ -113,7 +118,7 @@ export default class WorktreeAdd extends Command {
 
       this.log(`${chalk.green('✓')} Worktree created and registered`);
 
-      const worktree = updatedRepo.worktrees.find(w => w.name === args.name);
+      const worktree = updatedRepo.worktrees.find((w) => w.name === args.name);
       if (worktree) {
         this.log(chalk.dim(`  Path: ${worktree.path}`));
       }

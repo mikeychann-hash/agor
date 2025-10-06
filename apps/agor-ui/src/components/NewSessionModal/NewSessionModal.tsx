@@ -30,7 +30,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
   const handleCreate = () => {
-    form.validateFields().then(values => {
+    form.validateFields().then((values) => {
       if (!selectedAgent) {
         return;
       }
@@ -73,7 +73,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
         <Form.Item label="Select Coding Agent" required>
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            {availableAgents.map(agent => (
+            {availableAgents.map((agent) => (
               <AgentSelectionCard
                 key={agent.id}
                 agent={agent}

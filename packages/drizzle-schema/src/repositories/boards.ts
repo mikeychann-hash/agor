@@ -86,7 +86,7 @@ export class BoardRepository implements BaseRepository<Board, Partial<Board>> {
       throw new AmbiguousIdError(
         'Board',
         id,
-        results.map(r => formatShortId(r.board_id))
+        results.map((r) => formatShortId(r.board_id))
       );
     }
 
@@ -148,7 +148,7 @@ export class BoardRepository implements BaseRepository<Board, Partial<Board>> {
       const rows = await this.db.select().from(boards).all();
 
       // Filter by slug in JSON data
-      const row = rows.find(r => {
+      const row = rows.find((r) => {
         // biome-ignore lint/suspicious/noExplicitAny: Repository layer uses JSON columns for flexible data storage
         const data = r.data as any;
         return data.slug === slug;
@@ -169,7 +169,7 @@ export class BoardRepository implements BaseRepository<Board, Partial<Board>> {
   async findAll(): Promise<Board[]> {
     try {
       const rows = await this.db.select().from(boards).all();
-      return rows.map(row => this.rowToBoard(row));
+      return rows.map((row) => this.rowToBoard(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find all boards: ${error instanceof Error ? error.message : String(error)}`,
@@ -278,7 +278,7 @@ export class BoardRepository implements BaseRepository<Board, Partial<Board>> {
       }
 
       // biome-ignore lint/suspicious/noExplicitAny: Type assertion needed for filtered session ID array
-      board.sessions = board.sessions.filter(id => id !== sessionId) as any[];
+      board.sessions = board.sessions.filter((id) => id !== sessionId) as any[];
       return this.update(boardId, { sessions: board.sessions });
     } catch (error) {
       if (error instanceof RepositoryError) throw error;

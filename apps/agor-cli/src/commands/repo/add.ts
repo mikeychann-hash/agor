@@ -49,7 +49,8 @@ export default class RepoAdd extends Command {
       // Call daemon API to clone repo
       const client = createClient(daemonUrl);
 
-      const repo = (await client.service('repos/clone').create({
+      // biome-ignore lint/suspicious/noExplicitAny: Dynamic Feathers service route not in ServiceTypes
+      const repo = (await (client.service('repos/clone' as any) as any).create({
         url: args.url,
         slug: repoName,
       })) as Repo;
@@ -65,24 +66,45 @@ export default class RepoAdd extends Command {
       this.log(`  ${chalk.cyan('Default Branch')}: ${repo.default_branch}`);
       this.log('');
 
-      // Close socket
-      client.io.close();
+      // Close socket and wait for it to close
+      await new Promise<void>((resolve) => {
+        client.io.on('disconnect', resolve);
+        client.io.close();
+        setTimeout(resolve, 1000); // Fallback timeout
+      });
       process.exit(0);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
-      // Check for common errors
+      this.log('');
+
+      // Check for common errors and provide friendly messages
       if (message.includes('already exists')) {
-        this.error(
-          `Repository already exists. Use ${chalk.cyan('agor repo list')} to see registered repos.`
-        );
+        this.log(chalk.red('✗ Repository already exists'));
+        this.log('');
+        this.log(`Use ${chalk.cyan('agor repo list')} to see registered repos.`);
+        this.log('');
+        process.exit(1);
       } else if (message.includes('Permission denied')) {
-        this.error('Permission denied. Make sure you have SSH keys configured or use HTTPS URL.');
+        this.log(chalk.red('✗ Permission denied'));
+        this.log('');
+        this.log('Make sure you have SSH keys configured or use HTTPS URL.');
+        this.log('');
+        process.exit(1);
       } else if (message.includes('Could not resolve host')) {
-        this.error('Network error. Check your internet connection and try again.');
+        this.log(chalk.red('✗ Network error'));
+        this.log('');
+        this.log('Check your internet connection and try again.');
+        this.log('');
+        process.exit(1);
       }
 
-      this.error(`Failed to add repository: ${message}`);
+      // Generic error
+      this.log(chalk.red('✗ Failed to add repository'));
+      this.log('');
+      this.log(chalk.dim(message));
+      this.log('');
+      process.exit(1);
     }
   }
 }

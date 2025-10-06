@@ -4,6 +4,7 @@ export * from './agent';
 export * from './board';
 export * from './concept';
 export * from './id';
+export * from './message';
 export * from './repo';
 export * from './report';
 export * from './session';

@@ -5,15 +5,15 @@
 
 **Pronunciation:** "AY-gore"
 
-**Status:** Phase 2b - Drizzle Integration Sprint 🌧️
+**Status:** Backend + CLI Complete | UI Integration Next
 **Project:** Open Source (Apache 2.0)
 **Organization:** Tembo
-**Date:** October 2025
+**Date:** January 2025
 
 **Quick Links:**
 
 - [PROJECT.md](PROJECT.md) - Implementation roadmap & current status
-- [DRIZZLE_ATTACK.md](DRIZZLE_ATTACK.md) - Current sprint plan (Days 1-10)
+- [CLAUDE.md](CLAUDE.md) - Developer guide & technical documentation
 - [context/](context/) - Architecture documentation
 
 ---
@@ -105,9 +105,9 @@ Your Project:
 │   └── Your code's version history
 │
 └── .agor/         # Session tree (agor)
-    ├── sessions/  # Conversation history
-    ├── concepts/  # Context library
-    └── Metadata linking sessions ↔ code
+    ├── agor.db    # Session database (SQLite)
+    ├── repos/     # Cloned repositories
+    └── worktrees/ # Git worktrees for session isolation
 ```
 
 **Git tracks code. Agor tracks the conversations that produced the code.**
@@ -140,22 +140,21 @@ Your Project:
 
 ---
 
-## Documentation
+## Current Status
 
-Agor's knowledge is organized into modular concept files:
+**✅ Completed:**
+- Backend daemon (FeathersJS + Drizzle + LibSQL)
+- CLI tool (session management, repo/worktree operations)
+- Claude Code session import with task extraction
+- UI prototype (React + Ant Design + Storybook)
+- Data architecture (Messages → Tasks event sourcing)
 
-### Core Concepts
+**🚧 In Progress:**
+- Agent integration framework
+- UI ↔ Backend connection
+- Real-time updates
 
-- **[core.md](context/concepts/core.md)** - The 5 primitives, vision, and how they compose
-- **[models.md](context/concepts/models.md)** - Information architecture, data models, and relationships
-- **[architecture.md](context/concepts/architecture.md)** - System design and storage structure
-- **[design.md](context/concepts/design.md)** - UI/UX principles and component patterns
-
-### Project Documentation
-
-- **[PROJECT.md](PROJECT.md)** - UI prototype implementation, roadmap, and progress
-
-**See [context/README.md](context/README.md) for the complete concept index.**
+**See [PROJECT.md](PROJECT.md) for detailed roadmap.**
 
 ---
 
@@ -163,65 +162,131 @@ Agor's knowledge is organized into modular concept files:
 
 ### Prerequisites
 
-- Git repository
-- One or more supported agents installed:
-  - Claude Code
-  - Cursor
-  - Codex
-  - Gemini
+- Node.js 18+ and pnpm
+- Git repository (optional, for worktree features)
 
 ### Installation
 
 ```bash
-# Coming soon - V1 in development
 git clone https://github.com/mistercrunch/agor
 cd agor
-npm install
-npm start
+pnpm install
+pnpm build
 ```
 
-### First Session
+### Run the Daemon
 
 ```bash
-# Start a new session
-agor session start \
-  --agent claude-code \
-  --concepts auth,security
-
-# Fork at decision point
-agor session fork <session-id> --from-task <task-id>
-
-# Spawn focused subtask
-agor session spawn <session-id> --agent gemini --concepts database
+cd apps/agor-daemon
+pnpm dev  # Starts on http://localhost:3030
 ```
+
+### Use the CLI
+
+```bash
+# Initialize Agor database
+pnpm agor init
+
+# Import a Claude Code session
+pnpm agor session load-claude <session-id>
+
+# List all sessions
+pnpm agor session list
+
+# Clone a repository
+pnpm agor repo add https://github.com/user/repo
+
+# Create a worktree for isolated work
+pnpm agor repo worktree add <repo-slug> <worktree-name>
+```
+
+### Develop the UI
+
+```bash
+cd apps/agor-ui
+pnpm storybook  # Component development on :6006
+pnpm dev        # Full app
+```
+
+**See [CLAUDE.md](CLAUDE.md) for complete developer documentation.**
+
+---
+
+## Documentation
+
+Agor's knowledge is organized into modular concept files:
+
+### Core Concepts
+
+- **[core.md](context/concepts/core.md)** - The 5 primitives, vision, and how they compose
+- **[models.md](context/concepts/models.md)** - Data models and relationships
+- **[architecture.md](context/concepts/architecture.md)** - System design and storage structure
+- **[design.md](context/concepts/design.md)** - UI/UX principles and component patterns
+- **[id-management.md](context/concepts/id-management.md)** - UUIDv7 and short ID strategy
+
+### Implementation Guides
+
+- **[CLAUDE.md](CLAUDE.md)** - Complete technical documentation for developers
+- **[PROJECT.md](PROJECT.md)** - Implementation roadmap and status
+
+**See [context/README.md](context/README.md) for the complete concept index.**
 
 ---
 
 ## Product Roadmap
 
-### V1: Local-First Orchestration
+### V1: Local Desktop App (Target: Q2 2025)
 
-- Desktop GUI (Electron/Tauri)
-- Multi-agent session management
-- Visual session tree canvas
-- Concept management UI
-- Git/worktree integration
-- Report generation
-- Local-only (no cloud)
+**Goal:** Full-featured local agent orchestrator with GUI + CLI
 
-**Target:** Individual developers and small teams
+**Core Capabilities:**
+- Multi-agent session management (Claude Code, Cursor, Codex, Gemini)
+- Visual session tree canvas with fork/spawn genealogy
+- Git worktree integration for isolated parallel sessions
+- Concept library for modular context composition
+- Automatic report generation from completed tasks
+- Local-only (no cloud, SQLite-based)
 
-### V2: Collaborative Orchestration (Agor Cloud)
+**Deliverables:**
+- Desktop app (Electron or Tauri)
+- Standalone CLI binary (`agor`)
+- Documentation + tutorials
 
-- Real-time multiplayer collaboration
-- Cloud-hosted sessions
-- Shared environments
-- Team concept libraries
-- Pattern recommendations
+---
+
+### V2: Agor Cloud (Target: Q4 2025)
+
+**Goal:** Real-time collaborative agent orchestration
+
+**New Capabilities:**
+- Cloud-hosted sessions (migrate LibSQL → PostgreSQL)
+- Real-time multiplayer (multiple devs, same session tree)
+- Shared concept libraries (team knowledge bases)
+- Pattern recommendations (learn from successful session workflows)
+- Session replay/export for knowledge sharing
 
 **Tagline:** _Real-time strategy multiplayer for AI development_
 
-**See [PROJECT.md](PROJECT.md) for detailed roadmap and milestones.**
+---
+
+## Architecture
+
+**Full Stack:**
+
+- **Backend:** FeathersJS (REST + WebSocket) + Drizzle ORM + LibSQL
+- **CLI:** oclif + cli-table3
+- **Frontend:** React + TypeScript + Ant Design + React Flow + Storybook
+- **Desktop:** Electron/Tauri wrapper (planned)
+
+**Key Technologies:**
+
+- UUIDv7 for time-ordered globally unique IDs
+- Hybrid materialization strategy (indexed columns + JSON blobs)
+- Event sourcing pattern (Messages = log, Tasks = state)
+- Git worktrees for session isolation
+- Repository pattern for local → cloud migration path
+
+**See [context/concepts/architecture.md](context/concepts/architecture.md) for complete system design.**
 
 ---
 
@@ -229,8 +294,21 @@ agor session spawn <session-id> --agent gemini --concepts database
 
 Agor is open source (Apache 2.0). Contributions welcome!
 
-- **Issues:** [github.com/mistercrunch/agor/issues](https://github.com/mistercrunch/agor/issues)
-- **Discussions:** [github.com/mistercrunch/agor/discussions](https://github.com/mistercrunch/agor/discussions)
+**Before contributing:**
+
+1. Read [context/concepts/core.md](context/concepts/core.md) - Understand primitives and vision
+2. Read [CLAUDE.md](CLAUDE.md) - Development workflow and standards
+3. Check [PROJECT.md](PROJECT.md) for current roadmap
+
+**Code standards:**
+
+- **UI:** Follow [context/concepts/design.md](context/concepts/design.md)
+- **Backend:** Repository pattern, Drizzle ORM, FeathersJS services
+- **CLI:** oclif conventions, entity-based commands
+- **Types:** Shared via `@agor/core/types`
+
+**Issues:** [github.com/mistercrunch/agor/issues](https://github.com/mistercrunch/agor/issues)
+**Discussions:** [github.com/mistercrunch/agor/discussions](https://github.com/mistercrunch/agor/discussions)
 
 ---
 

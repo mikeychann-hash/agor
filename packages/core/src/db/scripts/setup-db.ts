@@ -13,8 +13,8 @@
  */
 
 import { sql } from 'drizzle-orm';
-import { createDatabase, DEFAULT_DB_PATH } from '../src/client';
-import { initializeDatabase, seedInitialData } from '../src/migrate';
+import { createDatabase, DEFAULT_DB_PATH } from '../client';
+import { initializeDatabase, seedInitialData } from '../migrate';
 
 interface SetupOptions {
   path?: string;

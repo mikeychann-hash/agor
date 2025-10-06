@@ -79,7 +79,7 @@ const SessionCard = ({
             type="text"
             icon={<PlusCircleOutlined />}
             size="small"
-            onClick={e => {
+            onClick={(e) => {
               e.stopPropagation();
               onSessionClick?.();
             }}
@@ -89,7 +89,7 @@ const SessionCard = ({
         </div>
       )}
 
-      {visibleTasks.map(task => (
+      {visibleTasks.map((task) => (
         <TaskListItem key={task.task_id} task={task} onClick={() => onTaskClick?.(task.task_id)} />
       ))}
     </div>
@@ -148,7 +148,7 @@ const SessionCard = ({
               type="text"
               size="small"
               icon={<ExpandOutlined />}
-              onClick={e => {
+              onClick={(e) => {
                 e.stopPropagation();
                 onSessionClick();
               }}
@@ -186,7 +186,7 @@ const SessionCard = ({
           <div style={{ marginBottom: 12 }}>
             <Space size={4} wrap>
               <Text type="secondary">📦</Text>
-              {session.concepts.map(concept => (
+              {session.concepts.map((concept) => (
                 <Tag key={concept} color="geekblue">
                   {concept}
                 </Tag>

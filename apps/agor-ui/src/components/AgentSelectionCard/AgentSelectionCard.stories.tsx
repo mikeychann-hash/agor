@@ -10,7 +10,7 @@ const meta = {
     layout: 'padded',
   },
   decorators: [
-    Story => (
+    (Story) => (
       <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
         <div style={{ maxWidth: 500 }}>
           <Story />
@@ -73,7 +73,7 @@ export const GeminiNotInstalled: Story = {
 
 export const AllAgents: Story = {
   decorators: [
-    _Story => (
+    (_Story) => (
       <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
         <Space direction="vertical" style={{ width: '100%', maxWidth: 500 }} size="middle">
           <AgentSelectionCard
