@@ -1,0 +1,25 @@
+{
+  "name": "@agor/daemon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agor/core": "workspace:*",
+    "@feathersjs/feathers": "^5.0.29",
+    "@feathersjs/socketio": "^5.0.29",
+    "@feathersjs/express": "^5.0.29"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  }
+}

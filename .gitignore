@@ -34,3 +34,10 @@ yarn-error.log*
 
 # Claude Code
 .claude/
+
+# Monorepo
+.turbo/
+pnpm-lock.yaml
+
+# Agor specific
+.agor/

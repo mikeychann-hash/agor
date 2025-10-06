@@ -1,0 +1,7 @@
+{
+  "*.{ts,tsx,js,jsx,mjs,cjs}": [
+    "biome check --write --no-errors-on-unmatched --diagnostic-level=error",
+    "prettier --write"
+  ],
+  "*.{json,md,yaml,yml}": ["prettier --write"]
+}

@@ -6,6 +6,69 @@ While Agor is primarily a rich GUI for organizing complex "session trees" across
 
 **Key Insight:** The CLI acts as both a standalone tool for session management AND an orchestration layer that can launch agentic coding CLIs (Claude Code, Cursor, etc.) with the right context pre-loaded.
 
+## Initialization
+
+### `agor init` - First-Time Setup
+
+**Purpose:** Initialize Agor in a new environment or repository.
+
+```bash
+# Global initialization (first time using Agor)
+agor init
+
+# Project-specific initialization (optional)
+agor init --local
+```
+
+**What it does:**
+
+1. **Global init** (`agor init`):
+   - Creates `~/.agor/` directory structure
+   - Initializes database (`~/.agor/sessions.db`)
+   - Creates default board
+   - Sets up global config (`~/.agor/config.json`)
+   - Checks daemon installation
+   - Runs health check
+
+2. **Local init** (`agor init --local`):
+   - Creates `.agor/` in current directory (git-ignored)
+   - Sets up project-specific context
+   - Links to git repository (if in git repo)
+   - Optionally creates initial worktree
+
+**Output:**
+
+```bash
+$ agor init
+
+✨ Initializing Agor...
+
+📁 Creating directory structure:
+   ✓ ~/.agor/
+   ✓ ~/.agor/repos/
+   ✓ ~/.agor/worktrees/
+
+💾 Setting up database:
+   ✓ Created ~/.agor/sessions.db
+   ✓ Initialized schema
+   ✓ Created default board
+
+⚙️  Configuration:
+   ✓ ~/.agor/config.json
+   ✓ ~/.agor/context.json
+
+🔍 Checking daemon:
+   ✓ Daemon ready to start
+
+✅ Agor initialized successfully!
+
+Next steps:
+  agor session start    # Create your first session
+  agor --help          # See available commands
+```
+
+**Idempotent:** Running `agor init` multiple times is safe - it only creates missing components.
+
 ## Framework Selection
 
 ### Recommended: **oclif**
@@ -13,6 +76,7 @@ While Agor is primarily a rich GUI for organizing complex "session trees" across
 After evaluating the major TypeScript CLI frameworks, **oclif** is the optimal choice for Agor:
 
 **Why oclif:**
+
 - **Plugin architecture** - Critical for extensibility (agent integrations, custom commands)
 - **First-class TypeScript support** - Type safety for all our primitives
 - **Hierarchical commands** - Natural fit for entity-based subcommand structure
@@ -21,11 +85,13 @@ After evaluating the major TypeScript CLI frameworks, **oclif** is the optimal c
 - **Enterprise-ready** - Built for complex, large-scale CLI applications
 
 **Trade-offs:**
+
 - Steeper learning curve than Commander (acceptable for our complexity)
 - More opinionated setup (beneficial for consistency)
 - Heavier than needed for simple CLIs (not a concern given our scope)
 
 **Alternatives considered:**
+
 - **Commander** - Too lightweight for plugin system needs
 - **Yargs** - Strong candidate, but lacks plugin architecture
 - **Ink** - React-based, overkill for our data-focused CLI
@@ -35,6 +101,7 @@ After evaluating the major TypeScript CLI frameworks, **oclif** is the optimal c
 For rich data tables (session lists, task timelines, etc.):
 
 **Features:**
+
 - Unicode-aided tables with custom styles
 - Column/row spanning
 - Per-cell customization (borders, colors, padding)
@@ -55,6 +122,7 @@ agor <entity> <operation> [options]
 ```
 
 **Entities (Top-Level Commands):**
+
 1. `board` - Board management
 2. `session` - Session orchestration (primary command)
 3. `task` - Task operations
@@ -66,12 +134,14 @@ agor <entity> <operation> [options]
 #### `agor session` (Primary Command)
 
 **List/Browse:**
+
 - `agor session list [--board <name>] [--status <status>] [--agent <agent>]`
   - Rich table: ID, prompt (truncated), agent, status, tasks, git ref, modified
   - Filter by board, status (running/idle/completed/failed), agent type
   - Sort by: recent, active, board
 
 **Lifecycle:**
+
 - `agor session start [options]`
   - Options: `--agent <agent>`, `--board <board>`, `--prompt <text>`, `--repo <slug>`, `--worktree <name>`, `--no-worktree`
   - Interactive workflow if options not provided:
@@ -108,6 +178,7 @@ agor <entity> <operation> [options]
   - Launches agent CLI in new session
 
 **Metadata:**
+
 - `agor session show <session-id>`
   - Detailed view: genealogy tree, all tasks, concepts, git state
   - ASCII tree diagram for family relationships
@@ -120,6 +191,7 @@ agor <entity> <operation> [options]
   - Shows forks (dashed) vs spawns (solid) relationships
 
 **CRUD:**
+
 - `agor session delete <session-id> [--force]`
   - Archive session (soft delete by default)
   - `--force` for hard delete (warn about children)
@@ -127,6 +199,7 @@ agor <entity> <operation> [options]
 #### `agor repo`
 
 **Repository Management:**
+
 - `agor repo add <git-url> [--slug <name>]`
   - Clone repository to `~/.agor/repos/{slug}` as bare clone
   - Enables Agor-managed worktree creation
@@ -146,6 +219,7 @@ agor <entity> <operation> [options]
   - Updates sessions to orphaned state
 
 **Worktree Management:**
+
 - `agor repo worktree add <repo-slug> <name> [--ref <branch>]`
   - Create worktree at `~/.agor/worktrees/{repo-slug}/{name}`
   - Auto-detects if remote branch exists (offers to track)
@@ -240,6 +314,7 @@ agor <entity> <operation> [options]
 #### `agor config`
 
 **View/Get:**
+
 - `agor config`
   - Show all current config and active context
 
@@ -248,6 +323,7 @@ agor <entity> <operation> [options]
   - Examples: `board`, `session`, `agent`, `cwd`
 
 **Set/Unset:**
+
 - `agor config set <key> <value>`
   - Set active context value
   - Accepts short IDs or slugs for board/session
@@ -263,6 +339,7 @@ agor <entity> <operation> [options]
   - Clear all active context
 
 **Edit:**
+
 - `agor config edit`
   - Open config file in $EDITOR
 
@@ -296,7 +373,7 @@ When commands like `start`, `resume`, `fork`, `spawn` are invoked:
 
 ```typescript
 interface AgentAdapter {
-  name: string;                    // "claude-code" | "cursor" | "codex" | "gemini"
+  name: string; // "claude-code" | "cursor" | "codex" | "gemini"
   isInstalled(): Promise<boolean>;
   launchCommand(context: SessionContext): string[];
   environmentVars(context: SessionContext): Record<string, string>;
@@ -331,6 +408,7 @@ agor session spawn abc123 --prompt "Write tests for auth middleware"
 ```
 
 **Without `--prompt`:**
+
 - Interactive multi-line input (Inquirer.js)
 - Shows context hints (current branch, concepts, parent prompt)
 - Preview before launching agent
@@ -350,6 +428,7 @@ agor session spawn abc123 --prompt "Write tests for auth middleware"
 ```
 
 **Color coding:**
+
 - Running: Blue spinner (●)
 - Completed: Green checkmark (✓)
 - Failed: Red cross (✗)
@@ -400,12 +479,14 @@ Legend: (fork) = branching decision | (spawn) = delegated subtask
 **Philosophy:** Reduce repetitive typing by setting context that persists across commands.
 
 **Two-tier configuration:**
+
 1. **Global config** (`~/.agor/config.json`) - Persistent settings
 2. **Active context** (`~/.agor/context.json`) - Current working state
 
 #### `agor config` Commands
 
 **View Current Context:**
+
 ```bash
 # Show all config values
 agor config
@@ -416,6 +497,7 @@ agor config get session
 ```
 
 **Set Context (Active State):**
+
 ```bash
 # Set active board
 agor config set board experiments
@@ -432,6 +514,7 @@ agor config set cwd /path/to/project
 ```
 
 **Unset Context:**
+
 ```bash
 agor config unset board
 agor config unset session
@@ -439,6 +522,7 @@ agor config clear  # Clear all active context
 ```
 
 **Edit Config File:**
+
 ```bash
 agor config edit  # Opens ~/.agor/config.json in $EDITOR
 ```
@@ -452,7 +536,7 @@ agor config edit  # Opens ~/.agor/config.json in $EDITOR
 ```json
 {
   "storage": {
-    "type": "local",  // or "cloud" in future
+    "type": "local", // or "cloud" in future
     "path": "~/.agor/sessions.db"
   },
   "agents": {
@@ -467,7 +551,7 @@ agor config edit  # Opens ~/.agor/config.json in $EDITOR
     }
   },
   "display": {
-    "tableStyle": "unicode",  // unicode | ascii | minimal
+    "tableStyle": "unicode", // unicode | ascii | minimal
     "colorOutput": true,
     "truncatePrompts": 120,
     "shortIdLength": 8
@@ -477,8 +561,8 @@ agor config edit  # Opens ~/.agor/config.json in $EDITOR
     "worktreeRoot": "~/.agor/worktrees"
   },
   "defaults": {
-    "board": "main",        // Default board for new sessions
-    "agent": "claude-code"  // Default agent for new sessions
+    "board": "main", // Default board for new sessions
+    "agent": "claude-code" // Default agent for new sessions
   }
 }
 ```
@@ -487,11 +571,11 @@ agor config edit  # Opens ~/.agor/config.json in $EDITOR
 
 ```json
 {
-  "board": "experiments",           // Active board (slug or ID)
-  "session": "01933e4a",           // Active session (for task commands)
-  "agent": "claude-code",          // Preferred agent for new sessions
-  "cwd": "/Users/max/code/myapp",  // Working directory
-  "lastCommand": "session list",   // Last command run (for history)
+  "board": "experiments", // Active board (slug or ID)
+  "session": "01933e4a", // Active session (for task commands)
+  "agent": "claude-code", // Preferred agent for new sessions
+  "cwd": "/Users/max/code/myapp", // Working directory
+  "lastCommand": "session list", // Last command run (for history)
   "updatedAt": "2025-01-15T10:30:00Z"
 }
 ```
@@ -508,6 +592,7 @@ Commands resolve values in this order:
 4. **Interactive prompts** (if required and not set)
 
 **Example:**
+
 ```bash
 # Set active board
 agor config set board experiments
@@ -528,6 +613,7 @@ agor config get board
 ### Config Output Display
 
 **`agor config` (show all):**
+
 ```
 Current Configuration
 ─────────────────────
@@ -553,6 +639,7 @@ Last updated: 2 minutes ago
 ```
 
 **`agor config get board`:**
+
 ```
 experiments
 ```
@@ -562,6 +649,7 @@ experiments
 ### Stateful Workflow Examples
 
 **Example 1: Working on a specific board**
+
 ```bash
 # Set context
 agor config set board experiments
@@ -577,6 +665,7 @@ agor session list  # Now shows bug-fixes sessions
 ```
 
 **Example 2: Deep-diving into a session**
+
 ```bash
 # Set active session
 agor config set session 01933e4a
@@ -592,6 +681,7 @@ agor session resume         # Resumes active session
 ```
 
 **Example 3: Multi-project workflow**
+
 ```bash
 # Project 1
 cd ~/code/frontend
@@ -609,6 +699,7 @@ agor session start --prompt "Optimize queries"
 ```
 
 **Example 4: Context-aware shortcuts**
+
 ```bash
 # Long form without context
 agor task list 01933e4a
@@ -628,43 +719,47 @@ agor task add --prompt "Fix bug"
 
 **Attributes that make sense for active context:**
 
-| Attribute | Purpose | Commands Affected | Persistence |
-|-----------|---------|-------------------|-------------|
-| `board` | Active board for session operations | `session list`, `session start` | Until changed |
-| `session` | Active session for task operations | `task list/show/add`, `session show/resume/fork/spawn` | Until changed |
-| `agent` | Preferred agent for new sessions | `session start` | Until changed |
-| `cwd` | Working directory context | All commands (project-scoped) | Per-directory |
-| `concepts` | Default concepts for new sessions | `session start` | Until changed |
-| `reportTemplate` | Default report template | Task completion | Until changed |
+| Attribute        | Purpose                             | Commands Affected                                      | Persistence   |
+| ---------------- | ----------------------------------- | ------------------------------------------------------ | ------------- |
+| `board`          | Active board for session operations | `session list`, `session start`                        | Until changed |
+| `session`        | Active session for task operations  | `task list/show/add`, `session show/resume/fork/spawn` | Until changed |
+| `agent`          | Preferred agent for new sessions    | `session start`                                        | Until changed |
+| `cwd`            | Working directory context           | All commands (project-scoped)                          | Per-directory |
+| `concepts`       | Default concepts for new sessions   | `session start`                                        | Until changed |
+| `reportTemplate` | Default report template             | Task completion                                        | Until changed |
 
 **Additional context ideas:**
 
-| Attribute | Use Case |
-|-----------|----------|
-| `defaultPromptTemplate` | Pre-fill session prompts with template |
-| `autoResume` | Auto-resume last active session on `agor` without args |
-| `verbosity` | Default verbosity level (quiet/normal/verbose) |
-| `pager` | Enable/disable paging for long output |
+| Attribute               | Use Case                                               |
+| ----------------------- | ------------------------------------------------------ |
+| `defaultPromptTemplate` | Pre-fill session prompts with template                 |
+| `autoResume`            | Auto-resume last active session on `agor` without args |
+| `verbosity`             | Default verbosity level (quiet/normal/verbose)         |
+| `pager`                 | Enable/disable paging for long output                  |
 
 ---
 
 ### Context Scoping
 
 **Option 1: Global context** (simplest)
+
 - Single `~/.agor/context.json` for all projects
 - Context applies everywhere
 
 **Option 2: Per-directory context** (git-style)
+
 - Look for `.agor/context.json` in current directory
 - Walk up directory tree to find context
 - Fallback to `~/.agor/context.json`
 
 **Option 3: Per-project context** (recommended)
+
 - Detect git root or project root
 - Use `.agor/context.json` in project root
 - Allows different contexts per codebase
 
 **Implementation:**
+
 ```typescript
 function findContextFile(): string {
   // Check current directory
@@ -721,11 +816,13 @@ function findContextFile(): string {
 ```
 
 **Disk Usage:**
+
 - Bare repo: ~same as regular clone
 - Each worktree: Only working tree files (no .git duplication)
 - Example: 100MB repo + 3 worktrees ≈ 100MB + 3×(source files)
 
 **Management:**
+
 - Use `agor repo add` to clone repos to `~/.agor/repos/`
 - Use `agor repo worktree add` to create worktrees in `~/.agor/worktrees/`
 - Sessions automatically reference worktrees via `repo.cwd` field
@@ -749,6 +846,7 @@ AGOR_WORKTREE_PATH=<worktree-path>      # Path to worktree (if managed)
 ## Implementation Phases
 
 ### Phase 1: Core CLI (MVP)
+
 - oclif setup with TypeScript
 - `agor session list/show/start/resume`
 - `agor board list/show`
@@ -758,6 +856,7 @@ AGOR_WORKTREE_PATH=<worktree-path>      # Path to worktree (if managed)
 - Local SQLite storage integration
 
 ### Phase 2: Orchestration
+
 - `agor session fork/spawn` with genealogy tracking
 - Agent adapter framework (multi-agent support)
 - Interactive prompts (Inquirer.js integration)
@@ -765,6 +864,7 @@ AGOR_WORKTREE_PATH=<worktree-path>      # Path to worktree (if managed)
 - Session context bundling & injection
 
 ### Phase 3: Advanced Features
+
 - `agor concept` commands (attach/detach/list)
 - `agor report` commands (generate/view/export)
 - `agor session tree` ASCII visualization
@@ -772,6 +872,7 @@ AGOR_WORKTREE_PATH=<worktree-path>      # Path to worktree (if managed)
 - Plugin system for custom commands
 
 ### Phase 4: Cloud Integration (V2)
+
 - Cloud storage backend (`agor login`)
 - Collaborative session sharing
 - Real-time sync for multi-device workflows
@@ -782,12 +883,14 @@ AGOR_WORKTREE_PATH=<worktree-path>      # Path to worktree (if managed)
 ### Session Context Injection
 
 **Method 1: Environment Variables** (Simplest)
+
 ```bash
 AGOR_SESSION_ID=abc123
 AGOR_CONCEPTS=auth,security
 ```
 
 **Method 2: Config File** (Richest)
+
 ```json
 // /tmp/agor-session-abc123.json
 {
@@ -808,6 +911,7 @@ AGOR_CONCEPTS=auth,security
 ```
 
 **Method 3: CLI Flags** (Agent-specific)
+
 ```bash
 claude --session abc123 --concepts auth,security
 ```
@@ -815,11 +919,13 @@ claude --session abc123 --concepts auth,security
 ### State Management
 
 **During Agent Session:**
+
 - Agent CLI writes state updates to Agor DB
 - Use file watchers or IPC for real-time sync
 - Graceful shutdown handlers to finalize session state
 
 **State Transitions:**
+
 - `start` → Creates session record, sets status=running
 - `resume` → Updates status=running, sets resumed_at timestamp
 - `fork/spawn` → Creates new session, links genealogy, copies/inherits context
@@ -830,11 +936,13 @@ claude --session abc123 --concepts auth,security
 **All commands accept both full UUIDs and short ID prefixes.**
 
 **Full UUID (36 chars):**
+
 ```bash
 agor session resume 01933e4a-7b89-7c35-a8f3-9d2e1c4b5a6f
 ```
 
 **Short ID (8+ chars, recommended):**
+
 ```bash
 agor session resume 01933e4a
 ```
@@ -848,6 +956,7 @@ agor session resume 01933e4a
 5. **Multiple matches** - Error with suggestions to use longer prefix
 
 **Example: Unique Match**
+
 ```bash
 $ agor session resume 01933e4a
 
@@ -862,6 +971,7 @@ Launching claude-code...
 ```
 
 **Example: Ambiguous Prefix**
+
 ```bash
 $ agor session resume 0193
 
@@ -877,6 +987,7 @@ $ agor session resume 0193
 ```
 
 **Example: Not Found**
+
 ```bash
 $ agor session resume xyz999
 
@@ -919,6 +1030,7 @@ async function resumeSession(idPrefix: string) {
 ### Error Handling
 
 **Agent Not Installed:**
+
 ```bash
 $ agor session start --agent cursor
 ✗ Error: Agent 'cursor' is not installed or configured
@@ -928,6 +1040,7 @@ $ agor session start --agent cursor
 ```
 
 **Git Conflicts:**
+
 ```bash
 $ agor session fork abc123
 ⚠ Warning: Current branch has uncommitted changes
@@ -986,11 +1099,13 @@ agor session export abc123 --format gif --output demo.gif
 ## References
 
 **CLI Frameworks:**
+
 - oclif: https://oclif.io
 - cli-table3: https://github.com/cli-table/cli-table3
 - Inquirer.js: https://github.com/SBoudrias/Inquirer.js
 
 **Related Agor Docs:**
+
 - `context/concepts/core.md` - Core primitives (Session, Task, Concept)
 - `context/concepts/models.md` - Data model definitions
 - `context/concepts/architecture.md` - System design & storage

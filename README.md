@@ -5,10 +5,16 @@
 
 **Pronunciation:** "AY-gore"
 
-**Status:** Design Document v1.0
+**Status:** Phase 2b - Drizzle Integration Sprint 🌧️
 **Project:** Open Source (Apache 2.0)
 **Organization:** Tembo
 **Date:** October 2025
+
+**Quick Links:**
+
+- [PROJECT.md](PROJECT.md) - Implementation roadmap & current status
+- [DRIZZLE_ATTACK.md](DRIZZLE_ATTACK.md) - Current sprint plan (Days 1-10)
+- [context/](context/) - Architecture documentation
 
 ---
 
@@ -139,12 +145,14 @@ Your Project:
 Agor's knowledge is organized into modular concept files:
 
 ### Core Concepts
+
 - **[core.md](context/concepts/core.md)** - The 5 primitives, vision, and how they compose
 - **[models.md](context/concepts/models.md)** - Information architecture, data models, and relationships
 - **[architecture.md](context/concepts/architecture.md)** - System design and storage structure
 - **[design.md](context/concepts/design.md)** - UI/UX principles and component patterns
 
 ### Project Documentation
+
 - **[PROJECT.md](PROJECT.md)** - UI prototype implementation, roadmap, and progress
 
 **See [context/README.md](context/README.md) for the complete concept index.**
@@ -211,7 +219,7 @@ agor session spawn <session-id> --agent gemini --concepts database
 - Team concept libraries
 - Pattern recommendations
 
-**Tagline:** *Real-time strategy multiplayer for AI development*
+**Tagline:** _Real-time strategy multiplayer for AI development_
 
 **See [PROJECT.md](PROJECT.md) for detailed roadmap and milestones.**
 
@@ -232,4 +240,4 @@ Apache License 2.0
 
 ---
 
-*Agor - Next-gen agent orchestration. Built by developers, for developers.*
+_Agor - Next-gen agent orchestration. Built by developers, for developers._

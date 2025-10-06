@@ -1,0 +1,35 @@
+{
+  "name": "@agor/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "agor": "./bin/run.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx bin/dev.ts",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agor/core": "workspace:*",
+    "@oclif/core": "^4.0.35",
+    "@oclif/plugin-help": "^6.2.18",
+    "chalk": "^5.6.2",
+    "cli-table3": "^0.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "oclif": "^4.18.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  },
+  "oclif": {
+    "bin": "agor",
+    "dirname": "agor",
+    "commands": "./dist/commands",
+    "topicSeparator": " ",
+    "helpClass": "./dist/lib/help.js"
+  }
+}

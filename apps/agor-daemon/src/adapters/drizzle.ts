@@ -1,0 +1,315 @@
+/**
+ * Custom Drizzle Adapter for FeathersJS
+ *
+ * Lightweight adapter that bridges FeathersJS service interface with Drizzle ORM.
+ * Uses the repository pattern from @agor/drizzle-schema for type-safe database operations.
+ */
+
+import type { Id, NullableId, Paginated, Params } from '@feathersjs/feathers';
+
+/**
+ * Query operators supported by the adapter
+ */
+export interface Query {
+  $limit?: number;
+  $skip?: number;
+  $sort?: Record<string, 1 | -1>;
+  $select?: string[];
+  [key: string]: any;
+}
+
+/**
+ * Pagination configuration
+ */
+export interface PaginationOptions {
+  default?: number;
+  max?: number;
+}
+
+/**
+ * Adapter options
+ */
+export interface DrizzleAdapterOptions {
+  /**
+   * Name of the ID field (default: 'id')
+   */
+  id?: string;
+
+  /**
+   * Pagination configuration
+   */
+  paginate?: PaginationOptions;
+
+  /**
+   * Allow multi-record operations (patch/remove without ID)
+   */
+  multi?: boolean | string[];
+}
+
+/**
+ * Repository interface that the adapter expects
+ */
+export interface Repository<T> {
+  create(data: Partial<T>): Promise<T>;
+  findById(id: string): Promise<T | null>;
+  findAll(): Promise<T[]>;
+  update(id: string, updates: Partial<T>): Promise<T>;
+  delete(id: string): Promise<void>;
+  count?(): Promise<number>;
+}
+
+/**
+ * Drizzle Service Adapter
+ *
+ * Implements FeathersJS service methods using a Drizzle repository.
+ */
+export class DrizzleService<T = any, D = Partial<T>, P extends Params = Params> {
+  id: string;
+  paginate?: PaginationOptions;
+  multi: boolean | string[];
+
+  constructor(
+    private repository: Repository<T>,
+    options: DrizzleAdapterOptions = {}
+  ) {
+    this.id = options.id ?? 'id';
+    this.paginate = options.paginate;
+    this.multi = options.multi ?? false;
+  }
+
+  /**
+   * Extract query parameters from params
+   */
+  private getQuery(params?: P): Query {
+    return (params?.query ?? {}) as Query;
+  }
+
+  /**
+   * Apply filters to data array (client-side filtering)
+   */
+  private filterData(data: T[], query: Query): T[] {
+    let filtered = [...data];
+
+    // Filter by field values
+    for (const [key, value] of Object.entries(query)) {
+      if (key.startsWith('$')) continue; // Skip operators
+
+      filtered = filtered.filter((item: any) => {
+        // Simple equality check
+        if (typeof value === 'object' && value !== null) {
+          // Handle operators like $in, $ne, etc.
+          for (const [op, opValue] of Object.entries(value)) {
+            switch (op) {
+              case '$in':
+                return Array.isArray(opValue) && opValue.includes(item[key]);
+              case '$nin':
+                return Array.isArray(opValue) && !opValue.includes(item[key]);
+              case '$ne':
+                return item[key] !== opValue;
+              case '$gt':
+                return item[key] > opValue;
+              case '$gte':
+                return item[key] >= opValue;
+              case '$lt':
+                return item[key] < opValue;
+              case '$lte':
+                return item[key] <= opValue;
+            }
+          }
+        }
+        return item[key] === value;
+      });
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Sort data array
+   */
+  private sortData(data: T[], sortSpec?: Record<string, 1 | -1>): T[] {
+    if (!sortSpec) return data;
+
+    const sorted = [...data];
+    const entries = Object.entries(sortSpec);
+
+    sorted.sort((a: any, b: any) => {
+      for (const [field, direction] of entries) {
+        const aVal = a[field];
+        const bVal = b[field];
+
+        if (aVal < bVal) return direction === 1 ? -1 : 1;
+        if (aVal > bVal) return direction === 1 ? 1 : -1;
+      }
+      return 0;
+    });
+
+    return sorted;
+  }
+
+  /**
+   * Select specific fields from data
+   */
+  private selectFields(data: T[], fields?: string[]): Partial<T>[] {
+    if (!fields || fields.length === 0) return data;
+
+    return data.map((item: any) => {
+      const selected: any = {};
+      for (const field of fields) {
+        if (field in item) {
+          selected[field] = item[field];
+        }
+      }
+      return selected;
+    });
+  }
+
+  /**
+   * Apply pagination to data
+   */
+  private paginateData(data: T[], query: Query, total: number): Paginated<T> | T[] {
+    const limit = query.$limit ?? this.paginate?.default ?? data.length;
+    const skip = query.$skip ?? 0;
+
+    // If pagination is disabled, return all data
+    if (!this.paginate) {
+      return data;
+    }
+
+    // Apply limit (capped by max)
+    const maxLimit = this.paginate.max ?? 1000;
+    const actualLimit = Math.min(limit, maxLimit);
+
+    // Slice data
+    const paginated = data.slice(skip, skip + actualLimit);
+
+    return {
+      total,
+      limit: actualLimit,
+      skip,
+      data: paginated,
+    };
+  }
+
+  /**
+   * Find records
+   */
+  async find(params?: P): Promise<Paginated<T> | T[]> {
+    const query = this.getQuery(params);
+
+    // Get all data from repository
+    let data = await this.repository.findAll();
+
+    // Get total count before filtering
+    const total = data.length;
+
+    // Apply filters
+    data = this.filterData(data, query);
+
+    // Apply sorting
+    data = this.sortData(data, query.$sort);
+
+    // Apply field selection
+    const selected = this.selectFields(data, query.$select);
+
+    // Apply pagination
+    return this.paginateData(selected as T[], query, total);
+  }
+
+  /**
+   * Get a single record by ID
+   */
+  async get(id: Id, _params?: P): Promise<T> {
+    const result = await this.repository.findById(String(id));
+
+    if (!result) {
+      throw new Error(`No record found for id '${id}'`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Create one or more records
+   */
+  async create(data: D | D[], _params?: P): Promise<T | T[]> {
+    if (Array.isArray(data)) {
+      // Bulk create
+      return Promise.all(data.map(item => this.repository.create(item as Partial<T>)));
+    }
+
+    return this.repository.create(data as Partial<T>);
+  }
+
+  /**
+   * Update a record (complete replacement)
+   */
+  async update(id: Id, data: D, params?: P): Promise<T> {
+    // Verify record exists
+    const existing = await this.get(id, params);
+    if (!existing) {
+      throw new Error(`No record found for id '${id}'`);
+    }
+
+    return this.repository.update(String(id), data as Partial<T>);
+  }
+
+  /**
+   * Patch a record (partial update)
+   */
+  async patch(id: NullableId, data: D, params?: P): Promise<T | T[]> {
+    if (id === null) {
+      // Multi-patch not supported in simple implementation
+      if (!this.multi) {
+        throw new Error('Multi-patch is not enabled');
+      }
+
+      // Find all matching records and patch them
+      const query = this.getQuery(params);
+      let records = await this.repository.findAll();
+      records = this.filterData(records, query);
+
+      return Promise.all(
+        records.map(record => this.repository.update((record as any)[this.id], data as Partial<T>))
+      );
+    }
+
+    // Single patch
+    const existing = await this.get(id, params);
+    if (!existing) {
+      throw new Error(`No record found for id '${id}'`);
+    }
+
+    return this.repository.update(String(id), data as Partial<T>);
+  }
+
+  /**
+   * Remove one or more records
+   */
+  async remove(id: NullableId, params?: P): Promise<T | T[]> {
+    if (id === null) {
+      // Multi-remove not supported in simple implementation
+      if (!this.multi) {
+        throw new Error('Multi-remove is not enabled');
+      }
+
+      // Find all matching records and remove them
+      const query = this.getQuery(params);
+      let records = await this.repository.findAll();
+      records = this.filterData(records, query);
+
+      await Promise.all(records.map(record => this.repository.delete((record as any)[this.id])));
+
+      return records;
+    }
+
+    // Single remove
+    const existing = await this.get(id, params);
+    if (!existing) {
+      throw new Error(`No record found for id '${id}'`);
+    }
+
+    await this.repository.delete(String(id));
+    return existing;
+  }
+}
