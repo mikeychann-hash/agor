@@ -4,6 +4,15 @@
 }
 
 .session-node {
-  /* Ensures the SessionCard inside doesn't interfere with React Flow dragging */
-  pointer-events: all;
+  /* Disable drag cursor on the entire node */
+  cursor: default !important;
+}
+
+/* Only the drag handle should show grab cursor and be draggable */
+.session-node .drag-handle {
+  cursor: grab !important;
+}
+
+.session-node .drag-handle:active {
+  cursor: grabbing !important;
 }

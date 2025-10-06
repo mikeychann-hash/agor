@@ -41,7 +41,7 @@ export function extractTasksFromMessages(
   // Find all user messages (these become task boundaries)
   const userMessageIndices = messages
     .map((msg, idx) => (msg.type === 'user' ? idx : -1))
-    .filter((idx) => idx !== -1);
+    .filter(idx => idx !== -1);
 
   // Create a task for each user message
   for (let i = 0; i < userMessageIndices.length; i++) {
@@ -61,13 +61,26 @@ export function extractTasksFromMessages(
     }, 0);
 
     // Get full prompt from user message content
-    const fullPrompt =
-      typeof userMessage.content === 'string'
-        ? userMessage.content
-        : JSON.stringify(userMessage.content);
+    // Clean up any remaining XML tags or complex payloads
+    let fullPrompt = '';
+    if (typeof userMessage.content === 'string') {
+      fullPrompt = userMessage.content;
+    } else if (Array.isArray(userMessage.content)) {
+      // If content is an array, extract text content only
+      const textContent = userMessage.content
+        .filter(c => c.type === 'text')
+        .map(c => c.text || '')
+        .join('\n');
+      fullPrompt = textContent || JSON.stringify(userMessage.content);
+    } else {
+      fullPrompt = JSON.stringify(userMessage.content);
+    }
+
+    // Clean up newlines and excessive whitespace for description
+    const cleanPrompt = fullPrompt.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
 
     // Generate short description (first 120 chars)
-    const description = fullPrompt.substring(0, 120) + (fullPrompt.length > 120 ? '...' : '');
+    const description = cleanPrompt.substring(0, 120) + (cleanPrompt.length > 120 ? '...' : '');
 
     // Get timestamps
     const startTimestamp = userMessage.timestamp;

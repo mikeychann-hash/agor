@@ -1,5 +1,6 @@
 import {
   BranchesOutlined,
+  DragOutlined,
   EditOutlined,
   ExpandOutlined,
   ForkOutlined,
@@ -79,7 +80,7 @@ const SessionCard = ({
             type="text"
             icon={<PlusCircleOutlined />}
             size="small"
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
               onSessionClick?.();
             }}
@@ -89,7 +90,7 @@ const SessionCard = ({
         </div>
       )}
 
-      {visibleTasks.map((task) => (
+      {visibleTasks.map(task => (
         <TaskListItem key={task.task_id} task={task} onClick={() => onTaskClick?.(task.task_id)} />
       ))}
     </div>
@@ -101,8 +102,6 @@ const SessionCard = ({
       styles={{
         body: { padding: 16 },
       }}
-      onClick={onSessionClick}
-      hoverable={!!onSessionClick}
     >
       {/* Session header */}
       <div
@@ -113,7 +112,7 @@ const SessionCard = ({
           marginBottom: 12,
         }}
       >
-        <Space size={8} align="center">
+        <Space size={8} align="center" className="nodrag">
           <span style={{ fontSize: 20 }}>{getAgentIcon()}</span>
           <Text strong>{session.agent}</Text>
           {session.status === 'running' ? (
@@ -133,33 +132,45 @@ const SessionCard = ({
         </Space>
 
         <Space size={4}>
-          {isForked && (
-            <Tag icon={<ForkOutlined />} color="cyan">
-              FORK
-            </Tag>
-          )}
-          {isSpawned && (
-            <Tag icon={<BranchesOutlined />} color="purple">
-              SPAWN
-            </Tag>
-          )}
-          {onSessionClick && (
-            <Button
-              type="text"
-              size="small"
-              icon={<ExpandOutlined />}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSessionClick();
-              }}
-              title="Open in drawer"
-            />
-          )}
+          <div className="nodrag">
+            {isForked && (
+              <Tag icon={<ForkOutlined />} color="cyan">
+                FORK
+              </Tag>
+            )}
+            {isSpawned && (
+              <Tag icon={<BranchesOutlined />} color="purple">
+                SPAWN
+              </Tag>
+            )}
+          </div>
+          <Button
+            type="text"
+            size="small"
+            icon={<DragOutlined />}
+            className="drag-handle"
+            title="Drag to reposition"
+            style={{ cursor: 'grab' }}
+          />
+          <div className="nodrag">
+            {onSessionClick && (
+              <Button
+                type="text"
+                size="small"
+                icon={<ExpandOutlined />}
+                onClick={e => {
+                  e.stopPropagation();
+                  onSessionClick();
+                }}
+                title="Open in drawer"
+              />
+            )}
+          </div>
         </Space>
       </div>
 
       {/* Session metadata */}
-      <div>
+      <div className="nodrag">
         {/* Description */}
         {session.description && (
           <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 8 }}>
@@ -186,7 +197,7 @@ const SessionCard = ({
           <div style={{ marginBottom: 12 }}>
             <Space size={4} wrap>
               <Text type="secondary">📦</Text>
-              {session.concepts.map((concept) => (
+              {session.concepts.map(concept => (
                 <Tag key={concept} color="geekblue">
                   {concept}
                 </Tag>
@@ -197,24 +208,26 @@ const SessionCard = ({
       </div>
 
       {/* Tasks - collapsible */}
-      <Collapse
-        defaultActiveKey={defaultExpanded ? ['tasks'] : []}
-        items={[
-          {
-            key: 'tasks',
-            label: taskListHeader,
-            children: taskListContent,
-          },
-        ]}
-        ghost
-        style={{ marginTop: 8 }}
-      />
+      <div className="nodrag">
+        <Collapse
+          defaultActiveKey={defaultExpanded ? ['tasks'] : []}
+          items={[
+            {
+              key: 'tasks',
+              label: taskListHeader,
+              children: taskListContent,
+            },
+          ]}
+          ghost
+          style={{ marginTop: 8 }}
+        />
 
-      {/* Footer metadata - always visible */}
-      <div style={{ marginTop: 12 }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          💬 {session.message_count} messages
-        </Text>
+        {/* Footer metadata - always visible */}
+        <div style={{ marginTop: 12 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            💬 {session.message_count} messages
+          </Text>
+        </div>
       </div>
     </Card>
   );

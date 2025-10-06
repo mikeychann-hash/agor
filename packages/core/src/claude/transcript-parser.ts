@@ -102,12 +102,26 @@ export async function loadSessionTranscript(
  * Filter transcript messages (exclude meta messages, snapshots, etc.)
  */
 export function filterConversationMessages(messages: TranscriptMessage[]): TranscriptMessage[] {
-  return messages.filter((msg) => {
+  return messages.filter(msg => {
     // Exclude file history snapshots
     if (msg.type === 'file-history-snapshot') return false;
 
     // Exclude meta messages (like local command wrappers)
     if (msg.isMeta) return false;
+
+    // Exclude tool result messages (these are internal, not user prompts)
+    const content = msg.message?.content;
+    if (Array.isArray(content) && content.some(c => c.type === 'tool_result')) {
+      return false;
+    }
+
+    // Exclude command execution metadata (XML-wrapped commands)
+    if (typeof content === 'string') {
+      // Filter out <command-name>, <local-command-stdout>, etc.
+      if (content.trim().match(/^<(command-name|local-command-stdout|system-reminder)/)) {
+        return false;
+      }
+    }
 
     // Include user and assistant messages
     return msg.type === 'user' || msg.type === 'assistant';
