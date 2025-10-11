@@ -9,7 +9,7 @@
  * - Groups 3+ sequential tool-only messages into ToolBlock
  */
 
-import type { Message, Task } from '@agor/core/types';
+import type { Message, Task, User } from '@agor/core/types';
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -27,6 +27,7 @@ import type React from 'react';
 import { useMemo } from 'react';
 import { AgentChain } from '../AgentChain';
 import { MessageBlock } from '../MessageBlock';
+import { CreatedByTag } from '../metadata/CreatedByTag';
 
 const { Text, Paragraph } = Typography;
 
@@ -38,6 +39,8 @@ type Block = { type: 'message'; message: Message } | { type: 'agent-chain'; mess
 interface TaskBlockProps {
   task: Task;
   messages: Message[];
+  users?: User[];
+  currentUserId?: string;
   defaultExpanded?: boolean;
 }
 
@@ -115,6 +118,8 @@ function groupMessagesIntoBlocks(messages: Message[]): Block[] {
 export const TaskBlock: React.FC<TaskBlockProps> = ({
   task,
   messages,
+  users = [],
+  currentUserId,
   defaultExpanded = false,
 }) => {
   const { token } = theme.useToken();
@@ -169,6 +174,14 @@ export const TaskBlock: React.FC<TaskBlockProps> = ({
 
           {/* Task metadata */}
           <Space size={token.sizeUnit * 1.5} style={{ marginTop: token.sizeUnit / 2 }}>
+            {task.created_by && (
+              <CreatedByTag
+                createdBy={task.created_by}
+                currentUserId={currentUserId}
+                users={users}
+                prefix="By"
+              />
+            )}
             <Text type="secondary" style={{ fontSize: 12 }}>
               <MessageOutlined /> {messages.length}
             </Text>
@@ -229,7 +242,14 @@ export const TaskBlock: React.FC<TaskBlockProps> = ({
               ) : (
                 blocks.map(block => {
                   if (block.type === 'message') {
-                    return <MessageBlock key={block.message.message_id} message={block.message} />;
+                    return (
+                      <MessageBlock
+                        key={block.message.message_id}
+                        message={block.message}
+                        users={users}
+                        currentUserId={task.created_by}
+                      />
+                    );
                   }
                   if (block.type === 'agent-chain') {
                     // Use first message ID as key for agent chain

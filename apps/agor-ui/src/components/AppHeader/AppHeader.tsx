@@ -29,13 +29,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   currentBoardName,
   currentBoardIcon,
 }) => {
+  const userEmoji = user?.emoji || '👤';
+
   const userMenuItems: MenuProps['items'] = [
     {
       key: 'user-info',
       label: (
-        <div style={{ padding: '4px 0' }}>
-          <div style={{ fontWeight: 500 }}>{user?.name || 'User'}</div>
-          <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.45)' }}>{user?.email}</div>
+        <div style={{ padding: '4px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 20 }}>{userEmoji}</span>
+          <div>
+            <div style={{ fontWeight: 500 }}>{user?.name || 'User'}</div>
+            <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.45)' }}>{user?.email}</div>
+          </div>
         </div>
       ),
       disabled: true,

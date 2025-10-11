@@ -5,7 +5,7 @@
  */
 
 import type { AgorClient } from '@agor/core/api';
-import type { Board, Repo, Session, Task, User } from '@agor/core/types';
+import type { Board, MCPServer, Repo, Session, Task, User } from '@agor/core/types';
 import { useCallback, useEffect, useState } from 'react';
 
 interface UseAgorDataResult {
@@ -14,6 +14,7 @@ interface UseAgorDataResult {
   boards: Board[];
   repos: Repo[];
   users: User[];
+  mcpServers: MCPServer[];
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -31,6 +32,7 @@ export function useAgorData(client: AgorClient | null): UseAgorDataResult {
   const [boards, setBoards] = useState<Board[]>([]);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,15 +46,22 @@ export function useAgorData(client: AgorClient | null): UseAgorDataResult {
       setLoading(true);
       setError(null);
 
-      // Fetch sessions, tasks, boards, repos, users in parallel
-      const [sessionsResult, tasksResult, boardsResult, reposResult, usersResult] =
-        await Promise.all([
-          client.service('sessions').find(),
-          client.service('tasks').find({ query: { $limit: 500 } }), // Fetch up to 500 tasks
-          client.service('boards').find(),
-          client.service('repos').find(),
-          client.service('users').find(),
-        ]);
+      // Fetch sessions, tasks, boards, repos, users, mcp servers in parallel
+      const [
+        sessionsResult,
+        tasksResult,
+        boardsResult,
+        reposResult,
+        usersResult,
+        mcpServersResult,
+      ] = await Promise.all([
+        client.service('sessions').find(),
+        client.service('tasks').find({ query: { $limit: 500 } }), // Fetch up to 500 tasks
+        client.service('boards').find(),
+        client.service('repos').find(),
+        client.service('users').find(),
+        client.service('mcp-servers').find(),
+      ]);
 
       // Handle paginated vs array results
       const sessionsList = Array.isArray(sessionsResult) ? sessionsResult : sessionsResult.data;
@@ -60,6 +69,9 @@ export function useAgorData(client: AgorClient | null): UseAgorDataResult {
       const boardsList = Array.isArray(boardsResult) ? boardsResult : boardsResult.data;
       const reposList = Array.isArray(reposResult) ? reposResult : reposResult.data;
       const usersList = Array.isArray(usersResult) ? usersResult : usersResult.data;
+      const mcpServersList = Array.isArray(mcpServersResult)
+        ? mcpServersResult
+        : mcpServersResult.data;
 
       setSessions(sessionsList);
 
@@ -76,6 +88,7 @@ export function useAgorData(client: AgorClient | null): UseAgorDataResult {
       setBoards(boardsList);
       setRepos(reposList);
       setUsers(usersList);
+      setMcpServers(mcpServersList);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
     } finally {
@@ -190,6 +203,23 @@ export function useAgorData(client: AgorClient | null): UseAgorDataResult {
     usersService.on('updated', handleUserPatched);
     usersService.on('removed', handleUserRemoved);
 
+    // Subscribe to MCP server events
+    const mcpServersService = client.service('mcp-servers');
+    const handleMCPServerCreated = (server: MCPServer) => {
+      setMcpServers(prev => [...prev, server]);
+    };
+    const handleMCPServerPatched = (server: MCPServer) => {
+      setMcpServers(prev => prev.map(s => (s.mcp_server_id === server.mcp_server_id ? server : s)));
+    };
+    const handleMCPServerRemoved = (server: MCPServer) => {
+      setMcpServers(prev => prev.filter(s => s.mcp_server_id !== server.mcp_server_id));
+    };
+
+    mcpServersService.on('created', handleMCPServerCreated);
+    mcpServersService.on('patched', handleMCPServerPatched);
+    mcpServersService.on('updated', handleMCPServerPatched);
+    mcpServersService.on('removed', handleMCPServerRemoved);
+
     // Cleanup listeners on unmount
     return () => {
       sessionsService.removeListener('created', handleSessionCreated);
@@ -216,6 +246,11 @@ export function useAgorData(client: AgorClient | null): UseAgorDataResult {
       usersService.removeListener('patched', handleUserPatched);
       usersService.removeListener('updated', handleUserPatched);
       usersService.removeListener('removed', handleUserRemoved);
+
+      mcpServersService.removeListener('created', handleMCPServerCreated);
+      mcpServersService.removeListener('patched', handleMCPServerPatched);
+      mcpServersService.removeListener('updated', handleMCPServerPatched);
+      mcpServersService.removeListener('removed', handleMCPServerRemoved);
     };
   }, [client, fetchData]);
 
@@ -225,6 +260,7 @@ export function useAgorData(client: AgorClient | null): UseAgorDataResult {
     boards,
     repos,
     users,
+    mcpServers,
     loading,
     error,
     refetch: fetchData,

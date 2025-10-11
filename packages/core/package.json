@@ -55,7 +55,8 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "db:setup": "tsx src/db/scripts/setup-db.ts",
-    "db:test": "tsx src/db/scripts/test-integration.ts"
+    "db:test": "tsx src/db/scripts/test-integration.ts",
+    "db:migrate:mcp": "tsx src/db/scripts/migrate-add-mcp-tables.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.8",

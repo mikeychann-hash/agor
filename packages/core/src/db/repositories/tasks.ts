@@ -54,6 +54,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
       created_at: new Date(task.created_at ?? now),
       completed_at: task.completed_at ? new Date(task.completed_at) : undefined,
       status: task.status ?? 'created',
+      created_by: task.created_by ?? 'anonymous',
       data: {
         description: task.description ?? '',
         full_prompt: task.full_prompt ?? task.description ?? '',

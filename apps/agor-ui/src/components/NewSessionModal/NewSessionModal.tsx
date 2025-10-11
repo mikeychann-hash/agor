@@ -1,3 +1,4 @@
+import type { MCPServer } from '@agor/core/types';
 import { Collapse, Form, Input, Modal, Radio, Select, Space, Typography } from 'antd';
 import { useState } from 'react';
 import type { Agent } from '../../types';
@@ -36,6 +37,9 @@ export interface NewSessionConfig {
   repoSlug?: string;
   initialWorktreeName?: string;
   initialWorktreeBranch?: string;
+
+  // MCP server associations
+  mcpServerIds?: string[];
 }
 
 export interface NewSessionModalProps {
@@ -47,6 +51,9 @@ export interface NewSessionModalProps {
   // Repo/worktree options (from backend)
   worktreeOptions?: RepoReferenceOption[]; // All existing worktrees
   repoOptions?: RepoReferenceOption[]; // All repos (for new worktree)
+
+  // MCP servers (from backend)
+  mcpServers?: MCPServer[];
 }
 
 export const NewSessionModal: React.FC<NewSessionModalProps> = ({
@@ -56,6 +63,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   availableAgents,
   worktreeOptions = [],
   repoOptions = [],
+  mcpServers = [],
 }) => {
   const [form] = Form.useForm();
   const [selectedAgent, setSelectedAgent] = useState<string | null>('claude-code');
@@ -80,6 +88,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
         repoSlug: values.repoSlug,
         initialWorktreeName: values.initialWorktreeName,
         initialWorktreeBranch: values.initialWorktreeBranch,
+        mcpServerIds: values.mcpServerIds,
       });
 
       form.resetFields();
@@ -235,6 +244,27 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
           <TextArea
             rows={4}
             placeholder="e.g., Build a JWT authentication system with secure password storage..."
+          />
+        </Form.Item>
+
+        <Form.Item
+          name="mcpServerIds"
+          label="MCP Servers (optional)"
+          help="Select MCP servers to make available in this session"
+        >
+          <Select
+            mode="multiple"
+            placeholder="Select MCP servers..."
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            options={mcpServers
+              .filter(server => server.enabled)
+              .map(server => ({
+                label: server.display_name || server.name,
+                value: server.mcp_server_id,
+                disabled: !server.enabled,
+              }))}
           />
         </Form.Item>
       </Form>

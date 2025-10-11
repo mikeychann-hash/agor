@@ -1,3 +1,4 @@
+import type { User } from '@agor/core/types';
 import {
   BranchesOutlined,
   CloseOutlined,
@@ -25,6 +26,7 @@ import {
 } from 'antd';
 import React from 'react';
 import type { Session, Task } from '../../types';
+import { CreatedByTag } from '../metadata';
 import TaskListItem from '../TaskListItem';
 import { ToolIcon } from '../ToolIcon';
 
@@ -35,6 +37,8 @@ const SESSION_CARD_MAX_WIDTH = 480;
 interface SessionCardProps {
   session: Session;
   tasks: Task[];
+  users: User[];
+  currentUserId?: string;
   onTaskClick?: (taskId: string) => void;
   onSessionClick?: () => void;
   onDelete?: (sessionId: string) => void;
@@ -45,6 +49,8 @@ interface SessionCardProps {
 const SessionCard = ({
   session,
   tasks,
+  users,
+  currentUserId,
   onTaskClick,
   onSessionClick,
   onDelete,
@@ -242,6 +248,18 @@ const SessionCard = ({
           <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 8 }}>
             {session.description}
           </Text>
+        )}
+
+        {/* Created By Tag */}
+        {session.created_by && (
+          <div style={{ marginBottom: 8 }}>
+            <CreatedByTag
+              createdBy={session.created_by}
+              currentUserId={currentUserId}
+              users={users}
+              prefix="Created by"
+            />
+          </div>
         )}
 
         {/* Git State */}

@@ -1,4 +1,5 @@
 import type { AgorClient } from '@agor/core/api';
+import type { User } from '@agor/core/types';
 import {
   BranchesOutlined,
   CodeOutlined,
@@ -24,6 +25,7 @@ import {
 import React from 'react';
 import type { Session } from '../../types';
 import { ConversationView } from '../ConversationView';
+import { CreatedByTag } from '../metadata';
 import {
   BranchPill,
   ConceptPill,
@@ -45,6 +47,8 @@ const { TextArea } = Input;
 interface SessionDrawerProps {
   client: AgorClient | null;
   session: Session | null;
+  users?: User[];
+  currentUserId?: string;
   open: boolean;
   onClose: () => void;
   onSendPrompt?: (prompt: string) => void;
@@ -55,6 +59,8 @@ interface SessionDrawerProps {
 const SessionDrawer = ({
   client,
   session,
+  users = [],
+  currentUserId,
   open,
   onClose,
   onSendPrompt,
@@ -140,6 +146,16 @@ const SessionDrawer = ({
                 {session.description}
               </Text>
             )}
+            {session.created_by && (
+              <div style={{ marginTop: 4 }}>
+                <CreatedByTag
+                  createdBy={session.created_by}
+                  currentUserId={currentUserId}
+                  users={users}
+                  prefix="Created by"
+                />
+              </div>
+            )}
           </div>
         </Space>
       }
@@ -212,6 +228,8 @@ const SessionDrawer = ({
         <ConversationView
           client={client}
           sessionId={session.session_id}
+          users={users}
+          currentUserId={currentUserId}
           onScrollRef={setScrollToBottom}
         />
       </div>

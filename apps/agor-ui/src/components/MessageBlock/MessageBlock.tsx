@@ -6,9 +6,10 @@
  * - Tool use blocks
  * - Tool result blocks
  * - User vs Assistant styling
+ * - User emoji avatars
  */
 
-import type { Message } from '@agor/core/types';
+import type { Message, User } from '@agor/core/types';
 import { RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
 import { Avatar, theme } from 'antd';
@@ -39,11 +40,21 @@ type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
 
 interface MessageBlockProps {
   message: Message;
+  users?: User[];
+  currentUserId?: string;
 }
 
-export const MessageBlock: React.FC<MessageBlockProps> = ({ message }) => {
+export const MessageBlock: React.FC<MessageBlockProps> = ({
+  message,
+  users = [],
+  currentUserId,
+}) => {
   const { token } = theme.useToken();
   const isUser = message.role === 'user';
+
+  // Get current user's emoji
+  const currentUser = users.find(u => u.user_id === currentUserId);
+  const userEmoji = currentUser?.emoji || '👤';
 
   // Skip rendering if message has no content
   if (!message.content || (typeof message.content === 'string' && message.content.trim() === '')) {
@@ -131,7 +142,9 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({ message }) => {
             placement={isUser ? 'end' : 'start'}
             avatar={
               isUser ? (
-                <Avatar icon={<UserOutlined />} style={{ backgroundColor: token.colorPrimary }} />
+                <Avatar style={{ backgroundColor: token.colorPrimary, fontSize: '20px' }}>
+                  {userEmoji}
+                </Avatar>
               ) : (
                 <Avatar icon={<RobotOutlined />} style={{ backgroundColor: token.colorSuccess }} />
               )

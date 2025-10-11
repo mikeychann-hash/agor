@@ -13,7 +13,7 @@
  */
 
 import type { AgorClient } from '@agor/core/api';
-import type { SessionID } from '@agor/core/types';
+import type { SessionID, User } from '@agor/core/types';
 import { Alert, Empty, Spin } from 'antd';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useMessages, useTasks } from '../../hooks';
@@ -31,6 +31,16 @@ export interface ConversationViewProps {
   sessionId: SessionID | null;
 
   /**
+   * All users for emoji avatars
+   */
+  users?: User[];
+
+  /**
+   * Current user ID for showing emoji
+   */
+  currentUserId?: string;
+
+  /**
    * Callback to expose scroll-to-bottom function to parent
    */
   onScrollRef?: (scrollToBottom: () => void) => void;
@@ -39,6 +49,8 @@ export interface ConversationViewProps {
 export const ConversationView: React.FC<ConversationViewProps> = ({
   client,
   sessionId,
+  users = [],
+  currentUserId,
   onScrollRef,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -129,6 +141,8 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           key={task.task_id}
           task={task}
           messages={taskMessages}
+          users={users}
+          currentUserId={currentUserId}
           // Expand only the last task by default
           defaultExpanded={index === taskWithMessages.length - 1}
         />

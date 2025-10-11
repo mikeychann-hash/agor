@@ -1,3 +1,4 @@
+import type { User } from '@agor/core/types';
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   Background,
@@ -17,6 +18,8 @@ import SessionCard from '../SessionCard';
 interface SessionCanvasProps {
   sessions: Session[];
   tasks: Record<string, Task[]>;
+  users: User[];
+  currentUserId?: string;
   onSessionClick?: (sessionId: string) => void;
   onTaskClick?: (taskId: string) => void;
   onSessionUpdate?: (sessionId: string, updates: Partial<Session>) => void;
@@ -26,6 +29,8 @@ interface SessionCanvasProps {
 interface SessionNodeData {
   session: Session;
   tasks: Task[];
+  users: User[];
+  currentUserId?: string;
   onTaskClick?: (taskId: string) => void;
   onSessionClick?: () => void;
   onUpdate?: (sessionId: string, updates: Partial<Session>) => void;
@@ -40,6 +45,8 @@ const SessionNode = ({ data }: { data: SessionNodeData }) => {
       <SessionCard
         session={data.session}
         tasks={data.tasks}
+        users={data.users}
+        currentUserId={data.currentUserId}
         onTaskClick={data.onTaskClick}
         onSessionClick={data.onSessionClick}
         onUpdate={data.onUpdate}
@@ -58,6 +65,8 @@ const nodeTypes = {
 const SessionCanvas = ({
   sessions,
   tasks,
+  users,
+  currentUserId,
   onSessionClick,
   onTaskClick,
   onSessionUpdate,
@@ -109,6 +118,8 @@ const SessionCanvas = ({
         data: {
           session,
           tasks: tasks[session.session_id] || [],
+          users,
+          currentUserId,
           onTaskClick,
           onSessionClick: () => onSessionClick?.(session.session_id),
           onUpdate: onSessionUpdate,
@@ -117,7 +128,16 @@ const SessionCanvas = ({
         },
       };
     });
-  }, [sessions, tasks, onSessionClick, onTaskClick, onSessionUpdate, onSessionDelete]);
+  }, [
+    sessions,
+    tasks,
+    users,
+    currentUserId,
+    onSessionClick,
+    onTaskClick,
+    onSessionUpdate,
+    onSessionDelete,
+  ]);
 
   // Convert session relationships to React Flow edges
   const initialEdges: Edge[] = useMemo(() => {

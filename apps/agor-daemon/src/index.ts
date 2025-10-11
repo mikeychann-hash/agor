@@ -19,8 +19,10 @@ import socketio from '@feathersjs/socketio';
 import cors from 'cors';
 import express from 'express';
 import { createBoardsService } from './services/boards';
+import { createMCPServersService } from './services/mcp-servers';
 import { createMessagesService } from './services/messages';
 import { createReposService } from './services/repos';
+import { createSessionMCPServersService } from './services/session-mcp-servers';
 import { createSessionsService } from './services/sessions';
 import { createTasksService } from './services/tasks';
 import { createUsersService } from './services/users';
@@ -104,6 +106,7 @@ async function main() {
   app.use('/messages', messagesService);
   app.use('/boards', createBoardsService(db));
   app.use('/repos', createReposService(db));
+  app.use('/mcp-servers', createMCPServersService(db));
 
   // Register users service (for authentication)
   const usersService = createUsersService(db);
@@ -116,7 +119,16 @@ async function main() {
         async context => {
           // Inject user_id if authenticated, otherwise use 'anonymous'
           // biome-ignore lint/suspicious/noExplicitAny: Context params extended with user field
-          const userId = (context.params as any).user?.user_id || 'anonymous';
+          const user = (context.params as any).user;
+          const userId = user?.user_id || 'anonymous';
+
+          // DEBUG: Log authentication state
+          console.log(
+            '🔍 Session create hook - user:',
+            user ? `${user.user_id} (${user.email})` : 'none',
+            '→ userId:',
+            userId
+          );
 
           if (Array.isArray(context.data)) {
             // biome-ignore lint/suspicious/noExplicitAny: Hook data type
@@ -139,7 +151,16 @@ async function main() {
         async context => {
           // Inject user_id if authenticated, otherwise use 'anonymous'
           // biome-ignore lint/suspicious/noExplicitAny: Context params extended with user field
-          const userId = (context.params as any).user?.user_id || 'anonymous';
+          const user = (context.params as any).user;
+          const userId = user?.user_id || 'anonymous';
+
+          // DEBUG: Log authentication state
+          console.log(
+            '🔍 Task create hook - user:',
+            user ? `${user.user_id} (${user.email})` : 'none',
+            '→ userId:',
+            userId
+          );
 
           if (Array.isArray(context.data)) {
             // biome-ignore lint/suspicious/noExplicitAny: Hook data type
@@ -281,22 +302,25 @@ async function main() {
       const startTimestamp = new Date().toISOString();
 
       // PHASE 1: Create task immediately with 'running' status (UI shows task instantly)
-      const task = await tasksService.create({
-        session_id: id,
-        status: 'running', // Start as running, will be updated to completed
-        description: data.prompt.substring(0, 120),
-        full_prompt: data.prompt,
-        message_range: {
-          start_index: messageStartIndex,
-          end_index: messageStartIndex + 1, // Will be updated after messages created
-          start_timestamp: startTimestamp,
-          end_timestamp: startTimestamp, // Will be updated when complete
+      const task = await tasksService.create(
+        {
+          session_id: id,
+          status: 'running', // Start as running, will be updated to completed
+          description: data.prompt.substring(0, 120),
+          full_prompt: data.prompt,
+          message_range: {
+            start_index: messageStartIndex,
+            end_index: messageStartIndex + 1, // Will be updated after messages created
+            start_timestamp: startTimestamp,
+            end_timestamp: startTimestamp, // Will be updated when complete
+          },
+          tool_use_count: 0, // Will be updated after assistant message
+          git_state: {
+            sha_at_start: session.git_state?.current_sha || 'unknown',
+          },
         },
-        tool_use_count: 0, // Will be updated after assistant message
-        git_state: {
-          sha_at_start: session.git_state?.current_sha || 'unknown',
-        },
-      });
+        params
+      );
 
       // Update session with new task immediately
       await sessionsService.patch(id, {
@@ -430,6 +454,70 @@ async function main() {
     },
   });
 
+  // Configure custom routes for session-MCP relationships
+  const sessionMCPServersService = createSessionMCPServersService(db);
+
+  // GET /sessions/:id/mcp-servers - List MCP servers for a session
+  app.use('/sessions/:id/mcp-servers', {
+    async find(_data: unknown, params: RouteParams) {
+      const id = params.route?.id;
+      if (!id) throw new Error('Session ID required');
+      const enabledOnly =
+        params.query?.enabledOnly === 'true' || params.query?.enabledOnly === true;
+      return sessionMCPServersService.listServers(
+        id as import('@agor/core/types').SessionID,
+        enabledOnly,
+        params
+      );
+    },
+    // POST /sessions/:id/mcp-servers - Add MCP server to session
+    async create(data: { mcpServerId: string }, params: RouteParams) {
+      const id = params.route?.id;
+      if (!id) throw new Error('Session ID required');
+      if (!data.mcpServerId) throw new Error('MCP Server ID required');
+      return sessionMCPServersService.addServer(
+        id as import('@agor/core/types').SessionID,
+        data.mcpServerId as import('@agor/core/types').MCPServerID,
+        params
+      );
+    },
+    // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
+  } as any);
+
+  // DELETE /sessions/:id/mcp-servers/:mcpId - Remove MCP server from session
+  app.use('/sessions/:id/mcp-servers/:mcpId', {
+    async remove(_id: unknown, params: RouteParams & { route?: { mcpId?: string } }) {
+      const id = params.route?.id;
+      const mcpId = params.route?.mcpId;
+      if (!id) throw new Error('Session ID required');
+      if (!mcpId) throw new Error('MCP Server ID required');
+      return sessionMCPServersService.removeServer(
+        id as import('@agor/core/types').SessionID,
+        mcpId as import('@agor/core/types').MCPServerID,
+        params
+      );
+    },
+    // PATCH /sessions/:id/mcp-servers/:mcpId - Toggle MCP server enabled state
+    async patch(
+      _id: unknown,
+      data: { enabled: boolean },
+      params: RouteParams & { route?: { mcpId?: string } }
+    ) {
+      const id = params.route?.id;
+      const mcpId = params.route?.mcpId;
+      if (!id) throw new Error('Session ID required');
+      if (!mcpId) throw new Error('MCP Server ID required');
+      if (typeof data.enabled !== 'boolean') throw new Error('enabled field required');
+      return sessionMCPServersService.toggleServer(
+        id as import('@agor/core/types').SessionID,
+        mcpId as import('@agor/core/types').MCPServerID,
+        data.enabled,
+        params
+      );
+    },
+    // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
+  } as any);
+
   // Hook: Remove session from all boards when session is deleted
   sessionsService.on('removed', async (session: import('@agor/core/types').Session) => {
     try {
@@ -482,6 +570,7 @@ async function main() {
     console.log(`     - /messages`);
     console.log(`     - /boards`);
     console.log(`     - /repos`);
+    console.log(`     - /mcp-servers`);
     console.log(`     - /users`);
   });
 

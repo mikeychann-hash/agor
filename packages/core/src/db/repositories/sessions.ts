@@ -103,6 +103,7 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
       updated_at: session.last_updated ? new Date(session.last_updated) : new Date(now),
       status: session.status ?? 'idle',
       agent: session.agent ?? 'claude-code',
+      created_by: session.created_by ?? 'anonymous',
       board_id: null, // Board ID tracked separately in boards.sessions array
       parent_session_id: session.genealogy?.parent_session_id ?? null,
       forked_from_session_id: session.genealogy?.forked_from_session_id ?? null,

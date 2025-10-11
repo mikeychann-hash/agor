@@ -20,6 +20,7 @@ interface CreateUserData {
   email: string;
   password: string;
   name?: string;
+  emoji?: string;
   role?: 'owner' | 'admin' | 'member' | 'viewer';
 }
 
@@ -30,6 +31,7 @@ interface UpdateUserData {
   email?: string;
   password?: string;
   name?: string;
+  emoji?: string;
   role?: 'owner' | 'admin' | 'member' | 'viewer';
   avatar?: string;
   preferences?: Record<string, unknown>;
@@ -107,6 +109,7 @@ export class UsersService {
         email: data.email,
         password: hashedPassword,
         name: data.name,
+        emoji: data.emoji || '👤',
         role: data.role || 'member',
         created_at: now,
         updated_at: now,
@@ -135,6 +138,7 @@ export class UsersService {
     // Update other fields
     if (data.email) updates.email = data.email;
     if (data.name) updates.name = data.name;
+    if (data.emoji !== undefined) updates.emoji = data.emoji;
     if (data.role) updates.role = data.role;
 
     // Update data blob
@@ -208,6 +212,7 @@ export class UsersService {
       user_id: row.user_id as UserID,
       email: row.email,
       name: row.name ?? undefined,
+      emoji: row.emoji ?? undefined,
       role: row.role as 'owner' | 'admin' | 'member' | 'viewer',
       avatar: data.avatar,
       preferences: data.preferences,
@@ -254,6 +259,7 @@ class UsersServiceWithAuth extends UsersService {
       email: row.email,
       password: row.password, // Include for authentication
       name: row.name ?? undefined,
+      emoji: row.emoji ?? undefined,
       role: row.role as 'owner' | 'admin' | 'member' | 'viewer',
       avatar: data.avatar,
       preferences: data.preferences,

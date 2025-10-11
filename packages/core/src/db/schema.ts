@@ -249,6 +249,7 @@ export const users = sqliteTable(
 
     // Basic profile (materialized for display)
     name: text('name'),
+    emoji: text('emoji'),
     role: text('role', {
       enum: ['owner', 'admin', 'member', 'viewer'],
     })
@@ -269,6 +270,120 @@ export const users = sqliteTable(
 );
 
 /**
+ * MCP Servers table - MCP server configurations
+ *
+ * Stores MCP (Model Context Protocol) server configurations that can be attached to sessions.
+ * Supports stdio, HTTP, and SSE transports with scoped access control.
+ */
+export const mcpServers = sqliteTable(
+  'mcp_servers',
+  {
+    // Primary identity
+    mcp_server_id: text('mcp_server_id', { length: 36 }).primaryKey(),
+    created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updated_at: integer('updated_at', { mode: 'timestamp_ms' }),
+
+    // Materialized for filtering
+    name: text('name').notNull(), // e.g., "filesystem", "sentry"
+    transport: text('transport', {
+      enum: ['stdio', 'http', 'sse'],
+    }).notNull(),
+    scope: text('scope', {
+      enum: ['global', 'team', 'repo', 'session'],
+    }).notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+
+    // Scope foreign keys (materialized for indexes)
+    owner_user_id: text('owner_user_id', { length: 36 }),
+    team_id: text('team_id', { length: 36 }),
+    repo_id: text('repo_id', { length: 36 }).references(() => repos.repo_id, {
+      onDelete: 'cascade',
+    }),
+    session_id: text('session_id', { length: 36 }).references(() => sessions.session_id, {
+      onDelete: 'cascade',
+    }),
+
+    // Source tracking (materialized for queries)
+    source: text('source', {
+      enum: ['user', 'imported', 'agor'],
+    }).notNull(),
+
+    // JSON blob for configuration and capabilities
+    data: text('data', { mode: 'json' })
+      .$type<{
+        display_name?: string;
+        description?: string;
+        import_path?: string;
+
+        // Transport config
+        command?: string;
+        args?: string[];
+        url?: string;
+        env?: Record<string, string>;
+
+        // Discovered capabilities
+        tools?: Array<{
+          name: string;
+          description: string;
+          input_schema: Record<string, unknown>;
+        }>;
+        resources?: Array<{
+          uri: string;
+          name: string;
+          mimeType?: string;
+        }>;
+        prompts?: Array<{
+          name: string;
+          description: string;
+          arguments?: Array<{
+            name: string;
+            description: string;
+            required?: boolean;
+          }>;
+        }>;
+      }>()
+      .notNull(),
+  },
+  table => ({
+    nameIdx: index('mcp_servers_name_idx').on(table.name),
+    scopeIdx: index('mcp_servers_scope_idx').on(table.scope),
+    ownerIdx: index('mcp_servers_owner_idx').on(table.owner_user_id),
+    teamIdx: index('mcp_servers_team_idx').on(table.team_id),
+    repoIdx: index('mcp_servers_repo_idx').on(table.repo_id),
+    sessionIdx: index('mcp_servers_session_idx').on(table.session_id),
+    enabledIdx: index('mcp_servers_enabled_idx').on(table.enabled),
+  })
+);
+
+/**
+ * Session-MCP Servers relationship table
+ *
+ * Many-to-many relationship between sessions and MCP servers.
+ * Tracks which MCP servers are enabled for each session.
+ */
+export const sessionMcpServers = sqliteTable(
+  'session_mcp_servers',
+  {
+    session_id: text('session_id', { length: 36 })
+      .notNull()
+      .references(() => sessions.session_id, { onDelete: 'cascade' }),
+    mcp_server_id: text('mcp_server_id', { length: 36 })
+      .notNull()
+      .references(() => mcpServers.mcp_server_id, { onDelete: 'cascade' }),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    added_at: integer('added_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  table => ({
+    // Composite primary key
+    pk: index('session_mcp_servers_pk').on(table.session_id, table.mcp_server_id),
+    // Indexes for queries
+    sessionIdx: index('session_mcp_servers_session_idx').on(table.session_id),
+    serverIdx: index('session_mcp_servers_server_idx').on(table.mcp_server_id),
+    enabledIdx: index('session_mcp_servers_enabled_idx').on(table.session_id, table.enabled),
+  })
+);
+
+/**
  * Type exports for use with Drizzle ORM
  */
 export type SessionRow = typeof sessions.$inferSelect;
@@ -283,3 +398,7 @@ export type RepoRow = typeof repos.$inferSelect;
 export type RepoInsert = typeof repos.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
 export type UserInsert = typeof users.$inferInsert;
+export type MCPServerRow = typeof mcpServers.$inferSelect;
+export type MCPServerInsert = typeof mcpServers.$inferInsert;
+export type SessionMCPServerRow = typeof sessionMcpServers.$inferSelect;
+export type SessionMCPServerInsert = typeof sessionMcpServers.$inferInsert;

@@ -1,6 +1,16 @@
-import type { Board, CreateUserInput, Repo, UpdateUserInput, User } from '@agor/core/types';
+import type {
+  Board,
+  CreateMCPServerInput,
+  CreateUserInput,
+  MCPServer,
+  Repo,
+  UpdateMCPServerInput,
+  UpdateUserInput,
+  User,
+} from '@agor/core/types';
 import { Modal, Tabs } from 'antd';
 import { BoardsTable } from './BoardsTable';
+import { MCPServersTable } from './MCPServersTable';
 import { ReposTable } from './ReposTable';
 import { UsersTable } from './UsersTable';
 
@@ -10,6 +20,7 @@ export interface SettingsModalProps {
   boards: Board[];
   repos: Repo[];
   users: User[];
+  mcpServers: MCPServer[];
   onCreateBoard?: (board: Partial<Board>) => void;
   onUpdateBoard?: (boardId: string, updates: Partial<Board>) => void;
   onDeleteBoard?: (boardId: string) => void;
@@ -23,6 +34,9 @@ export interface SettingsModalProps {
   onCreateUser?: (data: CreateUserInput) => void;
   onUpdateUser?: (userId: string, updates: UpdateUserInput) => void;
   onDeleteUser?: (userId: string) => void;
+  onCreateMCPServer?: (data: CreateMCPServerInput) => void;
+  onUpdateMCPServer?: (serverId: string, updates: UpdateMCPServerInput) => void;
+  onDeleteMCPServer?: (serverId: string) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -31,6 +45,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   boards,
   repos,
   users,
+  mcpServers,
   onCreateBoard,
   onUpdateBoard,
   onDeleteBoard,
@@ -41,6 +56,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onCreateUser,
   onUpdateUser,
   onDeleteUser,
+  onCreateMCPServer,
+  onUpdateMCPServer,
+  onDeleteMCPServer,
 }) => {
   return (
     <Modal
@@ -78,6 +96,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onDelete={onDeleteRepo}
                 onDeleteWorktree={onDeleteWorktree}
                 onCreateWorktree={onCreateWorktree}
+              />
+            ),
+          },
+          {
+            key: 'mcp',
+            label: 'MCP Servers',
+            children: (
+              <MCPServersTable
+                mcpServers={mcpServers}
+                onCreate={onCreateMCPServer}
+                onUpdate={onUpdateMCPServer}
+                onDelete={onDeleteMCPServer}
               />
             ),
           },

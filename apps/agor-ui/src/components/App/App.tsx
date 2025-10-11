@@ -25,7 +25,7 @@ export interface AppProps {
   availableAgents: Agent[];
   boards: Board[];
   repos: Repo[];
-  users: User[];
+  users: User[]; // All users for multiplayer metadata
   worktreeOptions: RepoReferenceOption[];
   repoOptions: RepoReferenceOption[];
   initialBoardId?: string;
@@ -143,6 +143,8 @@ export const App: React.FC<AppProps> = ({
         <SessionCanvas
           sessions={boardSessions}
           tasks={tasks}
+          users={users}
+          currentUserId={user?.user_id}
           onSessionClick={handleSessionClick}
           onSessionUpdate={onUpdateSession}
           onSessionDelete={onDeleteSession}
@@ -160,6 +162,8 @@ export const App: React.FC<AppProps> = ({
       <SessionDrawer
         client={client}
         session={selectedSession}
+        users={users}
+        currentUserId={user?.user_id}
         open={!!selectedSessionId}
         onClose={() => setSelectedSessionId(null)}
         onSendPrompt={handleSendPrompt}

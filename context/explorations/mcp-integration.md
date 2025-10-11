@@ -21,7 +21,7 @@ MCP (Model Context Protocol) servers extend agent capabilities by connecting to 
 4. Session-level MCP selection enables fine-grained control
 5. Cross-agent MCP sharing is a unique Agor differentiator
 
-**Strategic Approach:** CRUD for MCP configurations + session-level selection + usage tracking
+**Strategic Approach:** CRUD for MCP configurations + session-level selection
 
 ---
 
@@ -134,9 +134,8 @@ for await (const message of query({
 2. **Scoped Configs:** Global (user), team, repo, session levels
 3. **Session Selection:** Choose which servers to enable per session
 4. **Federation:** Import existing `.mcp.json` configs
-5. **Usage Tracking:** See which tools are used, how often
-6. **Team Sharing:** Distribute MCP configs across team
-7. **Cross-Agent:** Same MCP configs work with Claude, Cursor, etc.
+5. **Team Sharing:** Distribute MCP configs across team
+6. **Cross-Agent:** Same MCP configs work with Claude, Cursor, etc.
 
 ### Non-Goals
 
@@ -221,25 +220,7 @@ interface SessionMCPServer {
 
 **Many-to-many:** A session can use multiple MCP servers, an MCP server can be used by multiple sessions.
 
-### MCP Tool Usage Tracking
-
-```typescript
-interface MCPToolUsage {
-  usage_id: ToolUsageID; // UUIDv7
-  session_id: SessionID;
-  task_id?: TaskID;
-  mcp_server_id: MCPServerID;
-  tool_name: string; // e.g., "mcp__filesystem__list_files"
-  input: Record<string, unknown>;
-  output?: Record<string, unknown>;
-  status: 'success' | 'error';
-  error_message?: string;
-  execution_time_ms: number;
-  timestamp: Date;
-}
-```
-
-**Purpose:** Analytics, debugging, cost tracking (future)
+**Note:** MCP tool usage tracking is **not** part of Agor's scope. Tools are executed by the agent (Claude, Cursor, etc.), not by Agor, so we don't have visibility into individual tool invocations. Agents handle their own tool usage analytics.
 
 ---
 
@@ -293,29 +274,12 @@ CREATE TABLE session_mcp_servers (
   PRIMARY KEY (session_id, mcp_server_id)
 );
 
--- MCP Tool Usage
-CREATE TABLE mcp_tool_usage (
-  usage_id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
-  task_id TEXT REFERENCES tasks(task_id) ON DELETE SET NULL,
-  mcp_server_id TEXT NOT NULL REFERENCES mcp_servers(mcp_server_id) ON DELETE CASCADE,
-  tool_name TEXT NOT NULL,
-  input JSON,
-  output JSON,
-  status TEXT NOT NULL CHECK (status IN ('success', 'error')),
-  error_message TEXT,
-  execution_time_ms INTEGER,
-  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Indexes
 CREATE INDEX idx_mcp_servers_scope ON mcp_servers(scope);
 CREATE INDEX idx_mcp_servers_owner ON mcp_servers(owner_user_id);
 CREATE INDEX idx_mcp_servers_team ON mcp_servers(team_id);
 CREATE INDEX idx_mcp_servers_repo ON mcp_servers(repo_id);
 CREATE INDEX idx_session_mcp_enabled ON session_mcp_servers(session_id, enabled);
-CREATE INDEX idx_mcp_tool_usage_session ON mcp_tool_usage(session_id);
-CREATE INDEX idx_mcp_tool_usage_server ON mcp_tool_usage(mcp_server_id);
 ```
 
 ---
@@ -358,16 +322,6 @@ class SessionMCPService {
   // Bulk operations
   async setServers(sessionId: SessionID, serverIds: MCPServerID[]): Promise<void>;
 }
-
-class MCPToolUsageService {
-  // Track tool usage
-  async record(usage: MCPToolUsageInput): Promise<MCPToolUsage>;
-
-  // Analytics
-  async getSessionUsage(sessionId: SessionID): Promise<MCPToolUsage[]>;
-  async getServerUsage(serverId: MCPServerID): Promise<MCPToolUsageStats>;
-  async getToolStats(toolName: string): Promise<ToolStats>;
-}
 ```
 
 ### REST Endpoints
@@ -388,10 +342,6 @@ POST   /sessions/:id/mcp-servers      # Add MCP server to session
 DELETE /sessions/:id/mcp-servers/:mcpId  # Remove MCP server from session
 PATCH  /sessions/:id/mcp-servers/:mcpId  # Toggle enabled
 GET    /sessions/:id/mcp-servers      # List session's MCP servers
-
-POST   /mcp-tool-usage                # Record tool usage (internal)
-GET    /mcp-tool-usage/session/:id    # Get session tool usage
-GET    /mcp-tool-usage/server/:id     # Get server usage stats
 ```
 
 ---
@@ -435,10 +385,6 @@ pnpm agor session mcp list <session-id>     # List session's servers
 pnpm agor session mcp add <session-id> <server-id>
 pnpm agor session mcp remove <session-id> <server-id>
 pnpm agor session mcp toggle <session-id> <server-id> --enabled=false
-
-# Usage analytics
-pnpm agor mcp usage session <session-id>    # Tool usage for session
-pnpm agor mcp usage server <server-id>      # Usage stats for server
 ```
 
 ---
@@ -537,55 +483,16 @@ pnpm agor mcp usage server <server-id>      # Usage stats for server
 │ Active MCP Servers (2):             │
 │ ┌─────────────────────────────────┐ │
 │ │ 🗂️  Filesystem                  │ │
-│ │ 147 tool calls                  │ │
-│ │ [View Usage] [Disable]          │ │
+│ │ [Disable]                       │ │
 │ └─────────────────────────────────┘ │
 │                                     │
 │ ┌─────────────────────────────────┐ │
 │ │ 🐙 GitHub                       │ │
-│ │ 23 tool calls                   │ │
-│ │ [View Usage] [Disable]          │ │
+│ │ [Disable]                       │ │
 │ └─────────────────────────────────┘ │
 │                                     │
 │ [+ Enable More]                     │
 └─────────────────────────────────────┘
-```
-
-### MCP Tool Usage Analytics
-
-**Route:** `/mcp-servers/:id/usage`
-
-**Layout:**
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ MCP Server: Filesystem                                   │
-│ Usage Analytics                                          │
-├─────────────────────────────────────────────────────────┤
-│ Time Range: [Last 30 days ▼]                           │
-│                                                          │
-│ Total Tool Calls: 1,247                                 │
-│ Sessions Using: 23                                      │
-│ Success Rate: 98.7%                                     │
-│ Avg Execution Time: 45ms                                │
-│                                                          │
-│ Top Tools:                                              │
-│ ┌─────────────────────────────────────────────────┐    │
-│ │ mcp__filesystem__list_files      847 (68%)      │    │
-│ │ mcp__filesystem__read_file       312 (25%)      │    │
-│ │ mcp__filesystem__write_file       88 (7%)       │    │
-│ └─────────────────────────────────────────────────┘    │
-│                                                          │
-│ Usage Over Time:                                        │
-│ [Line chart showing tool calls per day]                │
-│                                                          │
-│ Recent Usage:                                           │
-│ ┌─────────────────────────────────────────────────┐    │
-│ │ Session: User Auth | list_files | 12ms | ✓     │    │
-│ │ Session: Bug Fix   | read_file  | 34ms | ✓     │    │
-│ │ Session: Refactor  | write_file | 56ms | ✓     │    │
-│ └─────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -641,23 +548,7 @@ pnpm agor mcp usage server <server-id>      # Usage stats for server
 
 ---
 
-### Phase 4: Usage Tracking (P2 - Q2 2026)
-
-**Goal:** Track and visualize MCP tool usage
-
-**Tasks:**
-
-1. Tool usage recording (intercept SDK tool calls)
-2. Usage analytics API endpoints
-3. CLI commands for usage stats
-4. UI for usage analytics (charts, tables)
-5. Per-session, per-server, per-tool views
-
-**Deliverable:** Users can see which MCP tools are used and how often
-
----
-
-### Phase 5: Advanced Features (P2-P3 - Q2 2026)
+### Phase 4: Advanced Features (P2-P3 - Q2 2026)
 
 **Goal:** Enhanced MCP capabilities
 
@@ -714,38 +605,8 @@ async function executeTa with MCP(
       allowedTools
     }
   })) {
-    // Track tool usage
-    if (message.type === 'tool_use') {
-      await trackToolUsage(sessionId, message);
-    }
-
     yield message;
   }
-}
-
-async function trackToolUsage(
-  sessionId: SessionID,
-  toolUse: ToolUseMessage
-) {
-  const toolName = toolUse.name;
-
-  // Find which MCP server this tool belongs to
-  const server = await findServerByToolName(sessionId, toolName);
-  if (!server) return; // Not an MCP tool
-
-  // Record usage
-  await db.mcpToolUsage.create({
-    usage_id: generateUUIDv7(),
-    session_id: sessionId,
-    mcp_server_id: server.mcp_server_id,
-    tool_name: toolName,
-    input: toolUse.input,
-    output: toolUse.output,
-    status: toolUse.error ? 'error' : 'success',
-    error_message: toolUse.error,
-    execution_time_ms: toolUse.executionTime,
-    timestamp: new Date()
-  });
 }
 ```
 
@@ -1009,6 +870,6 @@ MCP integration is **critical** for Agor's success. The SDK provides full suppor
 2. 📋 Implement Phase 1 (Core CRUD) - Q1 2026
 3. 📋 Implement Phase 2 (Federation) - Q1 2026
 4. 📋 Implement Phase 3 (Session Integration) - Q1 2026
-5. 📋 Implement Phase 4 (Usage Tracking) - Q2 2026
+5. 📋 Implement Phase 4 (Advanced Features) - Q2 2026
 
-**Success = Users can import their MCP configs, select servers per session, and gain visibility into MCP usage—all while using Agor's orchestration features.**
+**Success = Users can import their MCP configs, select servers per session, and leverage Agor's orchestration features with their existing MCP investments.**

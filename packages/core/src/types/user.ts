@@ -7,6 +7,7 @@ export interface User {
   user_id: UserID;
   email: string;
   name?: string;
+  emoji?: string; // User emoji for visual identity (like boards)
   role: 'owner' | 'admin' | 'member' | 'viewer';
   avatar?: string;
   preferences?: Record<string, unknown>;
@@ -21,6 +22,7 @@ export interface CreateUserInput {
   email: string;
   password: string;
   name?: string;
+  emoji?: string;
   role?: 'owner' | 'admin' | 'member' | 'viewer';
 }
 
@@ -31,6 +33,7 @@ export interface UpdateUserInput {
   email?: string;
   password?: string;
   name?: string;
+  emoji?: string;
   role?: 'owner' | 'admin' | 'member' | 'viewer';
   avatar?: string;
   preferences?: Record<string, unknown>;

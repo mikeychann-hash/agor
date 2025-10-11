@@ -53,6 +53,7 @@ function AppContent() {
     boards,
     repos,
     users,
+    mcpServers,
     loading,
     error: dataError,
   } = useAgorData(connected ? client : null);
@@ -223,6 +224,20 @@ function AppContent() {
         await client?.service(`boards/${boardId}/sessions`).create({
           sessionId: session.session_id,
         });
+
+        // Associate MCP servers if provided
+        if (config.mcpServerIds && config.mcpServerIds.length > 0) {
+          for (const serverId of config.mcpServerIds) {
+            try {
+              await client?.service(`sessions/${session.session_id}/mcp-servers`).create({
+                mcpServerId: serverId,
+              });
+            } catch (error) {
+              console.error(`Failed to associate MCP server ${serverId}:`, error);
+            }
+          }
+        }
+
         message.success('Session created and added to board!');
 
         // If there's an initial prompt, send it to the agent
@@ -439,6 +454,46 @@ function AppContent() {
     }
   };
 
+  // Handle MCP server CRUD
+  const handleCreateMCPServer = async (data: import('@agor/core/types').CreateMCPServerInput) => {
+    if (!client) return;
+    try {
+      await client.service('mcp-servers').create(data);
+      message.success('MCP server added successfully!');
+    } catch (error) {
+      message.error(
+        `Failed to add MCP server: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  };
+
+  const handleUpdateMCPServer = async (
+    serverId: string,
+    updates: import('@agor/core/types').UpdateMCPServerInput
+  ) => {
+    if (!client) return;
+    try {
+      await client.service('mcp-servers').patch(serverId, updates);
+      message.success('MCP server updated successfully!');
+    } catch (error) {
+      message.error(
+        `Failed to update MCP server: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  };
+
+  const handleDeleteMCPServer = async (serverId: string) => {
+    if (!client) return;
+    try {
+      await client.service('mcp-servers').remove(serverId);
+      message.success('MCP server deleted successfully!');
+    } catch (error) {
+      message.error(
+        `Failed to delete MCP server: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  };
+
   // Generate repo reference options for dropdowns
   const allOptions = getRepoReferenceOptions(repos);
   const worktreeOptions = allOptions.filter(opt => opt.type === 'managed-worktree');
@@ -455,6 +510,7 @@ function AppContent() {
       boards={boards}
       repos={repos}
       users={users}
+      mcpServers={mcpServers}
       worktreeOptions={worktreeOptions}
       repoOptions={repoOptions}
       initialBoardId={boards[0]?.board_id}
@@ -474,6 +530,9 @@ function AppContent() {
       onCreateUser={handleCreateUser}
       onUpdateUser={handleUpdateUser}
       onDeleteUser={handleDeleteUser}
+      onCreateMCPServer={handleCreateMCPServer}
+      onUpdateMCPServer={handleUpdateMCPServer}
+      onDeleteMCPServer={handleDeleteMCPServer}
       onLogout={logout}
     />
   );

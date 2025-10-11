@@ -40,6 +40,8 @@ async function parseArgs(): Promise<SetupOptions> {
 
 async function dropTables(db: ReturnType<typeof createDatabase>): Promise<void> {
   console.log('Dropping existing tables...');
+  await db.run(sql`DROP TABLE IF EXISTS session_mcp_servers`);
+  await db.run(sql`DROP TABLE IF EXISTS mcp_servers`);
   await db.run(sql`DROP TABLE IF EXISTS messages`);
   await db.run(sql`DROP TABLE IF EXISTS tasks`);
   await db.run(sql`DROP TABLE IF EXISTS sessions`);
