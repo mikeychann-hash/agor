@@ -71,6 +71,32 @@ export default class ConfigIndex extends Command {
         }
       }
 
+      // Daemon Settings
+      if (config.daemon) {
+        this.log(chalk.bold('\nDaemon Settings:'));
+        if (config.daemon.port !== undefined) {
+          this.log(`  port:          ${chalk.gray(String(config.daemon.port))}`);
+        }
+        if (config.daemon.host) {
+          this.log(`  host:          ${chalk.gray(config.daemon.host)}`);
+        }
+        if (config.daemon.jwtSecret) {
+          this.log(
+            `  JWT secret:    ${chalk.gray('***' + config.daemon.jwtSecret.slice(-8))} ${chalk.dim('(saved)')}`
+          );
+        }
+        if (config.daemon.allowAnonymous !== undefined) {
+          this.log(
+            `  allow anon:    ${chalk.gray(config.daemon.allowAnonymous ? 'enabled' : 'disabled')}`
+          );
+        }
+        if (config.daemon.requireAuth !== undefined) {
+          this.log(
+            `  require auth:  ${chalk.gray(config.daemon.requireAuth ? 'enabled' : 'disabled')}`
+          );
+        }
+      }
+
       // Config File Path
       this.log(chalk.bold('\nConfig File:'));
       this.log(`  ${chalk.dim(getConfigPath())}`);
@@ -93,6 +119,11 @@ export default class ConfigIndex extends Command {
       this.log('    credentials.OPENAI_API_KEY');
       this.log('    credentials.CURSOR_API_KEY');
       this.log('    credentials.GOOGLE_API_KEY');
+      this.log('');
+      this.log(chalk.cyan('  Daemon:'));
+      this.log('    daemon.port, daemon.host');
+      this.log('    daemon.jwtSecret (auto-generated if not set)');
+      this.log('    daemon.allowAnonymous, daemon.requireAuth');
 
       this.log('');
     } catch (error) {
