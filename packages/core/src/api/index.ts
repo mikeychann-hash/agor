@@ -4,7 +4,7 @@
  * Shared client library for connecting to agor-daemon from CLI and UI
  */
 
-import type { Board, Repo, Session, Task, User } from '@agor/core/types';
+import type { Board, MCPServer, Repo, Session, Task, User } from '@agor/core/types';
 import authentication from '@feathersjs/authentication-client';
 import type { Application, Paginated, Params } from '@feathersjs/feathers';
 import { feathers } from '@feathersjs/feathers';
@@ -20,6 +20,7 @@ export interface ServiceTypes {
   boards: Board;
   repos: Repo;
   users: User;
+  'mcp-servers': MCPServer;
 }
 
 /**

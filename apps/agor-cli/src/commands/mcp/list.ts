@@ -73,7 +73,7 @@ export default class McpList extends Command {
       // Add rows
       for (const server of servers) {
         table.push([
-          server.mcp_server_id.substring(0, 8),
+          String(server.mcp_server_id).substring(0, 8),
           server.display_name || server.name,
           server.transport,
           server.scope,

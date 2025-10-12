@@ -54,7 +54,7 @@ export default class McpShow extends Command {
       this.log(chalk.bold(chalk.cyan('MCP Server Details')));
       this.log('');
       this.log(`${chalk.cyan('ID')}: ${server.mcp_server_id}`);
-      this.log(`${chalk.cyan('Short ID')}: ${server.mcp_server_id.substring(0, 8)}`);
+      this.log(`${chalk.cyan('Short ID')}: ${String(server.mcp_server_id).substring(0, 8)}`);
       this.log(`${chalk.cyan('Name')}: ${server.name}`);
 
       if (server.display_name) {

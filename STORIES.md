@@ -2,17 +2,26 @@
 
 ## Guiding principles
 
-### For Humans and Autonomous Agents
+### For Humans + Autonomous Agents
 
-agor needs to work for both humans (locally) and Tembo (background cloud tasks). While humans may prefer UI, Tembo platform would require a CLI or API/SDK. Ideally both humans and Tembo generate the same artifacts, so humans can transfer sessions to Tembo and vice versa - Tembo is just another dev.
+agor needs to work for both humans (locally) and Tembo (background cloud tasks).
+
+While humans may prefer UI, Tembo platform would require a CLI or API/SDK.
+
+Ideally both humans and Tembo generate the same artifacts,
+so humans can transfer sessions to Tembo and vice versa - Tembo is just another dev.
 
 ### Open source
 
-When I'm choosing AI development infrastructure, I want open source and vendor-neutral solutions, so I can avoid lock-in and contribute to community-driven improvements.
+When I'm choosing AI development infrastructure,
+I want open source and vendor-neutral solutions,
+so I can avoid lock-in and contribute to community-driven improvements.
 
 ### Coding Agent Agnostic
 
-When I'm context-switching between agents, I want zero conflicts and seamless transitions, so I can use the best tool for each specific task without workflow disruption.
+When I'm context-switching between agents,
+I want zero conflicts and seamless transitions,
+so I can use the best tool for each specific task without workflow disruption.
 
 ---
 
@@ -22,29 +31,41 @@ When I'm context-switching between agents, I want zero conflicts and seamless tr
 
 `agor session start --agent <agent> --concepts <concepts> --task <task>`
 
-When I want to start a coding agent session, I want a CLI that allows me to specify the agent, the context, and the task, so I can start a session with a single command from the terminal.
+When I want to start a coding agent session,
+I want a CLI that allows me to specify the agent, the context, and the task,
+so I can start a session with a single command from the terminal.
 
 ### Session Subtasks
 
 `agor session subtask <session-id>`
 
-When I have a complex task that requires focused subtasks, I want to spawn new sessions with specific agents and concepts, so I can tackle problems modularly while maintaining relationships to the parent work.
+When I have a complex task that requires focused subtasks,
+I want to spawn new sessions with specific agents and concepts,
+so I can tackle problems modularly while maintaining relationships to the parent work.
 
 ### Visual Interface
 
-When I'm working with multiple concurrent sessions, I want a unified interface that visually maps my sessions, so I use agents efficiently, understand what I have running at a glance, and build on past work.
+When I'm working with multiple concurrent sessions,
+I want a unified interface that visually maps my sessions,
+so I use agents efficiently, understand what I have running at a glance, and build on past work.
 
 ### Session Visualization
 
-When I want to understand which explorations succeeded or stalled, I want visual indicators in my session tree, so I can quickly identify productive patterns and dead ends.
+When I want to understand which explorations succeeded or stalled,
+I want visual indicators in my session tree,
+so I can quickly identify productive patterns and dead ends.
 
 ### Git Provenance
 
-When I complete AI-assisted coding sessions, I want to track which sessions produced which code changes, so I can understand the provenance of my codebase.
+When I complete AI-assisted coding sessions,
+I want to track which sessions produced which code changes,
+so I can understand the provenance of my codebase.
 
 ### Git History
 
-When I'm reviewing past work, I want to see git state and task checkpoints for each session, so I can understand the complete history of how code evolved.
+When I'm reviewing past work,
+I want to see git state and task checkpoints for each session,
+so I can understand the complete history of how code evolved.
 
 ## P2 - Session Management
 
