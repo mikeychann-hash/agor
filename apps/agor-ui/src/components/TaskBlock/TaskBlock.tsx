@@ -32,6 +32,7 @@ import { AgentChain } from '../AgentChain';
 import { MessageBlock } from '../MessageBlock';
 import { CreatedByTag } from '../metadata/CreatedByTag';
 import { PermissionRequestBlock } from '../PermissionRequestBlock';
+import { ToolIcon } from '../ToolIcon';
 
 const { Text, Paragraph } = Typography;
 
@@ -45,6 +46,7 @@ type PermissionScope = 'once' | 'session' | 'project';
 interface TaskBlockProps {
   task: Task;
   messages: Message[];
+  agent?: string;
   users?: User[];
   currentUserId?: string;
   defaultExpanded?: boolean;
@@ -132,6 +134,7 @@ function groupMessagesIntoBlocks(messages: Message[]): Block[] {
 export const TaskBlock: React.FC<TaskBlockProps> = ({
   task,
   messages,
+  agent,
   users = [],
   currentUserId,
   defaultExpanded = false,
@@ -268,6 +271,7 @@ export const TaskBlock: React.FC<TaskBlockProps> = ({
                     <MessageBlock
                       key={block.message.message_id}
                       message={block.message}
+                      agent={agent}
                       users={users}
                       currentUserId={task.created_by}
                       isTaskRunning={task.status === 'running'}
@@ -288,10 +292,14 @@ export const TaskBlock: React.FC<TaskBlockProps> = ({
                   <Bubble
                     placement="start"
                     avatar={
-                      <Avatar
-                        icon={<RobotOutlined />}
-                        style={{ backgroundColor: token.colorSuccess }}
-                      />
+                      agent ? (
+                        <ToolIcon tool={agent} size={32} />
+                      ) : (
+                        <Avatar
+                          icon={<RobotOutlined />}
+                          style={{ backgroundColor: token.colorSuccess }}
+                        />
+                      )
                     }
                     loading={true}
                     content=""

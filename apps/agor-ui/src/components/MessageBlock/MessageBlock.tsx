@@ -15,6 +15,7 @@ import { Bubble } from '@ant-design/x';
 import { Avatar, theme } from 'antd';
 import type React from 'react';
 import { MarkdownRenderer } from '../MarkdownRenderer';
+import { ToolIcon } from '../ToolIcon';
 import { ToolUseRenderer } from '../ToolUseRenderer';
 
 interface ToolUseBlock {
@@ -43,6 +44,7 @@ interface MessageBlockProps {
   users?: User[];
   currentUserId?: string;
   isTaskRunning?: boolean; // Whether the task is running (for loading state)
+  agent?: string; // Agent/tool name for showing tool icon
 }
 
 export const MessageBlock: React.FC<MessageBlockProps> = ({
@@ -50,6 +52,7 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
   users = [],
   currentUserId,
   isTaskRunning = false,
+  agent,
 }) => {
   const { token } = theme.useToken();
   const isUser = message.role === 'user';
@@ -159,6 +162,8 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
                 <Avatar style={{ backgroundColor: token.colorPrimary, fontSize: '20px' }}>
                   {userEmoji}
                 </Avatar>
+              ) : agent ? (
+                <ToolIcon tool={agent} size={32} />
               ) : (
                 <Avatar icon={<RobotOutlined />} style={{ backgroundColor: token.colorSuccess }} />
               )
@@ -200,7 +205,11 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
           <Bubble
             placement="start"
             avatar={
-              <Avatar icon={<RobotOutlined />} style={{ backgroundColor: token.colorSuccess }} />
+              agent ? (
+                <ToolIcon tool={agent} size={32} />
+              ) : (
+                <Avatar icon={<RobotOutlined />} style={{ backgroundColor: token.colorSuccess }} />
+              )
             }
             loading={isLoading}
             typing={shouldUseTyping ? { step: 5, interval: 20 } : false}

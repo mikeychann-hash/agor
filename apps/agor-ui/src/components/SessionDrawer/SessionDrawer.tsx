@@ -1,5 +1,5 @@
 import type { AgorClient } from '@agor/core/api';
-import type { MCPServer, User } from '@agor/core/types';
+import type { MCPServer, PermissionMode, User } from '@agor/core/types';
 import {
   ApiOutlined,
   BranchesOutlined,
@@ -10,7 +10,6 @@ import {
   SendOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk';
 import {
   Badge,
   Button,
@@ -70,6 +69,7 @@ interface SessionDrawerProps {
     allow: boolean
   ) => void;
   onOpenSettings?: (sessionId: string) => void;
+  onUpdateSession?: (sessionId: string, updates: Partial<Session>) => void;
 }
 
 const SessionDrawer = ({
@@ -86,11 +86,21 @@ const SessionDrawer = ({
   onSubtask,
   onPermissionDecision,
   onOpenSettings,
+  onUpdateSession,
 }: SessionDrawerProps) => {
   const { token } = theme.useToken();
   const [inputValue, setInputValue] = React.useState('');
-  const [permissionMode, setPermissionMode] = React.useState<PermissionMode>('default');
+  const [permissionMode, setPermissionMode] = React.useState<PermissionMode>(
+    session?.permission_config?.mode || 'auto'
+  );
   const [scrollToBottom, setScrollToBottom] = React.useState<(() => void) | null>(null);
+
+  // Update permission mode when session changes
+  React.useEffect(() => {
+    if (session?.permission_config?.mode) {
+      setPermissionMode(session.permission_config.mode);
+    }
+  }, [session?.permission_config?.mode]);
 
   // Scroll to bottom when drawer opens
   React.useEffect(() => {
@@ -120,6 +130,20 @@ const SessionDrawer = ({
     if (inputValue.trim()) {
       onSubtask?.(inputValue);
       setInputValue('');
+    }
+  };
+
+  const handlePermissionModeChange = (newMode: PermissionMode) => {
+    setPermissionMode(newMode);
+
+    // Persist to database immediately (will broadcast via WebSocket)
+    if (session && onUpdateSession) {
+      onUpdateSession(session.session_id, {
+        permission_config: {
+          ...session.permission_config,
+          mode: newMode,
+        },
+      });
     }
   };
 
@@ -236,7 +260,7 @@ const SessionDrawer = ({
       </div>
 
       {/* Concepts */}
-      {session.concepts.length > 0 && (
+      {session.concepts && session.concepts.length > 0 && (
         <div style={{ marginBottom: token.sizeUnit }}>
           <Title level={5}>Loaded Concepts</Title>
           <Space size={4} wrap>
@@ -276,6 +300,7 @@ const SessionDrawer = ({
         <ConversationView
           client={client}
           sessionId={session.session_id}
+          agent={session.agent}
           users={users}
           currentUserId={currentUserId}
           onScrollRef={setScrollToBottom}
@@ -317,34 +342,44 @@ const SessionDrawer = ({
               <ToolCountPill count={session.tool_use_count} />
             </Space>
             <Space size={8}>
-              {/* Permission Mode Selector - Only show for Claude Code sessions */}
-              {session.agent === 'claude-code' && (
-                <Select
-                  value={permissionMode}
-                  onChange={setPermissionMode}
-                  style={{ width: 160 }}
-                  size="small"
-                  options={[
-                    {
-                      label: 'Default',
-                      value: 'default',
-                    },
-                    {
-                      label: 'Accept Edits',
-                      value: 'acceptEdits',
-                    },
-                    {
-                      label: 'Bypass Permissions',
-                      value: 'bypassPermissions',
-                    },
-                    {
-                      label: 'Plan Mode',
-                      value: 'plan',
-                    },
-                  ]}
-                  suffixIcon={<SafetyOutlined />}
-                />
-              )}
+              {/* Permission Mode Selector - Different options per agent */}
+              <Select
+                value={permissionMode}
+                onChange={handlePermissionModeChange}
+                style={{ width: 180 }}
+                size="small"
+                options={
+                  session.agent === 'codex'
+                    ? [
+                        // Codex SDK doesn't support interactive approval like Claude
+                        // Only show auto and allow-all modes
+                        {
+                          label: '✅ Auto (Recommended)',
+                          value: 'auto',
+                        },
+                        {
+                          label: '🔓 Allow All',
+                          value: 'allow-all',
+                        },
+                      ]
+                    : [
+                        // Claude Code supports full permission flow
+                        {
+                          label: '🔒 Ask (Read-Only)',
+                          value: 'ask',
+                        },
+                        {
+                          label: '✅ Auto (Recommended)',
+                          value: 'auto',
+                        },
+                        {
+                          label: '🔓 Allow All',
+                          value: 'allow-all',
+                        },
+                      ]
+                }
+                suffixIcon={<SafetyOutlined />}
+              />
               <Button.Group>
                 <Tooltip title="Fork Session">
                   <Button
