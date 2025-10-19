@@ -57,7 +57,7 @@ export interface AgorService<T> {
   get(id: string, params?: Params): Promise<T>;
   create(data: Partial<T>, params?: Params): Promise<T>;
   update(id: string, data: T, params?: Params): Promise<T>;
-  patch(id: string | null, data: Partial<T>, params?: Params): Promise<T>;
+  patch(id: string | null, data: Partial<T> | null, params?: Params): Promise<T>;
   remove(id: string, params?: Params): Promise<T>;
 
   // Event emitter methods (for real-time updates)

@@ -14,7 +14,7 @@ import {
 } from '@agor/core/claude';
 import { getDaemonUrl } from '@agor/core/config';
 import { generateId } from '@agor/core/db';
-import type { Session, SessionID } from '@agor/core/types';
+import type { MessageID, Session, SessionID, TaskID } from '@agor/core/types';
 import { Args, Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 
@@ -113,8 +113,7 @@ export default class SessionLoadClaude extends Command {
 
       // Create session in daemon
       const sessionsService = client.service('sessions');
-      // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
-      const created = (await (sessionsService as any).create(agorSession)) as Session;
+      const created = await sessionsService.create(agorSession);
 
       this.log(`${chalk.green('✓')} Created Agor session: ${chalk.cyan(created.session_id)}`);
 
@@ -123,8 +122,7 @@ export default class SessionLoadClaude extends Command {
       this.log(`${chalk.blue('●')} Converting ${messages.length} messages...`);
 
       // Bulk insert messages in batches to avoid timeout
-      // biome-ignore lint/suspicious/noExplicitAny: Custom service path not in type definitions
-      const messagesBulkService = client.service('messages/bulk' as any);
+      const messagesBulkService = client.service('messages/bulk');
       const batchSize = 100;
       const totalMessages = messages.length;
 
@@ -132,8 +130,7 @@ export default class SessionLoadClaude extends Command {
         const end = Math.min(i + batchSize, totalMessages);
         const batch = messages.slice(i, end);
 
-        // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
-        await (messagesBulkService as any).create(batch);
+        await messagesBulkService.createMany(batch);
 
         this.log(`${chalk.blue('●')} Processed ${end}/${totalMessages} messages...`);
       }
@@ -145,8 +142,7 @@ export default class SessionLoadClaude extends Command {
       this.log(`${chalk.blue('●')} Extracting ${tasks.length} tasks from user messages...`);
 
       // Bulk insert tasks in batches
-      // biome-ignore lint/suspicious/noExplicitAny: Custom service path not in type definitions
-      const tasksBulkService = client.service('tasks/bulk' as any);
+      const tasksBulkService = client.service('tasks/bulk');
       const taskBatchSize = 100;
       const totalTasks = tasks.length;
       const createdTasks = [];
@@ -155,8 +151,7 @@ export default class SessionLoadClaude extends Command {
         const end = Math.min(i + taskBatchSize, totalTasks);
         const batch = tasks.slice(i, end);
 
-        // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
-        const batchResult = await (tasksBulkService as any).create(batch);
+        const batchResult = await tasksBulkService.createMany(batch);
         createdTasks.push(...batchResult);
 
         this.log(`${chalk.blue('●')} Created ${end}/${totalTasks} tasks...`);
@@ -166,8 +161,7 @@ export default class SessionLoadClaude extends Command {
 
       // Update session with task IDs
       const taskIds = createdTasks.map(t => t.task_id);
-      // biome-ignore lint/suspicious/noExplicitAny: FeathersJS service type doesn't include patch
-      await (sessionsService as any).patch(created.session_id, {
+      await sessionsService.patch(created.session_id, {
         tasks: taskIds,
       });
 
@@ -176,7 +170,7 @@ export default class SessionLoadClaude extends Command {
       let linkedCount = 0;
 
       // Batch updates by collecting message_id -> task_id mappings
-      const messageLinkUpdates: { messageId: string; taskId: string }[] = [];
+      const messageLinkUpdates: Array<{ messageId: MessageID; taskId: TaskID }> = [];
 
       for (const task of createdTasks) {
         const { start_index, end_index } = task.message_range;
@@ -196,22 +190,16 @@ export default class SessionLoadClaude extends Command {
 
       // Use bulk link service if available, otherwise fall back to individual updates
       try {
-        // biome-ignore lint/suspicious/noExplicitAny: Custom service path not in type definitions
-        const messageLinkService = client.service('messages/link-tasks' as any);
-        // biome-ignore lint/suspicious/noExplicitAny: Custom service method
-        await (messageLinkService as any).create({ updates: messageLinkUpdates });
+        const messageLinkService = client.service('messages/link-tasks');
+        await messageLinkService.create({ updates: messageLinkUpdates });
       } catch {
         // Fallback: batch patch in groups of 100
-        // biome-ignore lint/suspicious/noExplicitAny: Custom service path not in type definitions
-        const messagesService = client.service('messages' as any);
+        const messagesService = client.service('messages');
         const batchSize = 100;
         for (let i = 0; i < messageLinkUpdates.length; i += batchSize) {
           const batch = messageLinkUpdates.slice(i, i + batchSize);
           await Promise.all(
-            batch.map(update =>
-              // biome-ignore lint/suspicious/noExplicitAny: FeathersJS service type doesn't include patch
-              (messagesService as any).patch(update.messageId, { task_id: update.taskId })
-            )
+            batch.map(update => messagesService.patch(update.messageId, { task_id: update.taskId }))
           );
           this.log(
             `${chalk.blue('●')} Linked ${Math.min(i + batchSize, messageLinkUpdates.length)}/${messageLinkUpdates.length} messages...`
@@ -227,8 +215,7 @@ export default class SessionLoadClaude extends Command {
       if (flags.board) {
         try {
           const boardsService = client.service('boards');
-          // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
-          await (boardsService as any).patch(null, null, {
+          await boardsService.patch(null, null, {
             query: { addSession: created.session_id, boardId: flags.board },
           });
           this.log(`${chalk.green('✓')} Added to board: ${chalk.cyan(flags.board)}`);

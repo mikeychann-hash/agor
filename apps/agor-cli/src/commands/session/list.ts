@@ -111,7 +111,7 @@ export default class SessionList extends BaseCommand {
         $limit: number;
         $sort: { created_at: -1 };
         status?: string;
-        agent?: string;
+        agentic_tool?: string;
         board_id?: string;
       }
 
@@ -121,13 +121,12 @@ export default class SessionList extends BaseCommand {
       };
 
       if (flags.status) query.status = flags.status;
-      if (flags.agent) query.agent = flags.agent;
+      if (flags.agent) query.agentic_tool = flags.agent;
       if (flags.board) query.board_id = flags.board; // TODO: Support board name lookup
 
       // Fetch sessions
       const sessionsService = client.service('sessions');
-      // biome-ignore lint/suspicious/noExplicitAny: Feathers service methods not properly typed
-      const result = await (sessionsService as any).find({ query });
+      const result = await sessionsService.find({ query });
       const isPaginated = !Array.isArray(result);
       const sessions = Array.isArray(result) ? result : (result as Paginated<Session>).data;
       const total = isPaginated ? (result as Paginated<Session>).total : sessions.length;
@@ -163,14 +162,11 @@ export default class SessionList extends BaseCommand {
         const shortId = formatShortId(session.session_id);
         const firstTask =
           Array.isArray(session.tasks) && session.tasks.length > 0 ? session.tasks[0] : null;
-        const description = this.truncate(
-          session.description ||
-            (firstTask && 'full_prompt' in firstTask ? firstTask.full_prompt : '(no description)'),
-          28
-        );
+        const description = this.truncate(session.description || '(no description)', 28);
         const taskCount = session.tasks?.length || 0;
-        const completedTasks =
-          session.tasks?.filter((t: { status: string }) => t.status === 'completed').length || 0;
+        // Note: session.tasks are TaskID arrays, not full Task objects in list view
+        // Task completion stats would require joining with tasks table
+        const completedTasks = 0;
         const worktree = session.repo?.worktree_name
           ? `${session.repo.repo_slug}:${session.repo.worktree_name}`
           : session.repo?.repo_slug || '-';
@@ -180,7 +176,7 @@ export default class SessionList extends BaseCommand {
         table.push([
           chalk.dim(shortId),
           description,
-          session.agent,
+          session.agentic_tool,
           this.formatStatus(session.status),
           `${completedTasks}/${taskCount}`,
           chalk.dim(worktree),
