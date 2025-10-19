@@ -653,9 +653,10 @@ async function main() {
         params
       );
 
-      // Update session with new task immediately
+      // Update session with new task immediately and set status to running
       await sessionsService.patch(id, {
         tasks: [...session.tasks, task.task_id],
+        status: 'running',
       });
 
       // Create streaming callbacks for real-time UI updates
@@ -803,6 +804,7 @@ async function main() {
 
               await sessionsService.patch(id, {
                 message_count: session.message_count + totalMessages,
+                status: 'idle',
               });
             } catch (error) {
               console.error(`❌ Error completing task ${task.task_id}:`, error);
@@ -829,9 +831,12 @@ async function main() {
               });
             }
 
-            // Mark task as failed
+            // Mark task as failed and set session back to idle
             await tasksService.patch(task.task_id, {
               status: 'failed',
+            });
+            await sessionsService.patch(id, {
+              status: 'idle',
             });
           });
       });

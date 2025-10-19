@@ -6,6 +6,7 @@ import {
   ForkOutlined,
   SendOutlined,
   SettingOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import {
   Badge,
@@ -180,12 +181,12 @@ const SessionDrawer = ({
   return (
     <Drawer
       title={
-        <Space size={12} align="center">
+        <Space size={12} align="start">
           <ToolIcon tool={session.agentic_tool} size={40} />
-          <div>
-            <div>
-              <Text strong style={{ fontSize: 16 }}>
-                {session.title || session.agentic_tool}
+          <div style={{ flex: 1 }}>
+            <div style={{ marginBottom: 4 }}>
+              <Text strong style={{ fontSize: 18 }}>
+                {session.title || session.description || session.agentic_tool}
               </Text>
               <Badge
                 status={getStatusColor()}
@@ -193,8 +194,15 @@ const SessionDrawer = ({
                 style={{ marginLeft: 12 }}
               />
             </div>
+            {session.description && session.description !== session.title && (
+              <div style={{ marginBottom: 4 }}>
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  {session.description}
+                </Text>
+              </div>
+            )}
             {session.created_by && (
-              <div style={{ marginTop: 4 }}>
+              <div>
                 <CreatedByTag
                   createdBy={session.created_by}
                   currentUserId={currentUserId}
@@ -361,6 +369,16 @@ const SessionDrawer = ({
               />
               {isRunning && <Spin size="small" />}
               <Button.Group>
+                <Tooltip title="Stop Execution (Coming Soon)">
+                  <Button
+                    danger
+                    icon={<StopOutlined />}
+                    onClick={() => {
+                      // TODO: Implement stop functionality
+                    }}
+                    disabled={!isRunning}
+                  />
+                </Tooltip>
                 <Tooltip title={isRunning ? 'Session is running...' : 'Fork Session'}>
                   <Button
                     icon={<ForkOutlined />}
