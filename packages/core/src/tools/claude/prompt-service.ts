@@ -139,16 +139,37 @@ export class ClaudePromptService {
         const timestamp = new Date().toISOString();
 
         // Update task status to 'awaiting_permission' via FeathersJS service (emits WebSocket)
-        await this.tasksService.patch(taskId, {
-          status: TaskStatus.AWAITING_PERMISSION,
-          permission_request: {
-            request_id: requestId,
-            tool_name: input.tool_name,
-            tool_input: input.tool_input as Record<string, unknown>,
-            tool_use_id: toolUseID,
-            requested_at: timestamp,
-          },
+        console.log(`🔒 Updating task ${taskId} to awaiting_permission`, {
+          tool_name: input.tool_name,
+          request_id: requestId,
         });
+        try {
+          await this.tasksService.patch(taskId, {
+            status: TaskStatus.AWAITING_PERMISSION,
+            permission_request: {
+              request_id: requestId,
+              tool_name: input.tool_name,
+              tool_input: input.tool_input as Record<string, unknown>,
+              tool_use_id: toolUseID,
+              requested_at: timestamp,
+            },
+          });
+          console.log(`✅ Task ${taskId} updated to awaiting_permission successfully`);
+        } catch (patchError) {
+          console.error(`❌ CRITICAL: Failed to patch task ${taskId}:`, patchError);
+          console.error(`Task data that failed:`, {
+            taskId,
+            status: TaskStatus.AWAITING_PERMISSION,
+            permission_request: {
+              request_id: requestId,
+              tool_name: input.tool_name,
+              tool_input: input.tool_input,
+              tool_use_id: toolUseID,
+              requested_at: timestamp,
+            },
+          });
+          throw patchError; // Re-throw so outer catch can handle it
+        }
 
         // Emit WebSocket event for UI (broadcasts to ALL viewers)
         this.permissionService.emitRequest(sessionId, {
