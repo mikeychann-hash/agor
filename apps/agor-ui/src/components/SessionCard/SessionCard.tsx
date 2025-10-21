@@ -1,4 +1,3 @@
-import type { User } from '@agor/core/types';
 import {
   BranchesOutlined,
   CloseOutlined,
@@ -12,7 +11,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import { App, Badge, Button, Card, Collapse, Space, Spin, Tag, Typography } from 'antd';
-import type { Session, Task } from '../../types';
+import type { Session, Task, User } from '../../types';
 import { CreatedByTag } from '../metadata';
 import TaskListItem from '../TaskListItem';
 import { ToolIcon } from '../ToolIcon';
@@ -274,19 +273,19 @@ const SessionCard = ({
           </Space>
         </div>
 
-        {/* Concepts */}
-        {session.concepts && session.concepts.length > 0 && (
+        {/* Concepts - TODO: Re-implement with contextFiles */}
+        {/* {session.contextFiles && session.contextFiles.length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <Space size={4} wrap>
               <Text type="secondary">📦</Text>
-              {session.concepts.map(concept => (
-                <Tag key={concept} color="geekblue">
-                  {concept}
+              {session.contextFiles.map((file) => (
+                <Tag key={file} color="geekblue">
+                  {file}
                 </Tag>
               ))}
             </Space>
           </div>
-        )}
+        )} */}
       </div>
 
       {/* Tasks - collapsible */}

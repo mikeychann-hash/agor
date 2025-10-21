@@ -120,7 +120,9 @@ export function registerHandlebarsHelpers(): void {
    * Usage: {{replace worktree.name "-" "_"}}
    */
   Handlebars.registerHelper('replace', (str: unknown, search: string, replace: string): string => {
-    return String(str || '').split(search).join(replace);
+    return String(str || '')
+      .split(search)
+      .join(replace);
   });
 
   // ===== Conditional Helpers =====

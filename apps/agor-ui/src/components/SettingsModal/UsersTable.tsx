@@ -1,4 +1,3 @@
-import type { CreateUserInput, UpdateUserInput, User } from '@agor/core/types';
 import { DeleteOutlined, EditOutlined, PlusOutlined, SmileOutlined } from '@ant-design/icons';
 import {
   Button,
@@ -15,6 +14,7 @@ import {
 } from 'antd';
 import EmojiPicker, { type EmojiClickData, Theme } from 'emoji-picker-react';
 import { useState } from 'react';
+import type { CreateUserInput, UpdateUserInput, User } from '../../types';
 
 const { Text } = Typography;
 

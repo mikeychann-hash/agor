@@ -14,7 +14,7 @@
  */
 
 import { formatShortId, generateId } from '../../lib/ids';
-import type { Session, TaskID } from '../../types';
+import type { Session, TaskID, UserID, WorktreeID } from '../../types';
 import { createDatabase } from '../client';
 import { initializeDatabase, seedInitialData } from '../migrate';
 import {
@@ -74,10 +74,8 @@ async function testSessionRepository(db: ReturnType<typeof createDatabase>) {
   const session = await repo.create({
     agentic_tool: 'claude-code',
     status: 'idle',
-    repo: {
-      cwd: '/Users/test/project',
-      managed_worktree: false,
-    },
+    created_by: 'test-user' as UserID,
+    worktree_id: 'test-worktree-id' as WorktreeID,
     git_state: {
       ref: 'main',
       base_sha: 'abc123',
@@ -86,6 +84,7 @@ async function testSessionRepository(db: ReturnType<typeof createDatabase>) {
     genealogy: {
       children: [],
     },
+    contextFiles: [],
     tasks: [],
     message_count: 0,
     tool_use_count: 0,
@@ -226,30 +225,15 @@ async function testRepoRepository(db: ReturnType<typeof createDatabase>) {
   const repoData = await repo.create({
     slug: 'test-repo',
     name: 'Test Repository',
+    remote_url: 'https://github.com/test/test-repo.git',
     local_path: '/Users/test/.agor/repos/test-repo',
-    managed_by_agor: true,
     default_branch: 'main',
-    worktrees: [],
   });
 
   console.log(`  ✅ Created repo: ${formatShortId(repoData.repo_id)}`);
 
-  // Add worktree
-  const updated = await repo.addWorktree(repoData.repo_id, {
-    name: 'feat-auth',
-    path: '/Users/test/.agor/worktrees/feat-auth',
-    ref: 'feat/auth',
-    new_branch: true,
-    sessions: [],
-    created_at: new Date().toISOString(),
-    last_used: new Date().toISOString(),
-  });
-
-  if (updated.worktrees.length !== 1) {
-    throw new Error('addWorktree failed');
-  }
-
-  console.log('  ✅ Added worktree');
+  // Note: Worktrees are now managed separately in the worktrees table
+  console.log('  ✅ Repo created successfully');
 
   // Test findBySlug
   const foundBySlug = await repo.findBySlug('test-repo');
@@ -271,9 +255,14 @@ async function testGenealogy(db: ReturnType<typeof createDatabase>) {
   const parent = await repo.create({
     agentic_tool: 'claude-code',
     status: 'completed',
-    repo: { cwd: '/test', managed_worktree: false },
+    created_by: 'test-user' as UserID,
+    worktree_id: 'test-worktree-id' as WorktreeID,
     git_state: { ref: 'main', base_sha: 'abc', current_sha: 'def' },
     genealogy: { children: [] },
+    contextFiles: [],
+    tasks: [],
+    message_count: 0,
+    tool_use_count: 0,
   });
 
   console.log(`  ✅ Created parent: ${formatShortId(parent.session_id)}`);
@@ -282,13 +271,18 @@ async function testGenealogy(db: ReturnType<typeof createDatabase>) {
   const fork = await repo.create({
     agentic_tool: 'claude-code',
     status: 'idle',
-    repo: { cwd: '/test', managed_worktree: false },
+    created_by: 'test-user' as UserID,
+    worktree_id: 'test-worktree-id' as WorktreeID,
     git_state: { ref: 'main', base_sha: 'def', current_sha: 'def' },
     genealogy: {
       forked_from_session_id: parent.session_id,
       fork_point_task_id: 'task-123' as TaskID,
       children: [],
     },
+    contextFiles: [],
+    tasks: [],
+    message_count: 0,
+    tool_use_count: 0,
   });
 
   console.log(`  ✅ Created fork: ${formatShortId(fork.session_id)}`);
@@ -297,13 +291,18 @@ async function testGenealogy(db: ReturnType<typeof createDatabase>) {
   const spawn = await repo.create({
     agentic_tool: 'cursor',
     status: 'idle',
-    repo: { cwd: '/test', managed_worktree: false },
+    created_by: 'test-user' as UserID,
+    worktree_id: 'test-worktree-id' as WorktreeID,
     git_state: { ref: 'main', base_sha: 'def', current_sha: 'def' },
     genealogy: {
       parent_session_id: parent.session_id,
       spawn_point_task_id: 'task-456' as TaskID,
       children: [],
     },
+    contextFiles: [],
+    tasks: [],
+    message_count: 0,
+    tool_use_count: 0,
   });
 
   console.log(`  ✅ Created spawn: ${formatShortId(spawn.session_id)}`);

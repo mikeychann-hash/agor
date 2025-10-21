@@ -160,7 +160,7 @@ export default class SessionList extends BaseCommand {
       // Add rows
       for (const session of sessions) {
         const shortId = formatShortId(session.session_id);
-        const firstTask =
+        const _firstTask =
           Array.isArray(session.tasks) && session.tasks.length > 0 ? session.tasks[0] : null;
         const description = this.truncate(session.description || '(no description)', 28);
         const taskCount = session.tasks?.length || 0;

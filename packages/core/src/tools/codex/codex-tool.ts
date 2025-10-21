@@ -97,8 +97,8 @@ export class CodexTool implements ITool {
     let capturedThreadId: string | undefined;
     let resolvedModel: string | undefined;
     let currentMessageId: MessageID | null = null;
-    let streamStartTime = Date.now();
-    let firstTokenTime: number | null = null;
+    let _streamStartTime = Date.now();
+    let _firstTokenTime: number | null = null;
 
     for await (const event of this.promptService.promptSessionStreaming(
       sessionId,
@@ -129,7 +129,7 @@ export class CodexTool implements ITool {
         // Start new message if needed
         if (!currentMessageId) {
           currentMessageId = generateId() as MessageID;
-          firstTokenTime = Date.now();
+          _firstTokenTime = Date.now();
 
           if (streamingCallbacks) {
             streamingCallbacks.onStreamStart(currentMessageId, {
@@ -203,7 +203,7 @@ export class CodexTool implements ITool {
         // Only create message if there's text content (not just tools)
         if (textOnlyContent.length > 0) {
           // Extract full text for client-side streaming
-          const fullText = textOnlyContent
+          const _fullText = textOnlyContent
             .map(block => (block as { text?: string }).text || '')
             .join('');
 
@@ -230,8 +230,8 @@ export class CodexTool implements ITool {
           currentMessageId = null;
         }
 
-        streamStartTime = Date.now();
-        firstTokenTime = null;
+        _streamStartTime = Date.now();
+        _firstTokenTime = null;
       }
     }
 

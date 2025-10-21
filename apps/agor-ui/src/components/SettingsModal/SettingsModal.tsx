@@ -1,4 +1,6 @@
-import type { Application } from '@agor/core/feathers';
+import type { AgorClient } from '@agor/core/api';
+import { Modal, Tabs } from 'antd';
+import { useState } from 'react';
 import type {
   Board,
   CreateMCPServerInput,
@@ -10,9 +12,7 @@ import type {
   UpdateUserInput,
   User,
   Worktree,
-} from '@agor/core/types';
-import { Modal, Tabs } from 'antd';
-import { useState } from 'react';
+} from '../../types';
 import { WorktreeModal } from '../WorktreeModal';
 import { BoardsTable } from './BoardsTable';
 import { MCPServersTable } from './MCPServersTable';
@@ -23,7 +23,7 @@ import { WorktreesTable } from './WorktreesTable';
 export interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
-  client: Application | null; // Still needed for WorktreeModal
+  client: AgorClient | null; // Still needed for WorktreeModal
   boards: Board[];
   repos: Repo[];
   worktrees: Worktree[];

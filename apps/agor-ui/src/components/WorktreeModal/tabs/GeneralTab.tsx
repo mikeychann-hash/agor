@@ -1,11 +1,9 @@
-import type { Repo, Session, Worktree } from '@agor/core/types';
 import { DeleteOutlined, EditOutlined, FolderOutlined, LinkOutlined } from '@ant-design/icons';
 import {
   Button,
   Descriptions,
   Input,
   List,
-  Modal,
   message,
   Popconfirm,
   Space,
@@ -13,6 +11,7 @@ import {
   Typography,
 } from 'antd';
 import { useState } from 'react';
+import type { Repo, Session, Worktree } from '../../../types';
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -63,7 +62,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
   };
 
   const activeSessions = sessions.filter(s => s.status === 'running');
-  const completedSessions = sessions.filter(s => s.status === 'completed');
+  const _completedSessions = sessions.filter(s => s.status === 'completed');
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%', padding: '0 24px' }}>

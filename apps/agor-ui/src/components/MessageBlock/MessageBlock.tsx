@@ -9,11 +9,11 @@
  * - User emoji avatars
  */
 
-import type { Message, User } from '@agor/core/types';
 import { RobotOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
 import { Avatar, theme } from 'antd';
 import type React from 'react';
+import type { Message, User } from '../../types';
 import { MarkdownRenderer } from '../MarkdownRenderer';
 import { ToolIcon } from '../ToolIcon';
 import { ToolUseRenderer } from '../ToolUseRenderer';
@@ -106,18 +106,18 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
       // First pass: collect blocks and track order
       for (const block of message.content) {
         if (block.type === 'text') {
-          const text = (block as TextBlock).text;
+          const text = (block as unknown as TextBlock).text;
           if (hasSeenTool) {
             textAfterTools.push(text);
           } else {
             textBeforeTools.push(text);
           }
         } else if (block.type === 'tool_use') {
-          const toolUse = block as ToolUseBlock;
+          const toolUse = block as unknown as ToolUseBlock;
           toolUseMap.set(toolUse.id, toolUse);
           hasSeenTool = true;
         } else if (block.type === 'tool_result') {
-          const toolResult = block as ToolResultBlock;
+          const toolResult = block as unknown as ToolResultBlock;
           toolResultMap.set(toolResult.tool_use_id, toolResult);
         }
       }

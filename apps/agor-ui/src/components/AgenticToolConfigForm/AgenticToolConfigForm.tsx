@@ -9,9 +9,9 @@
  * Used in both NewSessionModal and SessionSettingsModal
  */
 
-import type { AgenticToolName, MCPServer } from '@agor/core/types';
-import { getDefaultPermissionMode } from '@agor/core/types';
 import { Form } from 'antd';
+import type { AgenticToolName, MCPServer } from '../../types';
+import { getDefaultPermissionMode } from '../../types';
 import { MCPServerSelect } from '../MCPServerSelect';
 import { ModelSelector } from '../ModelSelector';
 import { PermissionModeSelector } from '../PermissionModeSelector';

@@ -3,6 +3,7 @@ import type {
   BoardID,
   CreateUserInput,
   MCPServer,
+  PermissionMode,
   Repo,
   UpdateUserInput,
   User,
@@ -11,9 +12,21 @@ import type {
 import { Layout } from 'antd';
 import { useState } from 'react';
 import { usePresence } from '../../hooks/usePresence';
-import type { Agent, Board, Session, Task } from '../../types';
+import type { Board, PermissionScope, Session, Task } from '../../types';
 import { AppHeader } from '../AppHeader';
 import type { ModelConfig } from '../ModelSelector';
+
+// UI-only type for agent selection dropdown (different from AgenticTool which has UUIDv7 ID)
+interface AgenticToolOption {
+  id: string; // AgenticToolName as string
+  name: string;
+  icon: string;
+  installed: boolean;
+  installable?: boolean;
+  version?: string;
+  description?: string;
+}
+
 import { NewSessionButton } from '../NewSessionButton';
 import {
   type NewSessionConfig,
@@ -35,7 +48,7 @@ export interface AppProps {
   user?: User | null;
   sessions: Session[];
   tasks: Record<string, Task[]>;
-  availableAgents: Agent[];
+  availableAgents: AgenticToolOption[];
   boards: Board[];
   repos: Repo[];
   worktrees: Worktree[];
@@ -166,7 +179,7 @@ export const App: React.FC<AppProps> = ({
     requestId: string,
     taskId: string,
     allow: boolean,
-    scope: 'once' | 'session' | 'project'
+    scope: PermissionScope
   ) => {
     if (!client) return;
 
@@ -282,7 +295,8 @@ export const App: React.FC<AppProps> = ({
         onClose={() => setModalOpen(false)}
         onCreate={handleCreateSession}
         onOpenSettings={() => setSettingsOpen(true)}
-        availableAgents={availableAgents}
+        // biome-ignore lint/suspicious/noExplicitAny: AgenticToolOption vs AgenticTool ID type mismatch
+        availableAgents={availableAgents as any}
         worktreeOptions={worktreeOptions}
         mcpServers={mcpServers}
       />
@@ -361,10 +375,11 @@ export const App: React.FC<AppProps> = ({
       <WorktreeModal
         open={!!worktreeModalWorktreeId}
         onClose={() => setWorktreeModalWorktreeId(null)}
-        worktree={selectedWorktree}
-        repo={selectedWorktreeRepo}
+        worktree={selectedWorktree || null}
+        repo={selectedWorktreeRepo || null}
         sessions={worktreeSessions}
-        client={client}
+        // biome-ignore lint/suspicious/noExplicitAny: AgorClient vs Application type incompatibility
+        client={client as any}
         onUpdateWorktree={onUpdateWorktree}
         onUpdateRepo={onUpdateRepo}
         onDelete={onDeleteWorktree}
@@ -373,7 +388,12 @@ export const App: React.FC<AppProps> = ({
           setSettingsOpen(true);
         }}
       />
-      <TerminalModal open={terminalOpen} onClose={() => setTerminalOpen(false)} client={client} />
+      {/* biome-ignore lint/suspicious/noExplicitAny: AgorClient vs Application type incompatibility */}
+      <TerminalModal
+        open={terminalOpen}
+        onClose={() => setTerminalOpen(false)}
+        client={client as any}
+      />
     </Layout>
   );
 };

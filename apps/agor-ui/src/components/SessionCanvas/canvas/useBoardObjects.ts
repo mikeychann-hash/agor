@@ -39,7 +39,8 @@ export const useBoardObjects = ({
           _action: 'upsertObject',
           objectId,
           objectData,
-        });
+          // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
+        } as any);
       } catch (error) {
         console.error('Failed to update object:', error);
       }
@@ -87,7 +88,8 @@ export const useBoardObjects = ({
           _action: 'deleteZone',
           objectId,
           deleteAssociatedSessions,
-        });
+          // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
+        } as any);
 
         // After successful deletion, we can remove from the tracking set
         setTimeout(() => {
@@ -150,11 +152,11 @@ export const useBoardObjects = ({
           },
           data: {
             objectId,
-            label: objectData.label,
+            label: objectData.type === 'zone' ? objectData.label : '',
             width: objectData.width,
             height: objectData.height,
             color: objectData.color,
-            status: objectData.status,
+            status: objectData.type === 'zone' ? objectData.status : undefined,
             x: objectData.x, // Include position in data for updates
             y: objectData.y,
             trigger: objectData.type === 'zone' ? objectData.trigger : undefined,
@@ -216,7 +218,8 @@ export const useBoardObjects = ({
             label: 'New Zone',
             // No color specified - will use theme default
           },
-        });
+          // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
+        } as any);
       } catch (error) {
         console.error('Failed to add zone node:', error);
         // Rollback
@@ -244,7 +247,8 @@ export const useBoardObjects = ({
         await client.service('boards').patch(currentBoard.board_id, {
           _action: 'removeObject',
           objectId,
-        });
+          // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
+        } as any);
 
         // After successful deletion, we can remove from the tracking set
         // (the object will no longer exist in board.objects)
@@ -295,7 +299,8 @@ export const useBoardObjects = ({
         await client.service('boards').patch(currentBoard.board_id, {
           _action: 'batchUpsertObjects',
           objects,
-        });
+          // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
+        } as any);
       } catch (error) {
         console.error('Failed to persist object positions:', error);
       }

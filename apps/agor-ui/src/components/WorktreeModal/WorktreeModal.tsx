@@ -1,7 +1,7 @@
-import type { Application } from '@agor/core/feathers';
-import type { Repo, Session, Worktree } from '@agor/core/types';
+import type { AgorClient } from '@agor/core/api';
 import { Modal, Tabs } from 'antd';
 import { useState } from 'react';
+import type { Repo, Session, Worktree } from '../../types';
 import { ConceptsTab } from './tabs/ConceptsTab';
 import { EnvironmentTab } from './tabs/EnvironmentTab';
 import { GeneralTab } from './tabs/GeneralTab';
@@ -14,7 +14,7 @@ export interface WorktreeModalProps {
   worktree: Worktree | null;
   repo: Repo | null;
   sessions: Session[];
-  client: Application | null;
+  client: AgorClient | null;
   onUpdateWorktree?: (worktreeId: string, updates: Partial<Worktree>) => void;
   onUpdateRepo?: (repoId: string, updates: Partial<Repo>) => void;
   onDelete?: (worktreeId: string) => void;

@@ -9,9 +9,9 @@
  */
 
 import type { AgorClient } from '@agor/core/api';
-import type { ActiveUser, BoardID, CursorMovedEvent, User } from '@agor/core/types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PRESENCE_CONFIG } from '../config/presence';
+import type { ActiveUser, BoardID, CursorMovedEvent, User } from '../types';
 
 interface UsePresenceOptions {
   client: AgorClient | null;

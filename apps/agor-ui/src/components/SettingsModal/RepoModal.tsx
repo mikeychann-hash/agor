@@ -7,9 +7,9 @@
  * - Worktrees: List of worktrees for this repo
  */
 
-import type { Repo } from '@agor/core/types';
 import { FolderOutlined, SettingOutlined } from '@ant-design/icons';
 import { Modal, Tabs, Typography } from 'antd';
+import type { Repo } from '../../types';
 
 const { Text } = Typography;
 

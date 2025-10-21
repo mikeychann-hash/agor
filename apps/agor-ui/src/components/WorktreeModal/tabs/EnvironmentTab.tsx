@@ -5,7 +5,6 @@
  * 2. Worktree Instance (bottom) - This worktree's variables and preview
  */
 
-import type { Repo, RepoEnvironmentConfig, Worktree } from '@agor/core/types';
 import { renderTemplate } from '@agor/core/templates/handlebars-helpers';
 import {
   CodeOutlined,
@@ -20,14 +19,14 @@ import {
   Card,
   Descriptions,
   Divider,
-  Empty,
   Input,
   Space,
   Tag,
   Typography,
+  theme,
 } from 'antd';
-import { useState, useMemo } from 'react';
-import { theme } from 'antd';
+import { useMemo, useState } from 'react';
+import type { Repo, RepoEnvironmentConfig, Worktree } from '../../../types';
 
 const { Text, Paragraph, Title } = Typography;
 const { TextArea } = Input;
@@ -443,9 +442,7 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
                       fontSize: 11,
                       display: 'block',
                       padding: 8,
-                      background: upPreview.success
-                        ? token.colorSuccessBg
-                        : token.colorErrorBg,
+                      background: upPreview.success ? token.colorSuccessBg : token.colorErrorBg,
                       border: `1px solid ${upPreview.success ? token.colorSuccessBorder : token.colorErrorBorder}`,
                       color: upPreview.success ? token.colorSuccessText : token.colorErrorText,
                       marginTop: 4,
@@ -467,13 +464,9 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
                       fontSize: 11,
                       display: 'block',
                       padding: 8,
-                      background: downPreview.success
-                        ? token.colorSuccessBg
-                        : token.colorErrorBg,
+                      background: downPreview.success ? token.colorSuccessBg : token.colorErrorBg,
                       border: `1px solid ${downPreview.success ? token.colorSuccessBorder : token.colorErrorBorder}`,
-                      color: downPreview.success
-                        ? token.colorSuccessText
-                        : token.colorErrorText,
+                      color: downPreview.success ? token.colorSuccessText : token.colorErrorText,
                       marginTop: 4,
                       wordBreak: 'break-all',
                     }}

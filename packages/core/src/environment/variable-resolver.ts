@@ -5,8 +5,8 @@
  * Handlebars context from worktree + repo config.
  */
 
-import type { WorktreeEnvironmentInstance } from '../types';
 import { buildWorktreeContext } from '../templates/handlebars-helpers';
+import type { WorktreeEnvironmentInstance } from '../types';
 
 /**
  * Auto-assign WORKTREE_UNIQUE_ID for a new worktree

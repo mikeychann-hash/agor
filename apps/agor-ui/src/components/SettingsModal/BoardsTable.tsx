@@ -1,8 +1,8 @@
-import type { Board } from '@agor/core/types';
 import { DeleteOutlined, EditOutlined, PlusOutlined, SmileOutlined } from '@ant-design/icons';
 import { Button, Form, Input, Modal, Popconfirm, Popover, Space, Table, Typography } from 'antd';
 import EmojiPicker, { type EmojiClickData, Theme } from 'emoji-picker-react';
 import { useState } from 'react';
+import type { Board } from '../../types';
 import { JSONEditor, validateJSON } from '../JSONEditor';
 
 const { Text } = Typography;

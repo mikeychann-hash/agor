@@ -5,16 +5,11 @@
  */
 
 import type { UUID, Worktree, WorktreeID } from '@agor/core/types';
-import { eq, like, or, sql } from 'drizzle-orm';
+import { eq, like, sql } from 'drizzle-orm';
 import { formatShortId, generateId } from '../../lib/ids';
 import type { Database } from '../client';
 import { type WorktreeInsert, type WorktreeRow, worktrees } from '../schema';
-import {
-  AmbiguousIdError,
-  type BaseRepository,
-  EntityNotFoundError,
-  RepositoryError,
-} from './base';
+import { AmbiguousIdError, type BaseRepository, EntityNotFoundError } from './base';
 
 /**
  * Worktree repository implementation

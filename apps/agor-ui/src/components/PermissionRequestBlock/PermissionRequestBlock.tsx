@@ -8,11 +8,11 @@
  * - Visual indication that system is waiting
  */
 
-import type { Task } from '@agor/core/types';
 import { CheckOutlined, CloseOutlined, LockOutlined } from '@ant-design/icons';
 import { Button, Card, Descriptions, Radio, Space, Tag, Typography, theme } from 'antd';
 import type React from 'react';
 import { useState } from 'react';
+import type { Task } from '../../types';
 
 const { Text, Title } = Typography;
 

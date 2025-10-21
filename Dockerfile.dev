@@ -21,7 +21,8 @@ COPY . .
 RUN cp docker-entrypoint.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+# NOTE: --force flag prevents interactive prompts in Docker builds (non-TTY environment)
+RUN pnpm install --frozen-lockfile --force
 
 # Create .agor directory for database and config
 RUN mkdir -p /root/.agor

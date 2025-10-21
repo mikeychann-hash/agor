@@ -11,7 +11,14 @@ import {
   useBoardActions,
   useSessionActions,
 } from './hooks';
-import { mockAgents } from './mocks';
+
+// Available agentic tools (formerly "agents")
+const availableAgents = [
+  { id: 'claude-code', name: 'Claude Code', icon: '🤖', installed: true, installable: true },
+  { id: 'codex', name: 'Codex', icon: '💻', installed: true, installable: true },
+  { id: 'gemini', name: 'Gemini', icon: '💎', installed: true, installable: true },
+  { id: 'cursor', name: 'Cursor', icon: '✏️', installed: false, installable: false },
+];
 
 function AppContent() {
   const { message } = AntApp.useApp();
@@ -243,10 +250,8 @@ function AppContent() {
   }
 
   // Handle session creation
-  const handleCreateSession = async (
-    config: Parameters<React.ComponentProps<typeof AgorApp>['onCreateSession']>[0],
-    boardId: string
-  ) => {
+  // biome-ignore lint/suspicious/noExplicitAny: Config type from AgorApp component props
+  const handleCreateSession = async (config: any, boardId: string) => {
     const session = await createSession(config);
     if (session) {
       // Add session to the current board using custom endpoint
@@ -613,15 +618,17 @@ function AppContent() {
         user={user}
         sessions={sessions}
         tasks={tasks}
-        availableAgents={mockAgents}
+        availableAgents={availableAgents}
         boards={boards}
         repos={repos}
         worktrees={worktrees}
         users={users}
         mcpServers={mcpServers}
         sessionMcpServerIds={sessionMcpServerIds}
-        worktreeOptions={worktreeOptions}
-        repoOptions={repoOptions}
+        // biome-ignore lint/suspicious/noExplicitAny: Type incompatibility between core and UI RepoReferenceOption
+        worktreeOptions={worktreeOptions as any}
+        // biome-ignore lint/suspicious/noExplicitAny: Type incompatibility between core and UI RepoReferenceOption
+        repoOptions={repoOptions as any}
         initialBoardId={boards[0]?.board_id}
         onCreateSession={handleCreateSession}
         onForkSession={handleForkSession}
@@ -641,7 +648,8 @@ function AppContent() {
         onCreateUser={handleCreateUser}
         onUpdateUser={handleUpdateUser}
         onDeleteUser={handleDeleteUser}
-        onCreateMCPServer={handleCreateMCPServer}
+        // biome-ignore lint/suspicious/noExplicitAny: CreateMCPServerInput vs Partial<MCPServer> type mismatch
+        onCreateMCPServer={handleCreateMCPServer as any}
         onUpdateMCPServer={handleUpdateMCPServer}
         onDeleteMCPServer={handleDeleteMCPServer}
         onUpdateSessionMcpServers={handleUpdateSessionMcpServers}

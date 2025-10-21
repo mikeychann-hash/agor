@@ -9,11 +9,11 @@
  * - Search/filter capability
  */
 
-import type { ConceptListItem } from '@agor/core/types';
 import { FileMarkdownOutlined, FolderOutlined } from '@ant-design/icons';
 import { Empty, Input, Spin, Tree, Typography } from 'antd';
 import type React from 'react';
 import { useMemo, useState } from 'react';
+import type { ConceptListItem } from '../../types';
 
 const { Text } = Typography;
 const { Search } = Input;

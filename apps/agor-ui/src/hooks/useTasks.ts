@@ -3,8 +3,8 @@
  */
 
 import type { AgorClient } from '@agor/core/api';
-import type { SessionID, Task } from '@agor/core/types';
 import { useCallback, useEffect, useState } from 'react';
+import type { SessionID, Task } from '../types';
 
 interface UseTasksResult {
   tasks: Task[];

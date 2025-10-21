@@ -1,8 +1,7 @@
-import type { AgenticToolName, MCPServer, PermissionMode } from '@agor/core/types';
 import { DownOutlined, SettingOutlined } from '@ant-design/icons';
 import { Alert, Button, Collapse, Form, Input, Modal, Select, Space, Typography } from 'antd';
 import { useState } from 'react';
-import type { Agent } from '../../types';
+import type { AgenticTool, AgenticToolName, MCPServer, PermissionMode } from '../../types';
 import { AgenticToolConfigForm } from '../AgenticToolConfigForm';
 import { AgentSelectionCard } from '../AgentSelectionCard';
 import type { ModelConfig } from '../ModelSelector';
@@ -36,7 +35,7 @@ export interface NewSessionModalProps {
   onClose: () => void;
   onCreate: (config: NewSessionConfig) => void;
   onOpenSettings?: () => void; // Callback to open settings modal
-  availableAgents: Agent[];
+  availableAgents: AgenticTool[];
 
   // Worktree options (from backend) - REQUIRED
   worktreeOptions?: RepoReferenceOption[];
@@ -69,7 +68,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
         }
 
         onCreate({
-          agent: selectedAgent,
+          agent: selectedAgent || 'claude-code',
           title: values.title,
           initialPrompt: values.initialPrompt,
           worktreeRef: values.worktreeRef,

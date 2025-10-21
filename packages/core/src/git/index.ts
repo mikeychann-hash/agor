@@ -152,7 +152,7 @@ export async function cloneRepo(options: CloneOptions): Promise<CloneResult> {
   const git = createGit();
 
   if (options.onProgress) {
-    git.outputHandler((_command, stdout, stderr) => {
+    git.outputHandler((_command, _stdout, _stderr) => {
       // Note: Progress tracking through outputHandler is limited
       // This is a simplified version - simple-git's progress callback
       // in constructor works better, but we need the binary path too
@@ -266,14 +266,14 @@ export async function createWorktree(
 ): Promise<void> {
   const git = createGit(repoPath);
 
-  let fetchSucceeded = false;
+  let _fetchSucceeded = false;
 
   // Pull latest from remote if requested
   if (pullLatest) {
     try {
       // Fetch all branches to ensure remote tracking branches exist
       await git.fetch(['origin']);
-      fetchSucceeded = true;
+      _fetchSucceeded = true;
       console.log('✅ Fetched latest from origin');
     } catch (error) {
       console.warn(

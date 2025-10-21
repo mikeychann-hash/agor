@@ -13,10 +13,10 @@
  */
 
 import type { AgorClient } from '@agor/core/api';
-import type { SessionID, User } from '@agor/core/types';
 import { Alert, Empty, Spin } from 'antd';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useMessages, useStreamingMessages, useTasks } from '../../hooks';
+import type { Message, SessionID, User } from '../../types';
 import { TaskBlock } from '../TaskBlock';
 
 export interface ConversationViewProps {
@@ -105,7 +105,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const allMessages = useMemo(() => {
     // Convert streaming messages map to array and merge with DB messages
     const streamingArray = Array.from(streamingMessages.values());
-    return [...messages, ...streamingArray].sort((a, b) => {
+    return ([...messages, ...streamingArray] as Message[]).sort((a, b) => {
       // Sort by timestamp (streaming messages have timestamps too)
       return a.timestamp.localeCompare(b.timestamp);
     });

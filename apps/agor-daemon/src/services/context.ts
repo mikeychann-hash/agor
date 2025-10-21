@@ -16,7 +16,6 @@ import type {
   ContextFileDetail,
   ContextFileListItem,
   Id,
-  Params,
   QueryParams,
   ServiceMethods,
 } from '@agor/core/types';
@@ -122,34 +121,6 @@ export class ContextService
   }
 
   /**
-   * Scan a single file and add to list if it exists
-   */
-  private async scanFile(
-    basePath: string,
-    relativePath: string,
-    files: ContextFileListItem[]
-  ): Promise<void> {
-    const fullPath = join(basePath, relativePath);
-
-    try {
-      const stats = await stat(fullPath);
-      if (stats.isFile() && relativePath.endsWith('.md')) {
-        const content = await readFile(fullPath, 'utf-8');
-        const title = this.extractTitle(content, relativePath);
-
-        files.push({
-          path: relativePath,
-          title,
-          size: stats.size,
-          lastModified: stats.mtime.toISOString(),
-        });
-      }
-    } catch (error) {
-      // File doesn't exist, ignore
-    }
-  }
-
-  /**
    * Recursively scan directory for markdown files
    */
   private async scanDirectory(
@@ -183,7 +154,7 @@ export class ContextService
           });
         }
       }
-    } catch (error) {
+    } catch (_error) {
       // Directory doesn't exist, ignore
     }
   }

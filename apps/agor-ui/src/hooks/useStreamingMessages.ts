@@ -6,8 +6,8 @@
  * The complete message will then be available from the database via useMessages.
  */
 
-import type { MessageID, SessionID } from '@agor/core/types';
 import { useEffect, useState } from 'react';
+import type { MessageID, SessionID } from '../types';
 import type { useAgorClient } from './useAgorClient';
 
 export interface StreamingMessage {

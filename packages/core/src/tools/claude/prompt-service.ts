@@ -214,9 +214,15 @@ export class ClaudePromptService {
             }
           } else if (decision.scope === 'project') {
             // Update project-level permissions in .claude/settings.json
-            await this.updateProjectSettings(freshSession.repo.cwd, {
-              allowTools: [input.tool_name],
-            });
+            // Get worktree path to determine project directory
+            if (freshSession.worktree_id && this.worktreesRepo) {
+              const worktree = await this.worktreesRepo.findById(freshSession.worktree_id);
+              if (worktree) {
+                await this.updateProjectSettings(worktree.path, {
+                  allowTools: [input.tool_name],
+                });
+              }
+            }
           }
         }
 
@@ -428,8 +434,18 @@ export class ClaudePromptService {
           allServers.push({ server, source: 'global' });
         }
 
-        // 2. Repo-scoped servers (if session has a repo)
-        const repoId = session?.repo?.repo_id;
+        // 2. Repo-scoped servers (if session has a worktree)
+        // Get repo_id from the worktree
+        let repoId: string | undefined;
+        // Note: session is guaranteed non-null due to check at line 331-332
+        // Using non-null assertions due to TypeScript's control flow analysis limitations with class properties
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const worktreeId = session!.worktree_id;
+        if (worktreeId && this.worktreesRepo) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          const worktree = await this.worktreesRepo!.findById(worktreeId);
+          repoId = worktree?.repo_id;
+        }
         if (repoId) {
           const repoServers = await this.mcpServerRepo?.findAll({
             scope: 'repo',
@@ -458,8 +474,8 @@ export class ClaudePromptService {
         // 4. Session-specific servers (from join table)
         if (session && this.sessionMCPRepo) {
           const sessionServers = await this.sessionMCPRepo!.listServers(sessionId, true); // enabledOnly
-          console.log(`   📍 Session scope: ${sessionServers.length} server(s)`);
-          for (const server of sessionServers) {
+          console.log(`   📍 Session scope: ${sessionServers!.length} server(s)`);
+          for (const server of sessionServers!) {
             allServers.push({ server, source: 'session' });
           }
         } else {
@@ -565,8 +581,8 @@ export class ClaudePromptService {
    */
   private logPromptStart(
     sessionId: SessionID,
-    prompt: string,
-    cwd: string,
+    _prompt: string,
+    _cwd: string,
     agentSessionId?: string
   ) {
     console.log(`🤖 Prompting Claude for session ${sessionId.substring(0, 8)}...`);
@@ -581,7 +597,7 @@ export class ClaudePromptService {
    */
   private processContentBlocks(
     content: unknown,
-    messageNum: number
+    _messageNum: number
   ): Array<{
     type: string;
     text?: string;

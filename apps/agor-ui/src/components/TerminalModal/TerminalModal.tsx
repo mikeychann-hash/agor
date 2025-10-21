@@ -41,10 +41,10 @@ export const TerminalModal: React.FC<TerminalModalProps> = ({ open, onClose, cli
 
       try {
         // Create terminal session on backend
-        const result = await client.service('terminals').create({
+        const result = (await client.service('terminals').create({
           rows: 30,
           cols: 100,
-        });
+        })) as { terminalId: string; cwd: string };
 
         if (!mounted) return;
 
@@ -61,20 +61,23 @@ export const TerminalModal: React.FC<TerminalModalProps> = ({ open, onClose, cli
         });
 
         // Listen for terminal output from backend
-        client.service('terminals').on('data', (message: { terminalId: string; data: string }) => {
+        client.service('terminals').on('data', ((message: { terminalId: string; data: string }) => {
           if (message.terminalId === result.terminalId && terminalRef.current) {
             terminalRef.current.write(message.data);
           }
-        });
+          // biome-ignore lint/suspicious/noExplicitAny: Socket event listener type mismatch
+        }) as any);
 
         // Listen for terminal exit
-        client
-          .service('terminals')
-          .on('exit', (message: { terminalId: string; exitCode: number }) => {
-            if (message.terminalId === result.terminalId && terminalRef.current) {
-              terminalRef.current.writeln(`\r\n\r\n[Process exited with code ${message.exitCode}]`);
-            }
-          });
+        client.service('terminals').on('exit', ((message: {
+          terminalId: string;
+          exitCode: number;
+        }) => {
+          if (message.terminalId === result.terminalId && terminalRef.current) {
+            terminalRef.current.writeln(`\r\n\r\n[Process exited with code ${message.exitCode}]`);
+          }
+          // biome-ignore lint/suspicious/noExplicitAny: Socket event listener type mismatch
+        }) as any);
       } catch (error) {
         console.error('Failed to create terminal:', error);
         if (terminalRef.current) {

@@ -1,5 +1,4 @@
 import type { AgorClient } from '@agor/core/api';
-import type { MCPServer, PermissionMode, Repo, User, Worktree } from '@agor/core/types';
 import {
   ApiOutlined,
   BranchesOutlined,
@@ -22,7 +21,15 @@ import {
   theme,
 } from 'antd';
 import React from 'react';
-import type { Session } from '../../types';
+import type {
+  MCPServer,
+  PermissionMode,
+  PermissionScope,
+  Repo,
+  Session,
+  User,
+  Worktree,
+} from '../../types';
 import { ConversationView } from '../ConversationView';
 import { CreatedByTag } from '../metadata';
 import { PermissionModeSelector } from '../PermissionModeSelector';
@@ -36,7 +43,6 @@ import {
   SessionIdPill,
   SpawnPill,
   ToolCountPill,
-  WorktreePill,
 } from '../Pill';
 import { ToolIcon } from '../ToolIcon';
 
@@ -64,7 +70,8 @@ interface SessionDrawerProps {
     sessionId: string,
     requestId: string,
     taskId: string,
-    allow: boolean
+    allow: boolean,
+    scope: PermissionScope
   ) => void;
   onOpenSettings?: (sessionId: string) => void;
   onOpenWorktree?: (worktreeId: string) => void;
@@ -93,13 +100,18 @@ const SessionDrawer = ({
   const { token } = theme.useToken();
   const [inputValue, setInputValue] = React.useState('');
 
+  // Early return if no session (drawer should not be open without a session)
+  if (!session) {
+    return null;
+  }
+
   // Get agent-aware default permission mode (wrapped in useCallback for hook deps)
   const getDefaultPermissionMode = React.useCallback((agent?: string): PermissionMode => {
     return agent === 'codex' ? 'auto' : 'acceptEdits';
   }, []);
 
   const [permissionMode, setPermissionMode] = React.useState<PermissionMode>(
-    session?.permission_config?.mode || getDefaultPermissionMode(session?.agentic_tool)
+    session.permission_config?.mode || getDefaultPermissionMode(session.agentic_tool)
   );
   const [scrollToBottom, setScrollToBottom] = React.useState<(() => void) | null>(null);
 
@@ -319,17 +331,17 @@ const SessionDrawer = ({
         </Space>
       </div>
 
-      {/* Concepts */}
-      {session.concepts && session.concepts.length > 0 && (
+      {/* Concepts - TODO: Re-implement with contextFiles */}
+      {/* {session.contextFiles && session.contextFiles.length > 0 && (
         <div style={{ marginBottom: token.sizeUnit }}>
-          <Title level={5}>Loaded Concepts</Title>
+          <Title level={5}>Loaded Context Files</Title>
           <Space size={4} wrap>
-            {session.concepts.map(concept => (
-              <ConceptPill key={concept} name={concept} />
+            {session.contextFiles.map((file) => (
+              <ConceptPill key={file} name={file} />
             ))}
           </Space>
         </div>
-      )}
+      )} */}
 
       {/* MCP Servers */}
       {sessionMcpServerIds.length > 0 && (

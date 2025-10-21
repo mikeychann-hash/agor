@@ -1,4 +1,4 @@
-import type { Message, PermissionMode, Session, Task, WorktreeConfig } from '@agor/core/types';
+import type { Message, PermissionMode, Session, Task } from '@agor/core/types';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 /**

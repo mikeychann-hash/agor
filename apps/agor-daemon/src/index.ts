@@ -6,8 +6,6 @@
  */
 
 import 'dotenv/config';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadConfig, type UnknownJson } from '@agor/core/config';
 import {
   createDatabase,

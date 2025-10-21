@@ -1,4 +1,5 @@
 import {
+  ApartmentOutlined,
   BranchesOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -10,7 +11,6 @@ import {
   GithubOutlined,
   MessageOutlined,
   ToolOutlined,
-  ApartmentOutlined,
 } from '@ant-design/icons';
 import { message, Tag, theme } from 'antd';
 import type React from 'react';
@@ -51,7 +51,7 @@ interface MessageCountPillProps extends BasePillProps {
   count: number;
 }
 
-export const MessageCountPill: React.FC<MessageCountPillProps> = ({ count, size, style }) => (
+export const MessageCountPill: React.FC<MessageCountPillProps> = ({ count, style }) => (
   <Tag icon={<MessageOutlined />} color={PILL_COLORS.message} style={style}>
     {count} {count === 1 ? 'message' : 'messages'}
   </Tag>
@@ -62,7 +62,7 @@ interface ToolCountPillProps extends BasePillProps {
   toolName?: string;
 }
 
-export const ToolCountPill: React.FC<ToolCountPillProps> = ({ count, toolName, size, style }) => (
+export const ToolCountPill: React.FC<ToolCountPillProps> = ({ count, toolName, style }) => (
   <Tag icon={<ToolOutlined />} color={PILL_COLORS.tool} style={style}>
     {count} {toolName || 'tools'}
   </Tag>
@@ -140,7 +140,7 @@ interface StatusPillProps extends BasePillProps {
   status: 'completed' | 'failed' | 'running' | 'pending';
 }
 
-export const StatusPill: React.FC<StatusPillProps> = ({ status, size, style }) => {
+export const StatusPill: React.FC<StatusPillProps> = ({ status, style }) => {
   const config = {
     completed: { icon: <CheckCircleOutlined />, color: PILL_COLORS.success, text: 'Completed' },
     failed: { icon: <CloseCircleOutlined />, color: PILL_COLORS.error, text: 'Failed' },
@@ -160,7 +160,7 @@ interface ForkPillProps extends BasePillProps {
   taskId?: string;
 }
 
-export const ForkPill: React.FC<ForkPillProps> = ({ fromSessionId, taskId, size, style }) => (
+export const ForkPill: React.FC<ForkPillProps> = ({ fromSessionId, taskId, style }) => (
   <Tag icon={<ForkOutlined />} color={PILL_COLORS.fork} style={style}>
     FORKED from {fromSessionId.substring(0, 7)}
     {taskId && ` at ${taskId.substring(0, 7)}`}
@@ -172,7 +172,7 @@ interface SpawnPillProps extends BasePillProps {
   taskId?: string;
 }
 
-export const SpawnPill: React.FC<SpawnPillProps> = ({ fromSessionId, taskId, size, style }) => (
+export const SpawnPill: React.FC<SpawnPillProps> = ({ fromSessionId, taskId, style }) => (
   <Tag icon={<BranchesOutlined />} color={PILL_COLORS.spawn} style={style}>
     SPAWNED from {fromSessionId.substring(0, 7)}
     {taskId && ` at ${taskId.substring(0, 7)}`}
@@ -183,7 +183,7 @@ interface ReportPillProps extends BasePillProps {
   reportId?: string;
 }
 
-export const ReportPill: React.FC<ReportPillProps> = ({ reportId, size, style }) => (
+export const ReportPill: React.FC<ReportPillProps> = ({ reportId, style }) => (
   <Tag icon={<FileTextOutlined />} color={PILL_COLORS.report} style={style}>
     {reportId ? `Report ${reportId.substring(0, 7)}` : 'Has Report'}
   </Tag>
@@ -193,7 +193,7 @@ interface ConceptPillProps extends BasePillProps {
   name: string;
 }
 
-export const ConceptPill: React.FC<ConceptPillProps> = ({ name, size, style }) => (
+export const ConceptPill: React.FC<ConceptPillProps> = ({ name, style }) => (
   <Tag color={PILL_COLORS.concept} style={style}>
     📦 {name}
   </Tag>
@@ -203,7 +203,7 @@ interface WorktreePillProps extends BasePillProps {
   managed?: boolean;
 }
 
-export const WorktreePill: React.FC<WorktreePillProps> = ({ managed = true, size, style }) => (
+export const WorktreePill: React.FC<WorktreePillProps> = ({ managed = true, style }) => (
   <Tag color={PILL_COLORS.worktree} style={style}>
     {managed ? 'Managed' : 'Worktree'}
   </Tag>
@@ -211,7 +211,7 @@ export const WorktreePill: React.FC<WorktreePillProps> = ({ managed = true, size
 
 interface DirtyStatePillProps extends BasePillProps {}
 
-export const DirtyStatePill: React.FC<DirtyStatePillProps> = ({ size, style }) => (
+export const DirtyStatePill: React.FC<DirtyStatePillProps> = ({ style }) => (
   <Tag icon={<EditOutlined />} color={PILL_COLORS.warning} style={style}>
     uncommitted changes
   </Tag>
@@ -221,7 +221,7 @@ interface BranchPillProps extends BasePillProps {
   branch: string;
 }
 
-export const BranchPill: React.FC<BranchPillProps> = ({ branch, size, style }) => {
+export const BranchPill: React.FC<BranchPillProps> = ({ branch, style }) => {
   const { token } = theme.useToken();
 
   return (
@@ -237,7 +237,13 @@ interface RepoPillProps extends BasePillProps {
   onClick?: () => void;
 }
 
-export const RepoPill: React.FC<RepoPillProps> = ({ repoName, worktreeName, onClick, size, style }) => {
+export const RepoPill: React.FC<RepoPillProps> = ({
+  repoName,
+  worktreeName,
+  onClick,
+  size,
+  style,
+}) => {
   const { token } = theme.useToken();
 
   return (
@@ -252,9 +258,7 @@ export const RepoPill: React.FC<RepoPillProps> = ({ repoName, worktreeName, onCl
         {worktreeName && (
           <>
             {' '}
-            <ApartmentOutlined style={{ fontSize: '0.85em', opacity: 0.7 }} />
-            {' '}
-            {worktreeName}
+            <ApartmentOutlined style={{ fontSize: '0.85em', opacity: 0.7 }} /> {worktreeName}
           </>
         )}
       </span>

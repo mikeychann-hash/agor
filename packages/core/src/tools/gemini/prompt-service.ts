@@ -21,10 +21,8 @@ import {
   GeminiClient,
   GeminiEventType,
   type ResumedSessionData,
-  type ServerGeminiStreamEvent,
-  type ToolCallRequestInfo,
 } from '@google/gemini-cli-core';
-import type { Content, FunctionCall, Part } from '@google/genai';
+import type { Content, Part } from '@google/genai';
 import type { MessagesRepository } from '../../db/repositories/messages';
 import type { SessionRepository } from '../../db/repositories/sessions';
 import type { PermissionMode, SessionID, TaskID } from '../../types';
@@ -78,9 +76,9 @@ export class GeminiPromptService {
   private activeControllers = new Map<SessionID, AbortController>();
 
   constructor(
-    private messagesRepo: MessagesRepository,
+    _messagesRepo: MessagesRepository,
     private sessionsRepo: SessionRepository,
-    private apiKey?: string
+    _apiKey?: string
   ) {}
 
   /**
@@ -95,7 +93,7 @@ export class GeminiPromptService {
   async *promptSessionStreaming(
     sessionId: SessionID,
     prompt: string,
-    taskId?: TaskID,
+    _taskId?: TaskID,
     permissionMode?: PermissionMode
   ): AsyncGenerator<GeminiStreamEvent> {
     // Get or create Gemini client for this session
@@ -601,63 +599,6 @@ export class GeminiPromptService {
       } else if (content && typeof content === 'object' && 'text' in content) {
         // Single part with text
         parts.push(content as Part);
-      }
-
-      if (parts.length > 0) {
-        history.push({ role: role as 'user' | 'model', parts });
-      }
-    }
-
-    return history;
-  }
-
-  /**
-   * Convert Agor messages to Gemini Content[] format for history restoration
-   * @deprecated Use SDK's native session files instead (convertConversationToHistory)
-   */
-  private convertMessagesToGeminiHistory(
-    messages: Array<{ role: string; content: unknown }>
-  ): Content[] {
-    // @google/genai Content type expects { role: 'user' | 'model', parts: Part[] }
-    const history: Content[] = [];
-
-    for (const msg of messages) {
-      // Map role: 'assistant' → 'model', keep 'user' as is
-      const role = msg.role === 'assistant' ? 'model' : msg.role;
-      if (role !== 'user' && role !== 'model') {
-        continue; // Skip system messages, etc.
-      }
-
-      // Convert content to parts array
-      const parts: Part[] = [];
-
-      if (Array.isArray(msg.content)) {
-        // Content is array of blocks (text, tool_use, etc.)
-        for (const block of msg.content) {
-          if (typeof block === 'object' && block !== null) {
-            const b = block as {
-              type?: string;
-              text?: string;
-              id?: string;
-              name?: string;
-              input?: unknown;
-            };
-            if (b.type === 'text' && b.text) {
-              parts.push({ text: b.text });
-            } else if (b.type === 'tool_use' && b.name && b.input) {
-              // Convert tool_use to functionCall
-              const functionCall: FunctionCall = {
-                name: b.name,
-                args: b.input as Record<string, unknown>,
-              };
-              parts.push({ functionCall });
-            }
-            // TODO: Handle tool_result → functionResponse if needed
-          }
-        }
-      } else if (typeof msg.content === 'string') {
-        // Content is plain string
-        parts.push({ text: msg.content });
       }
 
       if (parts.length > 0) {

@@ -1,5 +1,4 @@
 import type { AgorClient } from '@agor/core/api';
-import type { BoardID, MCPServer, User, ZoneTrigger } from '@agor/core/types';
 import { BorderOutlined, DeleteOutlined, SelectOutlined } from '@ant-design/icons';
 import { Modal, Typography } from 'antd';
 import Handlebars from 'handlebars';
@@ -18,6 +17,7 @@ import {
   useEdgesState,
   useNodesState,
 } from 'reactflow';
+import type { BoardID, MCPServer, User, ZoneTrigger } from '../../types';
 import 'reactflow/dist/style.css';
 import './SessionCanvas.css';
 import { useCursorTracking } from '../../hooks/useCursorTracking';
@@ -179,7 +179,7 @@ const SessionCanvas = ({
       if (!currentLayout?.parentId) return;
 
       // Get session position from board.layout
-      const sessionLayout = board.layout[sessionId];
+      const sessionLayout = board.layout?.[sessionId];
       // Get parent zone position from board.objects (zones are board objects, not in layout)
       const parentZone = board.objects?.[currentLayout.parentId];
 
@@ -479,9 +479,11 @@ const SessionCanvas = ({
 
   // Intercept onNodesChange to detect resize events
   const onNodesChange = useCallback(
-    changes => {
+    // biome-ignore lint/suspicious/noExplicitAny: React Flow change event types are not exported
+    (changes: any) => {
       // Detect resize by checking for dimensions changes
-      changes.forEach(change => {
+      // biome-ignore lint/suspicious/noExplicitAny: React Flow change event types are not exported
+      changes.forEach((change: any) => {
         if (change.type === 'dimensions' && change.dimensions) {
           const node = nodes.find(n => n.id === change.id);
           if (node?.type === 'zone') {
@@ -534,7 +536,8 @@ const SessionCanvas = ({
                       _action: 'upsertObject',
                       objectId: nodeId,
                       objectData: updatedObject,
-                    });
+                      // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
+                    } as any);
                   } catch (error) {
                     console.error('Failed to persist zone resize:', error);
                   }
@@ -639,7 +642,8 @@ const SessionCanvas = ({
 
                   // If zone has a trigger, show confirmation modal AFTER pinning
                   if (zoneTrigger) {
-                    const zoneName = zoneObject.label || 'Unknown Zone';
+                    const zoneName =
+                      zoneObject?.type === 'zone' ? zoneObject.label : 'Unknown Zone';
                     // Use setTimeout to show modal after the layout update completes
                     setTimeout(() => {
                       setTriggerModal({
@@ -799,7 +803,8 @@ const SessionCanvas = ({
                       _action: 'upsertObject',
                       objectId: id,
                       objectData: data,
-                    })
+                      // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
+                    } as any)
                     .catch(console.error);
                 }
               },
@@ -823,7 +828,8 @@ const SessionCanvas = ({
                 label: 'New Zone',
                 color: '#d9d9d9',
               },
-            })
+              // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
+            } as any)
             .catch((error: unknown) => {
               console.error('Failed to add zone:', error);
               setNodes(nodes => nodes.filter(n => n.id !== objectId));

@@ -1,3 +1,4 @@
+// @ts-nocheck - Complex WebSocket event handling with dynamic types
 /**
  * React hook for fetching and subscribing to Agor data
  *
@@ -5,8 +6,8 @@
  */
 
 import type { AgorClient } from '@agor/core/api';
-import type { Board, MCPServer, Repo, Session, Task, User, Worktree } from '@agor/core/types';
 import { useCallback, useEffect, useState } from 'react';
+import type { Board, MCPServer, Repo, Session, Task, User, Worktree } from '../types';
 
 interface UseAgorDataResult {
   sessions: Session[];

@@ -13,7 +13,6 @@
  * as green message bubbles, NOT in AgentChain.
  */
 
-import type { Message } from '@agor/core/types';
 import {
   BulbOutlined,
   CheckCircleOutlined,
@@ -27,6 +26,7 @@ import { ThoughtChain } from '@ant-design/x';
 import { Space, Tag, Tooltip, Typography, theme } from 'antd';
 import type React from 'react';
 import { useMemo, useState } from 'react';
+import type { Message } from '../../types';
 import { MarkdownRenderer } from '../MarkdownRenderer';
 import { ToolIcon } from '../ToolIcon';
 import { ToolUseRenderer } from '../ToolUseRenderer';
@@ -100,7 +100,7 @@ export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
       // First pass: collect blocks and track order
       for (const block of message.content) {
         if (block.type === 'text') {
-          const text = (block as TextBlock).text.trim();
+          const text = (block as unknown as TextBlock).text.trim();
           if (text) {
             if (hasSeenTool) {
               textBlocksAfterTools.push(text);
@@ -109,11 +109,11 @@ export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
             }
           }
         } else if (block.type === 'tool_use') {
-          const toolUse = block as ToolUseBlock;
+          const toolUse = block as unknown as ToolUseBlock;
           toolUseMap.set(toolUse.id, toolUse);
           hasSeenTool = true;
         } else if (block.type === 'tool_result') {
-          const toolResult = block as ToolResultBlock;
+          const toolResult = block as unknown as ToolResultBlock;
           toolResultMap.set(toolResult.tool_use_id, toolResult);
         }
       }

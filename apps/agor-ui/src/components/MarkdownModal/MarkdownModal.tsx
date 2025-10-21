@@ -8,7 +8,7 @@
  * - Scrollable content area
  */
 
-import { Breadcrumb, Modal } from 'antd';
+import { Modal } from 'antd';
 import type React from 'react';
 import { MarkdownRenderer } from '../MarkdownRenderer';
 
@@ -45,7 +45,7 @@ export const MarkdownModal: React.FC<MarkdownModalProps> = ({
   content,
   filePath,
 }) => {
-  const breadcrumbItems = parseBreadcrumb(filePath);
+  const _breadcrumbItems = parseBreadcrumb(filePath);
 
   return (
     <Modal

@@ -1,6 +1,6 @@
-import type { Session, Worktree } from '@agor/core/types';
 import { MessageOutlined, ToolOutlined } from '@ant-design/icons';
-import { Badge, Button, Empty, List, Space, Tag, Typography } from 'antd';
+import { Button, Empty, List, Space, Tag, Typography } from 'antd';
+import type { Session, Worktree } from '../../../types';
 
 const { Text } = Typography;
 
@@ -124,7 +124,7 @@ export const SessionsTab: React.FC<SessionsTabProps> = ({ worktree, sessions }) 
                         <Text style={{ fontSize: 12 }}>{session.title || session.description}</Text>
                       )}
                       <Space size="small" style={{ fontSize: 11 }}>
-                        <Text type="secondary">Started: {formatTimeAgo(session.started_at)}</Text>
+                        <Text type="secondary">Created: {formatTimeAgo(session.created_at)}</Text>
                         <Text type="secondary">
                           <MessageOutlined /> {session.message_count}
                         </Text>
@@ -191,7 +191,7 @@ export const SessionsTab: React.FC<SessionsTabProps> = ({ worktree, sessions }) 
                       )}
                       <Space size="small" style={{ fontSize: 11 }}>
                         <Text type="secondary">
-                          Completed: {formatTimeAgo(session.completed_at || session.started_at)}
+                          Completed: {formatTimeAgo(session.last_updated)}
                         </Text>
                         <Text type="secondary">
                           <MessageOutlined /> {session.message_count}
@@ -263,7 +263,7 @@ export const SessionsTab: React.FC<SessionsTabProps> = ({ worktree, sessions }) 
                         <Text style={{ fontSize: 12 }}>{session.title || session.description}</Text>
                       )}
                       <Text type="secondary" style={{ fontSize: 11 }}>
-                        Failed: {formatTimeAgo(session.failed_at || session.started_at)}
+                        Failed: {formatTimeAgo(session.last_updated)}
                       </Text>
                     </Space>
                   }

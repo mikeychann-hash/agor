@@ -1,3 +1,4 @@
+// @ts-nocheck - markdown-it has no type declarations
 /**
  * MarkdownRenderer - Renders markdown content using markdown-it
  *

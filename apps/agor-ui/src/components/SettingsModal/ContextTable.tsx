@@ -5,16 +5,16 @@
  * Uses reusable MarkdownFileCollection + MarkdownModal components
  */
 
-import type { Application } from '@agor/core/feathers';
-import type { ContextFileDetail, ContextFileListItem } from '@agor/core/types';
+import type { AgorClient } from '@agor/core/api';
 import { Alert } from 'antd';
 import { useEffect, useState } from 'react';
+import type { ContextFileDetail, ContextFileListItem } from '../../types';
 import { MarkdownFileCollection } from '../MarkdownFileCollection/MarkdownFileCollection';
 import { MarkdownModal } from '../MarkdownModal/MarkdownModal';
 
 export interface ContextTableProps {
   /** FeathersJS client for fetching context files */
-  client: Application | null;
+  client: AgorClient | null;
 }
 
 export const ContextTable: React.FC<ContextTableProps> = ({ client }) => {

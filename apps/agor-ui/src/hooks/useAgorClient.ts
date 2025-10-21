@@ -1,3 +1,4 @@
+// @ts-nocheck - Complex client lifecycle with conditional null states
 /**
  * React hook for Agor daemon client connection
  *

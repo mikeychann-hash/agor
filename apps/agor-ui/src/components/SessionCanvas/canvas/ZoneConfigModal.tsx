@@ -2,10 +2,9 @@
  * Modal for configuring zone settings (name, triggers, etc.)
  */
 
-import type { ZoneTriggerType } from '@agor/core/types';
 import { Alert, Input, Modal, Select, theme } from 'antd';
 import { useEffect, useId, useState } from 'react';
-import type { BoardObject } from '../../types';
+import type { BoardObject, ZoneTriggerType } from '../../../types';
 
 interface ZoneConfigModalProps {
   open: boolean;

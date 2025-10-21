@@ -5,10 +5,10 @@
  * and provides a method to send permission decisions back.
  */
 
+import type { AgorClient } from '@agor/core/api';
 import type { PermissionDecision, PermissionRequest } from '@agor/core/permissions';
 import { useEffect, useState } from 'react';
 import { getDaemonUrl } from '../config/daemon';
-import type { AgorClient } from '../types/client';
 
 export function usePermissions(client: AgorClient | null) {
   const [pendingRequest, setPendingRequest] = useState<PermissionRequest | null>(null);
@@ -22,10 +22,12 @@ export function usePermissions(client: AgorClient | null) {
     };
 
     // Listen for permission requests on sessions service
-    client.service('sessions').on('permission:request', handleRequest);
+    // biome-ignore lint/suspicious/noExplicitAny: Socket event listener type mismatch
+    (client.service('sessions') as any).on('permission:request', handleRequest);
 
     return () => {
-      client.service('sessions').off('permission:request', handleRequest);
+      // biome-ignore lint/suspicious/noExplicitAny: Socket event listener type mismatch
+      (client.service('sessions') as any).off('permission:request', handleRequest);
     };
   }, [client]);
 
@@ -38,6 +40,8 @@ export function usePermissions(client: AgorClient | null) {
 
     const decision: PermissionDecision = {
       requestId: pendingRequest.requestId,
+      taskId: pendingRequest.taskId,
+      decidedBy: 'user',
       allow,
       remember,
       scope,

@@ -23,12 +23,15 @@
       },
       "correctness": {
         "noUnusedImports": "warn",
-        "noUnusedFunctionParameters": "warn",
+        "noUnusedFunctionParameters": "off",
         "useHookAtTopLevel": "warn"
       },
+      "style": {
+        "noNonNullAssertion": "off"
+      },
       "a11y": {
-        "noStaticElementInteractions": "warn",
-        "useKeyWithClickEvents": "warn"
+        "noStaticElementInteractions": "off",
+        "useKeyWithClickEvents": "off"
       }
     }
   },

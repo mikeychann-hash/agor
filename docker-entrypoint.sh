@@ -3,9 +3,14 @@ set -e
 
 echo "🚀 Starting Agor development environment..."
 
-# Install dependencies (handles platform-specific binaries)
-echo "📦 Installing dependencies..."
-pnpm install
+# Quick dependency check (only reinstall if node_modules is missing)
+# NOTE: Keep --force flag to avoid interactive prompts in Docker (non-TTY environment)
+if [ ! -d "/app/node_modules" ]; then
+  echo "📦 Installing dependencies..."
+  pnpm install --frozen-lockfile --force
+else
+  echo "✅ Dependencies already installed"
+fi
 
 # Initialize database if it doesn't exist
 if [ ! -f /root/.agor/agor.db ]; then

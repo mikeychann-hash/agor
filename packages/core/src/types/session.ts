@@ -50,9 +50,6 @@ export function getDefaultPermissionMode(agenticTool: AgenticToolName): Permissi
   switch (agenticTool) {
     case 'codex':
       return 'auto';
-    case 'claude-code':
-    case 'cursor':
-    case 'gemini':
     default:
       return 'acceptEdits';
   }

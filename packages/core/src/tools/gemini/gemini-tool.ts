@@ -28,7 +28,7 @@ export class GeminiTool implements ITool {
 
   constructor(
     private messagesRepo?: MessagesRepository,
-    private sessionsRepo?: SessionRepository,
+    sessionsRepo?: SessionRepository,
     apiKey?: string,
     private messagesService?: MessagesService,
     private tasksService?: TasksService

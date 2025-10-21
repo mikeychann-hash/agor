@@ -5,11 +5,11 @@
  */
 
 import type { AgorClient } from '@agor/core/api';
-import type { AgenticToolName, Repo, Session, SessionID } from '@agor/core/types';
-import { getDefaultPermissionMode } from '@agor/core/types';
 import { useState } from 'react';
 import type { NewSessionConfig } from '../components/NewSessionModal';
 import { getDaemonUrl } from '../config/daemon';
+import type { AgenticToolName, Repo, Session, SessionID, Worktree } from '../types';
+import { getDefaultPermissionMode } from '../types';
 
 interface UseSessionActionsResult {
   createSession: (config: NewSessionConfig) => Promise<Session | null>;
@@ -81,9 +81,9 @@ export function useSessionActions(client: AgorClient | null): UseSessionActionsR
       console.log('Worktrees response:', worktreesResponse);
 
       // Handle both array and paginated response formats
-      const worktrees = Array.isArray(worktreesResponse)
-        ? worktreesResponse
-        : worktreesResponse.data || [];
+      const worktrees = (
+        Array.isArray(worktreesResponse) ? worktreesResponse : worktreesResponse.data || []
+      ) as Worktree[];
       const worktree = worktrees.find(w => w.name === worktreeName);
       if (!worktree) {
         console.error(

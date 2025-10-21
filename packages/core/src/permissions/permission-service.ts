@@ -41,13 +41,15 @@ export interface PermissionRequest {
   timestamp: string;
 }
 
+export type PermissionScope = 'once' | 'session' | 'project';
+
 export interface PermissionDecision {
   requestId: string;
   taskId: TaskID; // Task to resume
   allow: boolean;
   reason?: string;
   remember: boolean;
-  scope: 'once' | 'session' | 'project'; // 'once' = don't save, 'session' = db, 'project' = .claude/settings.json
+  scope: PermissionScope; // 'once' = don't save, 'session' = db, 'project' = .claude/settings.json
   // Multi-user: Who made the decision?
   decidedBy: string; // userId
 }

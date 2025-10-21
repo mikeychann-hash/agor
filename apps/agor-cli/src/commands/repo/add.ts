@@ -6,7 +6,6 @@
 
 import { createClient, isDaemonRunning } from '@agor/core/api';
 import { extractSlugFromUrl, getDaemonUrl, isValidSlug } from '@agor/core/config';
-import type { Repo } from '@agor/core/types';
 import { Args, Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 

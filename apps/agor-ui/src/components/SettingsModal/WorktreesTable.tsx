@@ -1,4 +1,3 @@
-import type { Repo, Worktree } from '@agor/core/types';
 import {
   BranchesOutlined,
   DeleteOutlined,
@@ -21,6 +20,7 @@ import {
   Typography,
 } from 'antd';
 import { useState } from 'react';
+import type { Repo, Worktree } from '../../types';
 
 const { Text } = Typography;
 

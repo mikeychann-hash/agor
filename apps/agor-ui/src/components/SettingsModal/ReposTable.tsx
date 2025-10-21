@@ -1,7 +1,7 @@
-import type { Repo } from '@agor/core/types';
 import { DeleteOutlined, FolderOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Empty, Form, Input, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { useState } from 'react';
+import type { Repo } from '../../types';
 
 const { Text } = Typography;
 
@@ -105,11 +105,9 @@ export const ReposTable: React.FC<ReposTableProps> = ({ repos, onCreate, onDelet
                 <Space>
                   <FolderOutlined />
                   <Text strong>{repo.name}</Text>
-                  {repo.managed_by_agor && (
-                    <Tag color="blue" style={{ marginLeft: 8 }}>
-                      Managed
-                    </Tag>
-                  )}
+                  <Tag color="blue" style={{ marginLeft: 8 }}>
+                    Managed
+                  </Tag>
                 </Space>
               }
               extra={
@@ -118,11 +116,9 @@ export const ReposTable: React.FC<ReposTableProps> = ({ repos, onCreate, onDelet
                   description={
                     <>
                       <p>Are you sure you want to delete "{repo.name}"?</p>
-                      {repo.managed_by_agor && (
-                        <p style={{ color: '#ff4d4f' }}>
-                          ⚠️ This will delete the local repository and all associated worktrees.
-                        </p>
-                      )}
+                      <p style={{ color: '#ff4d4f' }}>
+                        ⚠️ This will delete the local repository and all associated worktrees.
+                      </p>
                     </>
                   }
                   onConfirm={() => handleDeleteRepo(repo.repo_id)}

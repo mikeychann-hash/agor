@@ -1,6 +1,6 @@
-import type { Repo } from '@agor/core/types';
 import { FolderOutlined, SettingOutlined } from '@ant-design/icons';
 import { Button, Descriptions, Space, Typography } from 'antd';
+import type { Repo } from '../../../types';
 
 const { Text, Paragraph } = Typography;
 
@@ -65,7 +65,8 @@ export const RepoTab: React.FC<RepoTabProps> = ({ repo, onOpenSettings }) => {
               </Text>
             </Descriptions.Item>
             <Descriptions.Item label="Template Variables">
-              <Text>{repo.environment_config.template_vars.join(', ')}</Text>
+              {/* biome-ignore lint/suspicious/noExplicitAny: Environment config type needs proper typing */}
+              <Text>{(repo.environment_config as any).template_vars?.join(', ') || 'None'}</Text>
             </Descriptions.Item>
           </Descriptions>
         </div>

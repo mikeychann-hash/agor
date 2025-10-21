@@ -6,7 +6,7 @@ import { DeleteOutlined, SettingOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
 import React, { useEffect, useRef, useState } from 'react';
 import { NodeResizer, useViewport } from 'reactflow';
-import type { BoardObject } from '../../types';
+import type { BoardObject } from '../../../types';
 import { DeleteZoneModal } from './DeleteZoneModal';
 import { ZoneConfigModal } from './ZoneConfigModal';
 
@@ -82,7 +82,14 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
 
   // Helper to create full object data with current values
   const createObjectData = (
-    overrides: Partial<Omit<BoardObject, 'type' | 'x' | 'y'>>
+    overrides: Partial<{
+      width: number;
+      height: number;
+      label: string;
+      color?: string;
+      status?: string;
+      trigger?: BoardObject extends { type: 'zone'; trigger?: infer T } ? T : never;
+    }>
   ): BoardObject => ({
     type: 'zone',
     x: data.x,

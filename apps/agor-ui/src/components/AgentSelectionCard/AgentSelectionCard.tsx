@@ -1,12 +1,12 @@
 import { CheckCircleOutlined, DownloadOutlined } from '@ant-design/icons';
 import { Button, Card, Space, Tag, Typography } from 'antd';
-import type { Agent } from '../../types';
+import type { AgenticTool } from '../../types';
 import { ToolIcon } from '../ToolIcon';
 
 const { Text } = Typography;
 
 export interface AgentSelectionCardProps {
-  agent: Agent;
+  agent: AgenticTool;
   selected?: boolean;
   onClick?: () => void;
   onInstall?: () => void;

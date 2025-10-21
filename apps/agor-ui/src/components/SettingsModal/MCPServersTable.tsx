@@ -1,4 +1,3 @@
-import type { CreateMCPServerInput, MCPServer, UpdateMCPServerInput } from '@agor/core/types';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   Badge,
@@ -16,6 +15,7 @@ import {
   Typography,
 } from 'antd';
 import { useState } from 'react';
+import type { CreateMCPServerInput, MCPServer, UpdateMCPServerInput } from '../../types';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -416,7 +416,7 @@ export const MCPServersTable: React.FC<MCPServersTableProps> = ({
         {viewingServer && (
           <Descriptions bordered column={1} size="small" style={{ marginTop: 16 }}>
             <Descriptions.Item label="ID">
-              {viewingServer.mcp_server_id.substring(0, 8)}
+              {(viewingServer.mcp_server_id as string).substring(0, 8)}
             </Descriptions.Item>
             <Descriptions.Item label="Name">{viewingServer.name}</Descriptions.Item>
             {viewingServer.display_name && (

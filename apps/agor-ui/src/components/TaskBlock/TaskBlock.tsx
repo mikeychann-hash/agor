@@ -9,7 +9,6 @@
  * - Groups 3+ sequential tool-only messages into ToolBlock
  */
 
-import type { Message, Task, User } from '@agor/core/types';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -29,6 +28,7 @@ import { Bubble } from '@ant-design/x';
 import { Avatar, Collapse, Space, Spin, Tag, Typography, theme } from 'antd';
 import type React from 'react';
 import { useMemo } from 'react';
+import type { Message, Task, User } from '../../types';
 import { AgentChain } from '../AgentChain';
 import { MessageBlock } from '../MessageBlock';
 import { CreatedByTag } from '../metadata/CreatedByTag';
@@ -80,7 +80,7 @@ function isAgentChainMessage(message: Message): boolean {
   // Array content - check what types of blocks we have
   if (Array.isArray(message.content)) {
     const hasTools = message.content.some(block => block.type === 'tool_use');
-    const hasThinking = message.content.some(block => block.type === 'thinking');
+    const hasThinking = false; // 'thinking' type not in current ContentBlock union
     const hasText = message.content.some(block => block.type === 'text');
 
     // If it has tools BUT ALSO has text, treat as mixed message

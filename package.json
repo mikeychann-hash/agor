@@ -21,6 +21,8 @@
     "format": "prettier --write .",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
+    "check": "pnpm typecheck && pnpm lint && pnpm build",
+    "check:fix": "pnpm lint:fix && pnpm typecheck && pnpm build",
     "clean": "turbo run clean && rm -rf node_modules",
     "prepare": "husky",
     "cli:link": "pnpm -C apps/agor-cli link --global",
