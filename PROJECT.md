@@ -100,7 +100,7 @@ See [context/explorations/](context/explorations/) for detailed designs:
 
 **Information Architecture:**
 
-- ⏳ **Git state tracking** - attach proper git sha to tasks (latest commit when created, mark -dirty)
+- ✅ **Git state tracking** - attach branch + sha to tasks at creation time (marks -dirty)
 - ⏳ **Concepts & Reports** - integrate in UI/CLI as first-class primitives
   - Concept management (CRUD/CLI) - many-to-many per session, shows as readonly
   - Report management + production system
@@ -125,6 +125,10 @@ See [context/explorations/](context/explorations/) for detailed designs:
 # Nice to Have
 
 - ✅ PR/Issue URL fields in session metadata
+- [ ] **Git state transitions** - Show start → end state in task metadata
+  - Capture `ref_at_end` and `sha_at_end` when task completes
+  - Display in UI as: `main : abc1234 → main : def5678-dirty`
+  - Useful for seeing what changed during a task execution
 - [ ] **Token count & cost** - show $ per task/session (when applicable)
 - [ ] **`@`-triggered autocomplete** - mention sessions, repos, concepts
 - [ ] **Session viewers** - mini avatar badges on cards showing who's viewing
