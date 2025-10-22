@@ -197,7 +197,7 @@ export const App: React.FC<AppProps> = ({
         taskId,
         allow,
         reason: allow ? 'Approved by user' : 'Denied by user',
-        remember: scope !== 'once', // Only remember if not 'once'
+        remember: scope !== PermissionScope.ONCE, // Only remember if not 'once'
         scope,
         decidedBy: user?.user_id || 'anonymous',
       });

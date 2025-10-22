@@ -6,13 +6,14 @@
  */
 
 import type { PermissionRequest } from '@agor/core/permissions';
+import { PermissionScope } from '@agor/core/types';
 import { Button, Modal, Space, Typography } from 'antd';
 
 const { Text, Title } = Typography;
 
 export interface PermissionModalProps {
   request: PermissionRequest | null;
-  onDecide: (allow: boolean, remember: boolean, scope: 'once' | 'session' | 'project') => void;
+  onDecide: (allow: boolean, remember: boolean, scope: PermissionScope) => void;
   onCancel: () => void;
 }
 
@@ -56,16 +57,16 @@ export function PermissionModal({ request, onDecide, onCancel }: PermissionModal
 
         {/* Action buttons */}
         <Space style={{ width: '100%', justifyContent: 'flex-end' }} size="middle">
-          <Button danger onClick={() => onDecide(false, false, 'once')}>
+          <Button danger onClick={() => onDecide(false, false, PermissionScope.ONCE)}>
             Deny
           </Button>
-          <Button type="default" onClick={() => onDecide(true, true, 'session')}>
+          <Button type="default" onClick={() => onDecide(true, true, PermissionScope.SESSION)}>
             Allow for Session
           </Button>
-          <Button type="default" onClick={() => onDecide(true, true, 'project')}>
+          <Button type="default" onClick={() => onDecide(true, true, PermissionScope.PROJECT)}>
             Allow for Project
           </Button>
-          <Button type="primary" onClick={() => onDecide(true, false, 'once')}>
+          <Button type="primary" onClick={() => onDecide(true, false, PermissionScope.ONCE)}>
             Allow Once
           </Button>
         </Space>

@@ -7,6 +7,7 @@
 
 import type { AgorClient } from '@agor/core/api';
 import type { PermissionDecision, PermissionRequest } from '@agor/core/permissions';
+import { PermissionScope } from '@agor/core/types';
 import { useEffect, useState } from 'react';
 import { getDaemonUrl } from '../config/daemon';
 
@@ -31,11 +32,7 @@ export function usePermissions(client: AgorClient | null) {
     };
   }, [client]);
 
-  const sendDecision = async (
-    allow: boolean,
-    remember: boolean,
-    scope: 'once' | 'session' | 'project'
-  ) => {
+  const sendDecision = async (allow: boolean, remember: boolean, scope: PermissionScope) => {
     if (!pendingRequest || !client) return;
 
     const decision: PermissionDecision = {
@@ -65,7 +62,7 @@ export function usePermissions(client: AgorClient | null) {
 
   const cancelRequest = () => {
     if (pendingRequest) {
-      sendDecision(false, false, 'once');
+      sendDecision(false, false, PermissionScope.ONCE);
     }
   };
 

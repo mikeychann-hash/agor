@@ -13,10 +13,10 @@
  */
 
 import type { AgorClient } from '@agor/core/api';
+import type { Message, PermissionScope, SessionID, User } from '@agor/core/types';
 import { Alert, Empty, Spin } from 'antd';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useMessages, useStreamingMessages, useTasks } from '../../hooks';
-import type { Message, SessionID, User } from '@agor/core/types';
 import { TaskBlock } from '../TaskBlock';
 
 export interface ConversationViewProps {
@@ -58,7 +58,7 @@ export interface ConversationViewProps {
     requestId: string,
     taskId: string,
     allow: boolean,
-    scope: 'once' | 'session' | 'project'
+    scope: PermissionScope
   ) => void;
 }
 
