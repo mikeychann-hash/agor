@@ -39,15 +39,6 @@ import { useEffect, useMemo, useState } from 'react';
 const { Text, Paragraph, Title } = Typography;
 const { TextArea } = Input;
 
-// Type for custom route parameters
-interface CustomRouteParams {
-  query?: {
-    $client?: {
-      method?: string;
-    };
-  };
-}
-
 interface EnvironmentTabProps {
   worktree: Worktree;
   repo: Repo;
@@ -111,13 +102,7 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
     if (!client) return;
     setIsStarting(true);
     try {
-      await client.service('worktrees').create(
-        {},
-        {
-          query: { $client: { method: 'create' } },
-        } as CustomRouteParams,
-        `/worktrees/${worktree.worktree_id}/start`
-      );
+      await client.service(`worktrees/${worktree.worktree_id}/start`).create({});
       message.success('Environment started successfully');
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Failed to start environment');
@@ -130,13 +115,7 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
     if (!client) return;
     setIsStopping(true);
     try {
-      await client.service('worktrees').create(
-        {},
-        {
-          query: { $client: { method: 'create' } },
-        } as CustomRouteParams,
-        `/worktrees/${worktree.worktree_id}/stop`
-      );
+      await client.service(`worktrees/${worktree.worktree_id}/stop`).create({});
       message.success('Environment stopped successfully');
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Failed to stop environment');
@@ -149,13 +128,7 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
     if (!client) return;
     setIsRestarting(true);
     try {
-      await client.service('worktrees').create(
-        {},
-        {
-          query: { $client: { method: 'create' } },
-        } as CustomRouteParams,
-        `/worktrees/${worktree.worktree_id}/restart`
-      );
+      await client.service(`worktrees/${worktree.worktree_id}/restart`).create({});
       message.success('Environment restarted successfully');
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Failed to restart environment');
