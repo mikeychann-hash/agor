@@ -22,12 +22,13 @@ RUN echo "=== Starting pnpm install ===" && \
     echo "=== Install complete, starting build ===" && \
     echo "=== Building @agor/core first (required by other packages) ===" && \
     pnpm --filter @agor/core build && \
-    echo "=== Building remaining packages ===" && \
-    pnpm --filter '!agor-ui' --filter '!@agor/core' -r build && \
+    echo "=== Building daemon ===" && \
+    pnpm --filter @agor/daemon build && \
     echo "=== Build complete ===" && \
-    echo "=== Verifying core dist exists ===" && \
+    echo "=== Verifying builds ===" && \
     ls -la /build/packages/core/dist/ && \
-    echo "=== Core build verified ==="
+    ls -la /build/apps/agor-daemon/dist/ && \
+    echo "=== Build verification complete ==="
 
 # Production stage
 FROM mcr.microsoft.com/devcontainers/typescript-node:20
