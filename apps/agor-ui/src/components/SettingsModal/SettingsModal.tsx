@@ -117,68 +117,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             key: 'boards',
             label: 'Boards',
             children: (
-              <div style={{ padding: '0 24px' }}>
-                <BoardsTable
-                  boards={boards}
-                  onCreate={onCreateBoard}
-                  onUpdate={onUpdateBoard}
-                  onDelete={onDeleteBoard}
-                />
-              </div>
+              <BoardsTable
+                boards={boards}
+                onCreate={onCreateBoard}
+                onUpdate={onUpdateBoard}
+                onDelete={onDeleteBoard}
+              />
             ),
           },
           {
             key: 'repos',
             label: 'Repositories',
-            children: (
-              <div style={{ padding: '0 24px' }}>
-                <ReposTable repos={repos} onCreate={onCreateRepo} onDelete={onDeleteRepo} />
-              </div>
-            ),
+            children: <ReposTable repos={repos} onCreate={onCreateRepo} onDelete={onDeleteRepo} />,
           },
           {
             key: 'worktrees',
             label: 'Worktrees & Environments',
             children: (
-              <div style={{ padding: '0 24px' }}>
-                <WorktreesTable
-                  worktrees={worktrees}
-                  repos={repos}
-                  onDelete={onDeleteWorktree}
-                  onCreate={onCreateWorktree}
-                  onRowClick={handleWorktreeRowClick}
-                  onStartEnvironment={onStartEnvironment}
-                  onStopEnvironment={onStopEnvironment}
-                />
-              </div>
+              <WorktreesTable
+                worktrees={worktrees}
+                repos={repos}
+                onDelete={onDeleteWorktree}
+                onCreate={onCreateWorktree}
+                onRowClick={handleWorktreeRowClick}
+                onStartEnvironment={onStartEnvironment}
+                onStopEnvironment={onStopEnvironment}
+              />
             ),
           },
           {
             key: 'mcp',
             label: 'MCP Servers',
             children: (
-              <div style={{ padding: '0 24px' }}>
-                <MCPServersTable
-                  mcpServers={mcpServers}
-                  onCreate={onCreateMCPServer}
-                  onUpdate={onUpdateMCPServer}
-                  onDelete={onDeleteMCPServer}
-                />
-              </div>
+              <MCPServersTable
+                mcpServers={mcpServers}
+                onCreate={onCreateMCPServer}
+                onUpdate={onUpdateMCPServer}
+                onDelete={onDeleteMCPServer}
+              />
             ),
           },
           {
             key: 'users',
             label: 'Users',
             children: (
-              <div style={{ padding: '0 24px' }}>
-                <UsersTable
-                  users={users}
-                  onCreate={onCreateUser}
-                  onUpdate={onUpdateUser}
-                  onDelete={onDeleteUser}
-                />
-              </div>
+              <UsersTable
+                users={users}
+                onCreate={onCreateUser}
+                onUpdate={onUpdateUser}
+                onDelete={onDeleteUser}
+              />
             ),
           },
         ]}
