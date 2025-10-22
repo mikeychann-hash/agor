@@ -4,7 +4,14 @@ import type { AgenticToolName } from './agentic-tool';
 import type { ContextFilePath } from './context';
 import type { SessionID, TaskID, WorktreeID } from './id';
 
-export type SessionStatus = 'idle' | 'running' | 'completed' | 'failed';
+export const SessionStatus = {
+  IDLE: 'idle',
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+} as const;
+
+export type SessionStatus = (typeof SessionStatus)[keyof typeof SessionStatus];
 
 /**
  * Permission mode controls how agentic tools handle execution approvals

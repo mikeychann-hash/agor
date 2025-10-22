@@ -39,7 +39,7 @@ import type {
   Task,
   User,
 } from '@agor/core/types';
-import { TaskStatus } from '@agor/core/types';
+import { SessionStatus, TaskStatus } from '@agor/core/types';
 // Import Claude SDK's PermissionMode type for ClaudeTool method signatures
 // (Agor's PermissionMode is a superset of all tool permission modes)
 import type { PermissionMode as ClaudePermissionMode } from '@anthropic-ai/claude-agent-sdk';
@@ -785,7 +785,7 @@ async function main() {
       // Update session with new task immediately and set status to running
       await sessionsService.patch(id, {
         tasks: [...session.tasks, task.task_id],
-        status: TaskStatus.RUNNING,
+        status: SessionStatus.RUNNING,
       });
 
       // Create streaming callbacks for real-time UI updates
@@ -938,7 +938,7 @@ async function main() {
 
               await sessionsService.patch(id, {
                 message_count: session.message_count + totalMessages,
-                status: 'idle',
+                status: SessionStatus.IDLE,
               });
             } catch (error) {
               console.error(`❌ Error completing task ${task.task_id}:`, error);
@@ -972,8 +972,12 @@ async function main() {
             if (isExitCode1 && hasResumeSession && !isLikelyConfigIssue) {
               // This should rarely happen now that we proactively detect stale sessions
               // But if it does, clear it as a safety measure
-              console.warn(`⚠️  Unexpected exit code 1 with resume session ${session.sdk_session_id}`);
-              console.warn(`   Session should have been validated before SDK call - clearing as safety measure`);
+              console.warn(
+                `⚠️  Unexpected exit code 1 with resume session ${session.sdk_session_id}`
+              );
+              console.warn(
+                `   Session should have been validated before SDK call - clearing as safety measure`
+              );
 
               // Clear the sdk_session_id so next prompt starts fresh
               await sessionsService.patch(id, {
@@ -994,7 +998,7 @@ async function main() {
               status: TaskStatus.FAILED,
             });
             await sessionsService.patch(id, {
-              status: 'idle',
+              status: SessionStatus.IDLE,
             });
           });
       });
@@ -1021,7 +1025,7 @@ async function main() {
       const session = await sessionsService.get(id, params);
 
       // Check if session is actually running
-      if (session.status !== TaskStatus.RUNNING) {
+      if (session.status !== SessionStatus.RUNNING) {
         return {
           success: false,
           reason: `Session is not running (status: ${session.status})`,
@@ -1092,7 +1096,7 @@ async function main() {
       if (result.success) {
         // Update session status back to idle
         await sessionsService.patch(id, {
-          status: 'idle',
+          status: SessionStatus.IDLE,
         });
 
         // Update task status to 'stopped'
@@ -1329,6 +1333,52 @@ async function main() {
 
   // Error handling
   app.use(errorHandler());
+
+  // Cleanup orphaned running tasks and sessions from previous daemon instance
+  // When daemon restarts (crashes, code changes, etc.), tasks/sessions remain in 'running' state
+  console.log('🧹 Cleaning up orphaned tasks and sessions...');
+
+  // Find all running or stopping tasks
+  const orphanedTasksResult = (await tasksService.find({
+    query: {
+      status: { $in: [TaskStatus.RUNNING, TaskStatus.STOPPING, TaskStatus.AWAITING_PERMISSION] },
+      $limit: 1000, // High limit to catch all orphaned tasks
+    },
+  })) as unknown as Paginated<Task>;
+  const orphanedTasks = orphanedTasksResult.data;
+
+  if (orphanedTasks.length > 0) {
+    console.log(`   Found ${orphanedTasks.length} orphaned task(s)`);
+    for (const task of orphanedTasks) {
+      await tasksService.patch(task.task_id, {
+        status: TaskStatus.STOPPED,
+      });
+      console.log(`   ✓ Marked task ${task.task_id} as stopped (was: ${task.status})`);
+    }
+  }
+
+  // Find all running sessions
+  const orphanedSessionsResult = (await sessionsService.find({
+    query: {
+      status: SessionStatus.RUNNING,
+      $limit: 1000,
+    },
+  })) as unknown as Paginated<Session>;
+  const orphanedSessions = orphanedSessionsResult.data;
+
+  if (orphanedSessions.length > 0) {
+    console.log(`   Found ${orphanedSessions.length} orphaned session(s)`);
+    for (const session of orphanedSessions) {
+      await sessionsService.patch(session.session_id, {
+        status: SessionStatus.IDLE,
+      });
+      console.log(`   ✓ Marked session ${session.session_id} as idle (was: running)`);
+    }
+  }
+
+  if (orphanedTasks.length === 0 && orphanedSessions.length === 0) {
+    console.log('   No orphaned tasks or sessions found');
+  }
 
   // Start server and store reference for shutdown
   const server = await app.listen(DAEMON_PORT);
