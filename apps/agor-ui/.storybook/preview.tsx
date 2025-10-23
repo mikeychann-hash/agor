@@ -1,19 +1,30 @@
 import type { Preview } from '@storybook/react-vite';
 import { App, ConfigProvider, theme } from 'antd';
 
-// Component to provide theme-aware background
+// Component to provide theme-aware background that fills entire Storybook canvas
 const ThemeBackground = ({ children }) => {
   const { token } = theme.useToken();
 
   return (
     <div
       style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         background: token.colorBgLayout,
-        minHeight: '100vh',
-        padding: '20px',
+        overflow: 'auto',
       }}
     >
-      {children}
+      <div
+        style={{
+          padding: '20px',
+          minHeight: '100%',
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 };
