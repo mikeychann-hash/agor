@@ -24,10 +24,16 @@ export const DeleteWorktreePopconfirm: React.FC<DeleteWorktreePopconfirmProps> =
     onConfirm(deleteFromFilesystem);
   };
 
+  const handleCancel = (e?: React.MouseEvent<HTMLElement>) => {
+    // Prevent event from bubbling to parent modal
+    e?.stopPropagation();
+  };
+
   return (
     <Popconfirm
       title="Delete worktree?"
       overlayStyle={{ maxWidth: 500 }}
+      onCancel={handleCancel}
       description={
         <div style={{ width: '100%' }}>
           <p>Are you sure you want to delete worktree "{worktree.name}"?</p>
