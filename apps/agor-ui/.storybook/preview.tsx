@@ -1,6 +1,23 @@
 import type { Preview } from '@storybook/react-vite';
 import { App, ConfigProvider, theme } from 'antd';
 
+// Component to provide theme-aware background
+const ThemeBackground = ({ children }) => {
+  const { token } = theme.useToken();
+
+  return (
+    <div
+      style={{
+        background: token.colorBgLayout,
+        minHeight: '100vh',
+        padding: '20px',
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
 // Global decorator to wrap all stories with Ant Design ConfigProvider
 const withAntdTheme = (Story, context) => {
   const isDark = context.globals.theme === 'dark';
@@ -12,7 +29,9 @@ const withAntdTheme = (Story, context) => {
       }}
     >
       <App>
-        <Story />
+        <ThemeBackground>
+          <Story />
+        </ThemeBackground>
       </App>
     </ConfigProvider>
   );
@@ -27,11 +46,8 @@ const preview: Preview = {
       },
     },
     backgrounds: {
-      default: 'dark',
-      values: [
-        { name: 'dark', value: '#141414' },
-        { name: 'light', value: '#ffffff' },
-      ],
+      // Disabled - using theme.colorBgLayout instead
+      disable: true,
     },
     options: {
       storySort: {
