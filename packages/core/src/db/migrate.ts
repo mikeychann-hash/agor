@@ -218,7 +218,7 @@ async function createInitialSchema(db: Database): Promise<void> {
         created_at INTEGER NOT NULL,
         session_id TEXT NOT NULL,
         task_id TEXT,
-        type TEXT NOT NULL CHECK(type IN ('user', 'assistant', 'system', 'file-history-snapshot')),
+        type TEXT NOT NULL CHECK(type IN ('user', 'assistant', 'system', 'file-history-snapshot', 'permission_request')),
         role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
         "index" INTEGER NOT NULL,
         timestamp INTEGER NOT NULL,
