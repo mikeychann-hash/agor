@@ -1,5 +1,5 @@
 import type { AgorClient } from '@agor/core/api';
-import type { Repo, Session, Worktree } from '@agor/core/types';
+import type { Board, BoardEntityObject, Repo, Session, Worktree } from '@agor/core/types';
 import { Modal, Tabs } from 'antd';
 import { useState } from 'react';
 import { ConceptsTab } from './tabs/ConceptsTab';
@@ -12,6 +12,8 @@ export interface WorktreeModalProps {
   worktree: Worktree | null;
   repo: Repo | null;
   sessions: Session[];
+  boards?: Board[];
+  boardObjects?: BoardEntityObject[];
   client: AgorClient | null;
   onUpdateWorktree?: (worktreeId: string, updates: Partial<Worktree>) => void;
   onUpdateRepo?: (repoId: string, updates: Partial<Repo>) => void;
@@ -25,6 +27,8 @@ export const WorktreeModal: React.FC<WorktreeModalProps> = ({
   worktree,
   repo,
   sessions,
+  boards = [],
+  boardObjects = [],
   client,
   onUpdateWorktree,
   onUpdateRepo,
@@ -61,8 +65,10 @@ export const WorktreeModal: React.FC<WorktreeModalProps> = ({
                 worktree={worktree}
                 repo={repo}
                 sessions={sessions}
+                boards={boards}
                 onUpdate={onUpdateWorktree}
                 onDelete={onDelete}
+                onClose={onClose}
               />
             ),
           },

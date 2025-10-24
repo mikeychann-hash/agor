@@ -141,6 +141,14 @@ The daemon's `pnpm dev` uses `concurrently` to run:
 
 This gives you a true 2-process workflow where editing core files automatically rebuilds and restarts the daemon!
 
+**IMPORTANT FOR CLAUDE CODE:**
+
+- The user is running the development environment in watch mode (daemon + UI)
+- **DO NOT run `pnpm build` or compilation commands unless explicitly asked**
+- **DO NOT start background processes** - the user manages these
+- Only run builds if you see compilation errors or if the user specifically requests it
+- Focus on code edits; the watch mode will handle recompilation automatically
+
 ### Daemon
 
 ```bash

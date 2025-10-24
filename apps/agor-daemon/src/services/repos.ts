@@ -9,7 +9,7 @@ import { type Database, RepoRepository } from '@agor/core/db';
 import { autoAssignWorktreeUniqueId } from '@agor/core/environment/variable-resolver';
 import type { Application } from '@agor/core/feathers';
 import { cloneRepo, getWorktreePath, createWorktree as gitCreateWorktree } from '@agor/core/git';
-import type { QueryParams, Repo, Worktree } from '@agor/core/types';
+import type { AuthenticatedParams, QueryParams, Repo, Worktree } from '@agor/core/types';
 import { DrizzleService } from '../adapters/drizzle';
 
 /**
@@ -166,20 +166,24 @@ export class ReposService extends DrizzleService<Repo, Partial<Repo>, RepoParams
     const worktreeUniqueId = autoAssignWorktreeUniqueId(existingWorktrees);
 
     // Create worktree record in database using the service (broadcasts WebSocket event)
-    const worktree = (await worktreesService.create({
-      repo_id: repo.repo_id,
-      name: data.name,
-      path: worktreePath,
-      ref: data.ref,
-      base_ref: data.sourceBranch,
-      new_branch: data.createBranch ?? false,
-      worktree_unique_id: worktreeUniqueId,
-      sessions: [],
-      last_used: new Date().toISOString(),
-      issue_url: data.issue_url,
-      pull_request_url: data.pull_request_url,
-      board_id: data.boardId, // Optional: assign to board
-    })) as Worktree;
+    const worktree = (await worktreesService.create(
+      {
+        repo_id: repo.repo_id,
+        name: data.name,
+        path: worktreePath,
+        ref: data.ref,
+        base_ref: data.sourceBranch,
+        new_branch: data.createBranch ?? false,
+        worktree_unique_id: worktreeUniqueId,
+        sessions: [],
+        last_used: new Date().toISOString(),
+        issue_url: data.issue_url,
+        pull_request_url: data.pull_request_url,
+        board_id: data.boardId, // Optional: assign to board
+        created_by: (params as AuthenticatedParams | undefined)?.user?.user_id || 'anonymous', // Set created_by from authenticated user
+      },
+      params
+    )) as Worktree;
 
     // If boardId provided, create board_object to position worktree on board
     if (data.boardId) {

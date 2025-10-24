@@ -492,7 +492,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
           label="Initial Prompt (optional)"
           help="What should this session work on?"
         >
-          <Typography.TextArea
+          <TextArea
             rows={4}
             placeholder="e.g., Build a JWT authentication system with secure password storage..."
           />

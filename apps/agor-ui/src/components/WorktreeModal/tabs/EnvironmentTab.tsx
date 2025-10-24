@@ -204,7 +204,7 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
     };
 
     client.service('worktrees').on('patched', handleWorktreeUpdate);
-    return () => client.service('worktrees').off('patched', handleWorktreeUpdate);
+    return () => client.service('worktrees').removeListener('patched', handleWorktreeUpdate);
   }, [client, worktree.worktree_id, worktree.name]);
 
   // Environment control handlers
@@ -528,7 +528,7 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
                   >
                     Up Command (Start Environment)
                   </Typography.Text>
-                  <Typography.TextArea
+                  <TextArea
                     value={upCommand}
                     onChange={e => setUpCommand(e.target.value)}
                     placeholder="DAEMON_PORT={{add 3000 worktree.unique_id}} UI_PORT={{add 5000 worktree.unique_id}} docker compose -p {{worktree.name}} up -d"
@@ -552,7 +552,7 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
                   >
                     Down Command (Stop Environment)
                   </Typography.Text>
-                  <Typography.TextArea
+                  <TextArea
                     value={downCommand}
                     onChange={e => setDownCommand(e.target.value)}
                     placeholder="docker compose -p {{worktree.name}} down"
@@ -741,7 +741,7 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
               </Typography.Text>
               {isEditingContext ? (
                 <>
-                  <Typography.TextArea
+                  <TextArea
                     value={customContextJson}
                     onChange={e => setCustomContextJson(e.target.value)}
                     placeholder='{\n  "feature_name": "authentication",\n  "extra_port": 3001\n}'

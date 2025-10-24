@@ -1,6 +1,7 @@
 import type { AgorClient } from '@agor/core/api';
 import type {
   Board,
+  BoardEntityObject,
   CreateMCPServerInput,
   CreateUserInput,
   MCPServer,
@@ -25,6 +26,7 @@ export interface SettingsModalProps {
   onClose: () => void;
   client: AgorClient | null; // Still needed for WorktreeModal
   boards: Board[];
+  boardObjects: BoardEntityObject[];
   repos: Repo[];
   worktrees: Worktree[];
   sessions: Session[];
@@ -63,6 +65,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   client,
   boards,
+  boardObjects,
   repos,
   worktrees,
   sessions,
@@ -193,6 +196,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         worktree={selectedWorktree}
         repo={selectedRepo}
         sessions={worktreeSessions}
+        boards={boards}
+        boardObjects={boardObjects}
         client={client}
         onUpdateWorktree={onUpdateWorktree}
         onUpdateRepo={onUpdateRepo}

@@ -312,6 +312,10 @@ export const App: React.FC<AppProps> = ({
           onOpenSettings={sessionId => {
             setSessionSettingsId(sessionId);
           }}
+          onOpenWorktree={worktreeId => {
+            setWorktreeModalWorktreeId(worktreeId);
+          }}
+          onDeleteWorktree={onDeleteWorktree}
         />
         <NewSessionButton onClick={() => setModalOpen(true)} />
       </Content>
@@ -365,6 +369,7 @@ export const App: React.FC<AppProps> = ({
         onClose={() => setSettingsOpen(false)}
         client={client}
         boards={boards}
+        boardObjects={boardObjects}
         repos={repos}
         worktrees={worktrees}
         sessions={sessions}

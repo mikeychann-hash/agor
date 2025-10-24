@@ -39,6 +39,26 @@ export class BoardObjectRepository {
   }
 
   /**
+   * Find board object by object ID
+   */
+  async findByObjectId(objectId: string): Promise<BoardEntityObject | null> {
+    try {
+      const row = await this.db
+        .select()
+        .from(boardObjects)
+        .where(eq(boardObjects.object_id, objectId))
+        .get();
+
+      return row ? this.rowToEntity(row) : null;
+    } catch (error) {
+      throw new RepositoryError(
+        `Failed to find board object by object_id: ${error instanceof Error ? error.message : String(error)}`,
+        error
+      );
+    }
+  }
+
+  /**
    * Find board object by worktree ID
    */
   async findByWorktreeId(worktreeId: WorktreeID): Promise<BoardEntityObject | null> {

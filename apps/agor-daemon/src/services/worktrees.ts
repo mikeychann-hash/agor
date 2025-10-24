@@ -14,7 +14,14 @@ import { type Database, WorktreeRepository } from '@agor/core/db';
 import type { Application } from '@agor/core/feathers';
 import { removeWorktree } from '@agor/core/git';
 import { renderTemplate } from '@agor/core/templates/handlebars-helpers';
-import type { QueryParams, Repo, UUID, Worktree, WorktreeID } from '@agor/core/types';
+import type {
+  BoardEntityObject,
+  QueryParams,
+  Repo,
+  UUID,
+  Worktree,
+  WorktreeID,
+} from '@agor/core/types';
 import { DrizzleService } from '../adapters/drizzle';
 
 /**
@@ -58,6 +65,49 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
 
     this.worktreeRepo = worktreeRepo;
     this.app = app;
+  }
+
+  /**
+   * Override patch to handle board_objects when board_id changes
+   */
+  async patch(id: WorktreeID, data: Partial<Worktree>, params?: WorktreeParams): Promise<Worktree> {
+    // Get current worktree to check if board_id is changing
+    const currentWorktree = await this.get(id, params);
+    const oldBoardId = currentWorktree.board_id;
+    const newBoardId = data.board_id;
+
+    // Call parent patch
+    const updatedWorktree = (await super.patch(id, data, params)) as Worktree;
+
+    // Handle board_objects changes if board_id changed
+    if (oldBoardId !== newBoardId) {
+      const boardObjectsService = this.app.service('board-objects') as unknown as {
+        findByWorktreeId: (worktreeId: WorktreeID) => Promise<BoardEntityObject | null>;
+        create: (data: Partial<BoardEntityObject>) => Promise<BoardEntityObject>;
+        remove: (id: string) => Promise<BoardEntityObject>;
+      };
+
+      // First, check if a board_object already exists
+      const existingObject = await boardObjectsService.findByWorktreeId(id);
+
+      if (existingObject) {
+        // Board object exists - delete it first
+        await boardObjectsService.remove(existingObject.object_id);
+        console.log(`🗑️  Removed existing board_object ${existingObject.object_id}`);
+      }
+
+      // Now create new board_object if board_id is set
+      if (newBoardId) {
+        await boardObjectsService.create({
+          board_id: newBoardId,
+          worktree_id: id,
+          position: { x: 100, y: 100 }, // Default position
+        });
+        console.log(`✅ Created board_object for worktree ${id} on board ${newBoardId}`);
+      }
+    }
+
+    return updatedWorktree;
   }
 
   /**

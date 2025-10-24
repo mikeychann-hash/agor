@@ -32,6 +32,7 @@ export class WorktreeRepository implements BaseRepository<Worktree, Partial<Work
       name: row.name,
       ref: row.ref,
       worktree_unique_id: row.worktree_unique_id,
+      board_id: (row.board_id as UUID | null) ?? undefined, // Top-level column
       ...row.data,
       sessions: (row.data.sessions || []) as UUID[],
     };
@@ -53,6 +54,8 @@ export class WorktreeRepository implements BaseRepository<Worktree, Partial<Work
       name: worktree.name!,
       ref: worktree.ref!,
       worktree_unique_id: worktree.worktree_unique_id!, // Required field
+      // Explicitly convert undefined to null for Drizzle (undefined values are ignored in set())
+      board_id: worktree.board_id === undefined ? null : worktree.board_id || null,
       data: {
         path: worktree.path!,
         base_ref: worktree.base_ref,
@@ -149,6 +152,7 @@ export class WorktreeRepository implements BaseRepository<Worktree, Partial<Work
     };
 
     const insert = this.worktreeToInsert(merged);
+
     const [row] = await this.db
       .update(worktrees)
       .set(insert)

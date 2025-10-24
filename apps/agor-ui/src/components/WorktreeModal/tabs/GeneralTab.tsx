@@ -1,65 +1,78 @@
-import type { Repo, Session, Worktree } from '@agor/core/types';
-import { DeleteOutlined, EditOutlined, FolderOutlined, LinkOutlined } from '@ant-design/icons';
-import { Button, Descriptions, Input, message, Space, Tag, Typography, theme } from 'antd';
+import type { Board, Repo, Session, Worktree } from '@agor/core/types';
+import { DeleteOutlined, FolderOutlined, LinkOutlined } from '@ant-design/icons';
+import {
+  Button,
+  Descriptions,
+  Form,
+  Input,
+  message,
+  Select,
+  Space,
+  Tag,
+  Typography,
+  theme,
+} from 'antd';
 import { useEffect, useState } from 'react';
 import { DeleteWorktreePopconfirm } from '../../DeleteWorktreePopconfirm';
 
-const { Paragraph } = Typography;
 const { TextArea } = Input;
 
 interface GeneralTabProps {
   worktree: Worktree;
   repo: Repo;
   sessions: Session[];
+  boards?: Board[];
   onUpdate?: (worktreeId: string, updates: Partial<Worktree>) => void;
   onDelete?: (worktreeId: string, deleteFromFilesystem: boolean) => void;
+  onClose?: () => void;
 }
 
 export const GeneralTab: React.FC<GeneralTabProps> = ({
   worktree,
   repo,
   sessions,
+  boards = [],
   onUpdate,
   onDelete,
+  onClose,
 }) => {
   const { token } = theme.useToken();
-  const [editingIssue, setEditingIssue] = useState(false);
-  const [editingPR, setEditingPR] = useState(false);
-  const [editingNotes, setEditingNotes] = useState(false);
 
+  const [boardId, setBoardId] = useState(worktree.board_id || undefined);
   const [issueUrl, setIssueUrl] = useState(worktree.issue_url || '');
   const [prUrl, setPrUrl] = useState(worktree.pull_request_url || '');
   const [notes, setNotes] = useState(worktree.notes || '');
 
   // Sync local state with prop changes (from WebSocket updates)
   useEffect(() => {
+    setBoardId(worktree.board_id || undefined);
     setIssueUrl(worktree.issue_url || '');
-  }, [worktree.issue_url]);
-
-  useEffect(() => {
     setPrUrl(worktree.pull_request_url || '');
-  }, [worktree.pull_request_url]);
-
-  useEffect(() => {
     setNotes(worktree.notes || '');
-  }, [worktree.notes]);
+  }, [worktree.board_id, worktree.issue_url, worktree.pull_request_url, worktree.notes]);
 
-  const handleSaveIssue = () => {
-    onUpdate?.(worktree.worktree_id, { issue_url: issueUrl || undefined });
-    setEditingIssue(false);
-    message.success('Issue URL updated');
+  const hasChanges =
+    boardId !== worktree.board_id ||
+    issueUrl !== (worktree.issue_url || '') ||
+    prUrl !== (worktree.pull_request_url || '') ||
+    notes !== (worktree.notes || '');
+
+  const handleSave = () => {
+    onUpdate?.(worktree.worktree_id, {
+      board_id: boardId ?? null, // Use null instead of undefined (undefined gets stripped by JSON)
+      issue_url: issueUrl || undefined,
+      pull_request_url: prUrl || undefined,
+      notes: notes || undefined,
+    });
+    message.success('Worktree updated');
+    onClose?.();
   };
 
-  const handleSavePR = () => {
-    onUpdate?.(worktree.worktree_id, { pull_request_url: prUrl || undefined });
-    setEditingPR(false);
-    message.success('Pull request URL updated');
-  };
-
-  const handleSaveNotes = () => {
-    onUpdate?.(worktree.worktree_id, { notes: notes || undefined });
-    setEditingNotes(false);
-    message.success('Notes updated');
+  const handleCancel = () => {
+    setBoardId(worktree.board_id || undefined);
+    setIssueUrl(worktree.issue_url || '');
+    setPrUrl(worktree.pull_request_url || '');
+    setNotes(worktree.notes || '');
   };
 
   const handleDelete = (deleteFromFilesystem: boolean) => {
@@ -115,163 +128,50 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
 
         {/* Work Context */}
         <div>
-          <Typography.Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+          <Typography.Text strong style={{ fontSize: 14, display: 'block', marginBottom: 16 }}>
             Work Context
           </Typography.Text>
-          <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            {/* Issue URL */}
-            <div>
-              <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                <Typography.Text type="secondary">Issue:</Typography.Text>
-                {!editingIssue && (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={() => setEditingIssue(true)}
-                  >
-                    Edit
-                  </Button>
-                )}
-              </Space>
-              {editingIssue ? (
-                <Space.Compact style={{ width: '100%', marginTop: 4 }}>
-                  <Input
-                    value={issueUrl}
-                    onChange={e => setIssueUrl(e.target.value)}
-                    placeholder="https://github.com/user/repo/issues/42"
-                    prefix={<LinkOutlined />}
-                  />
-                  <Button type="primary" onClick={handleSaveIssue}>
-                    Save
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setIssueUrl(worktree.issue_url || '');
-                      setEditingIssue(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </Space.Compact>
-              ) : issueUrl ? (
-                <a href={issueUrl} target="_blank" rel="noopener noreferrer">
-                  <Typography.Text code style={{ fontSize: 12 }}>
-                    {issueUrl}
-                  </Typography.Text>
-                </a>
-              ) : (
-                <Typography.Text type="secondary" italic>
-                  No issue linked
-                </Typography.Text>
-              )}
-            </div>
+          <Form layout="horizontal" colon={false}>
+            <Form.Item label="Board" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }}>
+              <Select
+                value={boardId}
+                onChange={setBoardId}
+                placeholder="Select board (optional)..."
+                allowClear
+                options={boards.map(board => ({
+                  value: board.board_id,
+                  label: `${board.icon || '📋'} ${board.name}`,
+                }))}
+              />
+            </Form.Item>
 
-            {/* Pull Request URL */}
-            <div>
-              <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                <Typography.Text type="secondary">Pull Request:</Typography.Text>
-                {!editingPR && (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={() => setEditingPR(true)}
-                  >
-                    Edit
-                  </Button>
-                )}
-              </Space>
-              {editingPR ? (
-                <Space.Compact style={{ width: '100%', marginTop: 4 }}>
-                  <Input
-                    value={prUrl}
-                    onChange={e => setPrUrl(e.target.value)}
-                    placeholder="https://github.com/user/repo/pull/43"
-                    prefix={<LinkOutlined />}
-                  />
-                  <Button type="primary" onClick={handleSavePR}>
-                    Save
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setPrUrl(worktree.pull_request_url || '');
-                      setEditingPR(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </Space.Compact>
-              ) : prUrl ? (
-                <a href={prUrl} target="_blank" rel="noopener noreferrer">
-                  <Typography.Text code style={{ fontSize: 12 }}>
-                    {prUrl}
-                  </Typography.Text>
-                </a>
-              ) : (
-                <Typography.Text type="secondary" italic>
-                  No pull request linked
-                </Typography.Text>
-              )}
-            </div>
+            <Form.Item label="Issue" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }}>
+              <Input
+                value={issueUrl}
+                onChange={e => setIssueUrl(e.target.value)}
+                placeholder="https://github.com/user/repo/issues/42"
+                prefix={<LinkOutlined />}
+              />
+            </Form.Item>
 
-            {/* Notes */}
-            <div>
-              <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                <Typography.Text type="secondary">Notes:</Typography.Text>
-                {!editingNotes && (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={() => setEditingNotes(true)}
-                  >
-                    Edit
-                  </Button>
-                )}
-              </Space>
-              {editingNotes ? (
-                <div style={{ marginTop: 4 }}>
-                  <Typography.TextArea
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Freeform notes about this worktree..."
-                    rows={4}
-                  />
-                  <Space style={{ marginTop: 8 }}>
-                    <Button type="primary" onClick={handleSaveNotes}>
-                      Save
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setNotes(worktree.notes || '');
-                        setEditingNotes(false);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </Space>
-                </div>
-              ) : notes ? (
-                <Paragraph
-                  style={{
-                    background: token.colorBgLayout,
-                    padding: 12,
-                    borderRadius: token.borderRadius,
-                    marginTop: 4,
-                    marginBottom: 0,
-                    border: `1px solid ${token.colorBorder}`,
-                  }}
-                >
-                  {notes}
-                </Paragraph>
-              ) : (
-                <Typography.Text type="secondary" italic>
-                  No notes
-                </Typography.Text>
-              )}
-            </div>
-          </Space>
+            <Form.Item label="Pull Request" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }}>
+              <Input
+                value={prUrl}
+                onChange={e => setPrUrl(e.target.value)}
+                placeholder="https://github.com/user/repo/pull/43"
+                prefix={<LinkOutlined />}
+              />
+            </Form.Item>
+
+            <Form.Item label="Notes" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }}>
+              <TextArea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Freeform notes about this worktree..."
+                rows={4}
+              />
+            </Form.Item>
+          </Form>
         </div>
 
         {/* Timestamps */}
@@ -286,6 +186,12 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
 
         {/* Actions */}
         <Space>
+          <Button type="primary" onClick={handleSave} disabled={!hasChanges}>
+            Save Changes
+          </Button>
+          <Button onClick={handleCancel} disabled={!hasChanges}>
+            Cancel
+          </Button>
           <DeleteWorktreePopconfirm
             worktree={worktree}
             sessionCount={sessions.length}

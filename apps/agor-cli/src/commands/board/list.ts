@@ -3,7 +3,7 @@
  */
 
 import { createClient } from '@agor/core/api';
-import type { Board } from '@agor/core/types';
+import type { Board, BoardEntityObject } from '@agor/core/types';
 import { Command } from '@oclif/core';
 import chalk from 'chalk';
 import Table from 'cli-table3';
@@ -27,25 +27,32 @@ export default class BoardList extends Command {
         return;
       }
 
+      // Fetch board objects to count worktrees per board
+      const boardObjectsResult = await client.service('board-objects').find();
+      const boardObjects = (
+        Array.isArray(boardObjectsResult) ? boardObjectsResult : boardObjectsResult.data
+      ) as BoardEntityObject[];
+
       // Create table
       const table = new Table({
         head: [
           chalk.cyan('ID'),
           chalk.cyan('Name'),
-          chalk.cyan('Sessions'),
+          chalk.cyan('Worktrees'),
           chalk.cyan('Description'),
           chalk.cyan('Created'),
         ],
-        colWidths: [12, 20, 10, 40, 12],
+        colWidths: [12, 20, 12, 40, 12],
         wordWrap: true,
       });
 
       // Add rows
       for (const board of boards) {
+        const worktreeCount = boardObjects.filter(bo => bo.board_id === board.board_id).length;
         table.push([
           board.board_id.substring(0, 8),
           `${board.icon || '📋'} ${board.name}`,
-          board.sessions.length.toString(),
+          worktreeCount.toString(),
           board.description || '',
           new Date(board.created_at).toLocaleDateString(),
         ]);

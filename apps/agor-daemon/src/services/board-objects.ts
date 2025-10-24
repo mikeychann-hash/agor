@@ -93,8 +93,7 @@ export class BoardObjectsService {
    * Get single board object
    */
   async get(id: string, _params?: BoardObjectParams): Promise<BoardEntityObject> {
-    const objects = await this.boardObjectRepo.findByBoardId(id as BoardID);
-    const object = objects.find(o => o.object_id === id);
+    const object = await this.boardObjectRepo.findByObjectId(id);
     if (!object) {
       throw new Error(`Board object ${id} not found`);
     }

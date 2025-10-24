@@ -48,6 +48,8 @@ interface SessionCanvasProps {
   onSessionDelete?: (sessionId: string) => void;
   onUpdateSessionMcpServers?: (sessionId: string, mcpServerIds: string[]) => void;
   onOpenSettings?: (sessionId: string) => void;
+  onOpenWorktree?: (worktreeId: string) => void;
+  onDeleteWorktree?: (worktreeId: string) => void;
 }
 
 interface SessionNodeData {
@@ -157,6 +159,8 @@ const SessionCanvas = ({
   onSessionDelete,
   onUpdateSessionMcpServers,
   onOpenSettings,
+  onOpenWorktree,
+  onDeleteWorktree,
 }: SessionCanvasProps) => {
   // Tool state for canvas annotations
   const [activeTool, setActiveTool] = useState<'select' | 'zone' | 'eraser'>('select');
@@ -309,8 +313,8 @@ const SessionCanvas = ({
           currentUserId,
           onTaskClick,
           onSessionClick,
-          onDelete: undefined, // TODO: Add worktree delete handler
-          onOpenSettings: undefined, // TODO: Add worktree settings handler
+          onDelete: onDeleteWorktree,
+          onOpenSettings: onOpenWorktree,
           onUnpin: undefined, // TODO: Add worktree unpin handler
           compact: false,
           isPinned: !!parentZoneId,
@@ -330,6 +334,8 @@ const SessionCanvas = ({
     currentUserId,
     onSessionClick,
     onTaskClick,
+    onDeleteWorktree,
+    onOpenWorktree,
     zoneLabels,
   ]);
 

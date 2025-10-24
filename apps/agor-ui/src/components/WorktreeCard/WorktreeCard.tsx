@@ -3,12 +3,13 @@ import { TaskStatus } from '@agor/core/types';
 import {
   BranchesOutlined,
   CloseOutlined,
+  DeleteOutlined,
   DragOutlined,
+  EditOutlined,
   ExpandOutlined,
   FolderOpenOutlined,
   LinkOutlined,
   PushpinFilled,
-  SettingOutlined,
 } from '@ant-design/icons';
 import { App, Badge, Button, Card, Collapse, Space, Spin, Tag, Typography } from 'antd';
 import { useState } from 'react';
@@ -212,7 +213,7 @@ const WorktreeCard = ({
       >
         <Space size={8} align="center">
           <div className="drag-handle" style={{ display: 'flex', alignItems: 'center' }}>
-            <FolderOpenOutlined style={{ fontSize: 32, color: '#1890ff' }} />
+            <BranchesOutlined style={{ fontSize: 32, color: '#1890ff' }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <Typography.Text strong className="nodrag">
@@ -253,19 +254,19 @@ const WorktreeCard = ({
               <Button
                 type="text"
                 size="small"
-                icon={<SettingOutlined />}
+                icon={<EditOutlined />}
                 onClick={e => {
                   e.stopPropagation();
                   onOpenSettings(worktree.worktree_id);
                 }}
-                title="Worktree settings"
+                title="Edit worktree"
               />
             )}
             {onDelete && (
               <Button
                 type="text"
                 size="small"
-                icon={<CloseOutlined />}
+                icon={<DeleteOutlined />}
                 onClick={e => {
                   e.stopPropagation();
                   handleDelete();
