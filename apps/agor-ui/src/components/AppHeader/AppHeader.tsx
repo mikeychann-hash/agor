@@ -1,3 +1,4 @@
+import type { ActiveUser, User } from '@agor/core/types';
 import {
   CodeOutlined,
   GithubOutlined,
@@ -8,11 +9,10 @@ import {
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { Button, Dropdown, Layout, Space, Typography } from 'antd';
-import type { ActiveUser, User } from '@agor/core/types';
 import { Facepile } from '../Facepile';
 
 const { Header } = Layout;
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 export interface AppHeaderProps {
   user?: User | null;
@@ -107,9 +107,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             onClick={onMenuClick}
           >
             {currentBoardIcon && <span style={{ fontSize: 16 }}>{currentBoardIcon}</span>}
-            <Text style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: 14 }}>
+            <Typography.Text style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: 14 }}>
               {currentBoardName}
-            </Text>
+            </Typography.Text>
           </Space>
         )}
       </Space>

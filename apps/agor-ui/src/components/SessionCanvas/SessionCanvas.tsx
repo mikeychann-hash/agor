@@ -29,7 +29,7 @@ import { ZoneNode } from './canvas/BoardObjectNodes';
 import { CursorNode } from './canvas/CursorNode';
 import { useBoardObjects } from './canvas/useBoardObjects';
 
-const { Text, Paragraph } = Typography;
+const { Paragraph } = Typography;
 
 interface SessionCanvasProps {
   board: Board | null;
@@ -1096,10 +1096,13 @@ const SessionCanvas = ({
               cancelText="No, Skip"
             >
               <Paragraph>
-                The session has been pinned to <Text strong>{triggerModal.zoneName}</Text>.
+                The session has been pinned to{' '}
+                <Typography.Text strong>{triggerModal.zoneName}</Typography.Text>.
               </Paragraph>
               <Paragraph>
-                This zone has a <Text strong>{triggerModal.trigger.type}</Text> trigger configured:
+                This zone has a{' '}
+                <Typography.Text strong>{triggerModal.trigger.type}</Typography.Text> trigger
+                configured:
               </Paragraph>
               <Paragraph
                 code

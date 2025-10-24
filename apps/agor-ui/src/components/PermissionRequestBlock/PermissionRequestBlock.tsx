@@ -19,7 +19,7 @@ import { Button, Card, Descriptions, Radio, Space, Tag, Typography, theme } from
 import type React from 'react';
 import { useState } from 'react';
 
-const { Text, Title, Paragraph } = Typography;
+const { Title, Paragraph } = Typography;
 
 interface PermissionRequestBlockProps {
   message: Message;
@@ -124,9 +124,9 @@ export const PermissionRequestBlock: React.FC<PermissionRequestBlockProps> = ({
               {getTitle()}
             </Title>
             {getSubtitle() && (
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {getSubtitle()}
-              </Text>
+              </Typography.Text>
             )}
           </div>
         </Space>
@@ -134,7 +134,7 @@ export const PermissionRequestBlock: React.FC<PermissionRequestBlockProps> = ({
         {/* Tool Details */}
         <div>
           <Space size={token.sizeUnit / 2}>
-            <Text strong>Tool:</Text>
+            <Typography.Text strong>Tool:</Typography.Text>
             <Tag color="blue">{tool_name}</Tag>
           </Space>
         </div>
@@ -142,9 +142,9 @@ export const PermissionRequestBlock: React.FC<PermissionRequestBlockProps> = ({
         {/* Tool Input - show only if active or in detailed view */}
         {isActive && Object.keys(tool_input).length > 0 && (
           <div>
-            <Text strong style={{ fontSize: 13 }}>
+            <Typography.Text strong style={{ fontSize: 13 }}>
               Parameters:
-            </Text>
+            </Typography.Text>
             <Descriptions
               size="small"
               column={1}
@@ -155,9 +155,9 @@ export const PermissionRequestBlock: React.FC<PermissionRequestBlockProps> = ({
               items={Object.entries(tool_input).map(([key, value]) => ({
                 key,
                 label: (
-                  <Text code style={{ fontSize: 11 }}>
+                  <Typography.Text code style={{ fontSize: 11 }}>
                     {key}
-                  </Text>
+                  </Typography.Text>
                 ),
                 children: (
                   <Paragraph
@@ -182,9 +182,9 @@ export const PermissionRequestBlock: React.FC<PermissionRequestBlockProps> = ({
 
         {/* Timestamp - show only for active requests */}
         {isActive && message.timestamp && (
-          <Text type="secondary" style={{ fontSize: 11 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
             Requested at {new Date(message.timestamp).toLocaleString()}
-          </Text>
+          </Typography.Text>
         )}
 
         {/* Action Buttons - show only when active */}

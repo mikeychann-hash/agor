@@ -1,10 +1,10 @@
+import type { Board, Session } from '@agor/core/types';
 import { SearchOutlined } from '@ant-design/icons';
 import { Badge, Drawer, Input, List, Select, Space, Typography, theme } from 'antd';
 import type React from 'react';
 import { useState } from 'react';
-import type { Board, Session } from '@agor/core/types';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 const { useToken } = theme;
 
 interface SessionListDrawerProps {
@@ -136,21 +136,21 @@ export const SessionListDrawer: React.FC<SessionListDrawerProps> = ({
                 avatar={<span style={{ fontSize: 24 }}>{getAgentIcon(session.agentic_tool)}</span>}
                 title={
                   <Space size={8}>
-                    <Text strong>
+                    <Typography.Text strong>
                       {session.title || session.description || session.agentic_tool}
-                    </Text>
+                    </Typography.Text>
                     <Badge status={getStatusColor(session.status)} />
                   </Space>
                 }
                 description={
                   <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                       {session.agentic_tool} • {session.tasks.length}{' '}
                       {session.tasks.length === 1 ? 'task' : 'tasks'}
-                    </Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    </Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                       📍 {session.git_state.ref}
-                    </Text>
+                    </Typography.Text>
                   </Space>
                 }
               />
@@ -172,10 +172,10 @@ export const SessionListDrawer: React.FC<SessionListDrawerProps> = ({
             background: token.colorBgContainer,
           }}
         >
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {filteredSessions.length} of {boardSessions.length} sessions
             {currentBoard.description && ` • ${currentBoard.description}`}
-          </Text>
+          </Typography.Text>
         </div>
       )}
     </Drawer>

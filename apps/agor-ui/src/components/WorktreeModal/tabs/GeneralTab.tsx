@@ -4,7 +4,7 @@ import { Button, Descriptions, Input, message, Space, Tag, Typography, theme } f
 import { useEffect, useState } from 'react';
 import { DeleteWorktreePopconfirm } from '../../DeleteWorktreePopconfirm';
 
-const { Text, Paragraph } = Typography;
+const { Paragraph } = Typography;
 const { TextArea } = Input;
 
 interface GeneralTabProps {
@@ -72,7 +72,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
         {/* Basic Information */}
         <Descriptions column={1} bordered size="small">
           <Descriptions.Item label="Name">
-            <Text strong>{worktree.name}</Text>
+            <Typography.Text strong>{worktree.name}</Typography.Text>
             {worktree.new_branch && (
               <Tag color="green" style={{ marginLeft: 8, fontSize: 11 }}>
                 New Branch
@@ -80,43 +80,43 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
             )}
           </Descriptions.Item>
           <Descriptions.Item label="Path">
-            <Text code style={{ fontSize: 11 }}>
+            <Typography.Text code style={{ fontSize: 11 }}>
               {worktree.path}
-            </Text>
+            </Typography.Text>
           </Descriptions.Item>
           <Descriptions.Item label="Repository">
             <Space>
               <FolderOutlined />
-              <Text>{repo.name}</Text>
+              <Typography.Text>{repo.name}</Typography.Text>
             </Space>
           </Descriptions.Item>
         </Descriptions>
 
         {/* Git Information */}
         <div>
-          <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+          <Typography.Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
             Git Information
-          </Text>
+          </Typography.Text>
           <Descriptions column={1} bordered size="small">
             <Descriptions.Item label="Branch">
-              <Text code>{worktree.ref}</Text>
+              <Typography.Text code>{worktree.ref}</Typography.Text>
             </Descriptions.Item>
             {worktree.base_ref && (
               <Descriptions.Item label="Base">
-                <Text code>
+                <Typography.Text code>
                   {worktree.base_ref}
                   {worktree.base_sha && ` (${worktree.base_sha.substring(0, 7)})`}
-                </Text>
+                </Typography.Text>
               </Descriptions.Item>
             )}
             {worktree.tracking_branch && (
               <Descriptions.Item label="Tracking">
-                <Text code>{worktree.tracking_branch}</Text>
+                <Typography.Text code>{worktree.tracking_branch}</Typography.Text>
               </Descriptions.Item>
             )}
             {worktree.last_commit_sha && (
               <Descriptions.Item label="Current SHA">
-                <Text code>{worktree.last_commit_sha.substring(0, 7)}</Text>
+                <Typography.Text code>{worktree.last_commit_sha.substring(0, 7)}</Typography.Text>
               </Descriptions.Item>
             )}
           </Descriptions>
@@ -124,14 +124,14 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
 
         {/* Work Context */}
         <div>
-          <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+          <Typography.Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
             Work Context
-          </Text>
+          </Typography.Text>
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             {/* Issue URL */}
             <div>
               <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                <Text type="secondary">Issue:</Text>
+                <Typography.Text type="secondary">Issue:</Typography.Text>
                 {!editingIssue && (
                   <Button
                     type="text"
@@ -165,21 +165,21 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
                 </Space.Compact>
               ) : issueUrl ? (
                 <a href={issueUrl} target="_blank" rel="noopener noreferrer">
-                  <Text code style={{ fontSize: 12 }}>
+                  <Typography.Text code style={{ fontSize: 12 }}>
                     {issueUrl}
-                  </Text>
+                  </Typography.Text>
                 </a>
               ) : (
-                <Text type="secondary" italic>
+                <Typography.Text type="secondary" italic>
                   No issue linked
-                </Text>
+                </Typography.Text>
               )}
             </div>
 
             {/* Pull Request URL */}
             <div>
               <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                <Text type="secondary">Pull Request:</Text>
+                <Typography.Text type="secondary">Pull Request:</Typography.Text>
                 {!editingPR && (
                   <Button
                     type="text"
@@ -213,21 +213,21 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
                 </Space.Compact>
               ) : prUrl ? (
                 <a href={prUrl} target="_blank" rel="noopener noreferrer">
-                  <Text code style={{ fontSize: 12 }}>
+                  <Typography.Text code style={{ fontSize: 12 }}>
                     {prUrl}
-                  </Text>
+                  </Typography.Text>
                 </a>
               ) : (
-                <Text type="secondary" italic>
+                <Typography.Text type="secondary" italic>
                   No pull request linked
-                </Text>
+                </Typography.Text>
               )}
             </div>
 
             {/* Notes */}
             <div>
               <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                <Text type="secondary">Notes:</Text>
+                <Typography.Text type="secondary">Notes:</Typography.Text>
                 {!editingNotes && (
                   <Button
                     type="text"
@@ -241,7 +241,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
               </Space>
               {editingNotes ? (
                 <div style={{ marginTop: 4 }}>
-                  <TextArea
+                  <Typography.TextArea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     placeholder="Freeform notes about this worktree..."
@@ -275,9 +275,9 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
                   {notes}
                 </Paragraph>
               ) : (
-                <Text type="secondary" italic>
+                <Typography.Text type="secondary" italic>
                   No notes
-                </Text>
+                </Typography.Text>
               )}
             </div>
           </Space>

@@ -9,7 +9,7 @@ import type { PermissionRequest } from '@agor/core/permissions';
 import { PermissionScope } from '@agor/core/types';
 import { Button, Modal, Space, Typography } from 'antd';
 
-const { Text, Title } = Typography;
+const { Title } = Typography;
 
 export interface PermissionModalProps {
   request: PermissionRequest | null;
@@ -30,14 +30,14 @@ export function PermissionModal({ request, onDecide, onCancel }: PermissionModal
     >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
         {/* Session info */}
-        <Text type="secondary">Session: {request.sessionId.slice(0, 8)}</Text>
+        <Typography.Text type="secondary">Session: {request.sessionId.slice(0, 8)}</Typography.Text>
 
         {/* Tool name */}
         <div>
           <Title level={4} style={{ marginBottom: 8 }}>
             {request.toolName}
           </Title>
-          <Text type="secondary">Claude wants to use this tool</Text>
+          <Typography.Text type="secondary">Claude wants to use this tool</Typography.Text>
         </div>
 
         {/* Tool input (formatted nicely) */}

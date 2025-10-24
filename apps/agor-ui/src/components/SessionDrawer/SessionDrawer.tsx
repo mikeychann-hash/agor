@@ -45,7 +45,7 @@ import {
 } from '../Pill';
 import { ToolIcon } from '../ToolIcon';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 const { TextArea } = Input;
 
 // Re-export PermissionMode from SDK for convenience
@@ -221,9 +221,9 @@ const SessionDrawer = ({
           <ToolIcon tool={session.agentic_tool} size={40} />
           <div style={{ flex: 1 }}>
             <div style={{ marginBottom: 4 }}>
-              <Text strong style={{ fontSize: 18 }}>
+              <Typography.Text strong style={{ fontSize: 18 }}>
                 {session.title || session.description || session.agentic_tool}
-              </Text>
+              </Typography.Text>
               <Badge
                 status={getStatusColor()}
                 text={session.status.toUpperCase()}
@@ -232,11 +232,11 @@ const SessionDrawer = ({
             </div>
             {session.description && session.description !== session.title && (
               <div style={{ marginBottom: 4 }}>
-                <Text type="secondary" style={{ fontSize: 13 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
                   {typeof session.description === 'string'
                     ? session.description
                     : JSON.stringify(session.description)}
-                </Text>
+                </Typography.Text>
               </div>
             )}
             {session.created_by && (
@@ -394,7 +394,7 @@ const SessionDrawer = ({
         }}
       >
         <Space direction="vertical" style={{ width: '100%' }} size={8}>
-          <TextArea
+          <Typography.TextArea
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             placeholder="Send a prompt, fork, or create a subtask..."

@@ -1,8 +1,8 @@
+import type { Repo } from '@agor/core/types';
 import { FolderOutlined, SettingOutlined } from '@ant-design/icons';
 import { Button, Descriptions, Space, Typography } from 'antd';
-import type { Repo } from '@agor/core/types';
 
-const { Text, Paragraph } = Typography;
+const { Paragraph } = Typography;
 
 interface RepoTabProps {
   repo: Repo;
@@ -14,7 +14,7 @@ export const RepoTab: React.FC<RepoTabProps> = ({ repo, onOpenSettings }) => {
     <Space direction="vertical" size="large" style={{ width: '100%', padding: '0 24px' }}>
       <Paragraph type="secondary">
         This worktree inherits environment configuration from repository "
-        <Text strong>{repo.name}</Text>".
+        <Typography.Text strong>{repo.name}</Typography.Text>".
       </Paragraph>
 
       {/* Repository Information */}
@@ -22,27 +22,27 @@ export const RepoTab: React.FC<RepoTabProps> = ({ repo, onOpenSettings }) => {
         <Descriptions.Item label="Name">
           <Space>
             <FolderOutlined />
-            <Text strong>{repo.name}</Text>
+            <Typography.Text strong>{repo.name}</Typography.Text>
           </Space>
         </Descriptions.Item>
         <Descriptions.Item label="Slug">
-          <Text code>{repo.slug}</Text>
+          <Typography.Text code>{repo.slug}</Typography.Text>
         </Descriptions.Item>
         {repo.remote_url && (
           <Descriptions.Item label="Remote URL">
-            <Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
+            <Typography.Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
               {repo.remote_url}
-            </Text>
+            </Typography.Text>
           </Descriptions.Item>
         )}
         <Descriptions.Item label="Local Path">
-          <Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
+          <Typography.Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
             {repo.local_path}
-          </Text>
+          </Typography.Text>
         </Descriptions.Item>
         {repo.default_branch && (
           <Descriptions.Item label="Default Branch">
-            <Text code>{repo.default_branch}</Text>
+            <Typography.Text code>{repo.default_branch}</Typography.Text>
           </Descriptions.Item>
         )}
       </Descriptions>
@@ -50,23 +50,25 @@ export const RepoTab: React.FC<RepoTabProps> = ({ repo, onOpenSettings }) => {
       {/* Environment Configuration */}
       {repo.environment_config && (
         <div>
-          <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+          <Typography.Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
             Environment Configuration
-          </Text>
+          </Typography.Text>
           <Descriptions column={1} bordered size="small">
             <Descriptions.Item label="Up Command">
-              <Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
+              <Typography.Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
                 {repo.environment_config.up_command}
-              </Text>
+              </Typography.Text>
             </Descriptions.Item>
             <Descriptions.Item label="Down Command">
-              <Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
+              <Typography.Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
                 {repo.environment_config.down_command}
-              </Text>
+              </Typography.Text>
             </Descriptions.Item>
             <Descriptions.Item label="Template Variables">
               {/* biome-ignore lint/suspicious/noExplicitAny: Environment config type needs proper typing */}
-              <Text>{(repo.environment_config as any).template_vars?.join(', ') || 'None'}</Text>
+              <Typography.Text>
+                {(repo.environment_config as any).template_vars?.join(', ') || 'None'}
+              </Typography.Text>
             </Descriptions.Item>
           </Descriptions>
         </div>

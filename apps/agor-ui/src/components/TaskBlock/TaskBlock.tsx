@@ -48,7 +48,7 @@ import { GitStatePill } from '../Pill';
 import ToolExecutingIndicator from '../ToolExecutingIndicator';
 import { ToolIcon } from '../ToolIcon';
 
-const { Text, Paragraph } = Typography;
+const { Paragraph } = Typography;
 
 /**
  * Block types for rendering
@@ -222,11 +222,11 @@ export const TaskBlock: React.FC<TaskBlockProps> = ({
               gap: token.sizeUnit / 2,
             }}
           >
-            <Text strong>
+            <Typography.Text strong>
               {typeof task.description === 'string'
                 ? task.description || 'User Prompt'
                 : 'User Prompt'}
-            </Text>
+            </Typography.Text>
           </div>
 
           {/* Task metadata */}
@@ -239,16 +239,16 @@ export const TaskBlock: React.FC<TaskBlockProps> = ({
                 prefix="By"
               />
             )}
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               <MessageOutlined /> {messages.length}
-            </Text>
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               <ToolOutlined /> {task.tool_use_count}
-            </Text>
+            </Typography.Text>
             {task.model && (
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 🤖 {task.model}
-              </Text>
+              </Typography.Text>
             )}
             {task.git_state.sha_at_start && task.git_state.sha_at_start !== 'unknown' && (
               <GitStatePill
@@ -377,14 +377,14 @@ export const TaskBlock: React.FC<TaskBlockProps> = ({
                     borderRadius: token.borderRadius,
                   }}
                 >
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                     <GithubOutlined /> Commit:{' '}
-                  </Text>
-                  <Text code style={{ fontSize: 11 }}>
+                  </Typography.Text>
+                  <Typography.Text code style={{ fontSize: 11 }}>
                     {typeof task.git_state.commit_message === 'string'
                       ? task.git_state.commit_message
                       : JSON.stringify(task.git_state.commit_message)}
-                  </Text>
+                  </Typography.Text>
                 </div>
               )}
 

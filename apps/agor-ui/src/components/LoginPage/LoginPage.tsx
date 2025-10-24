@@ -8,7 +8,7 @@ import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Form, Input, Space, Typography } from 'antd';
 import { useState } from 'react';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 interface LoginPageProps {
   onLogin: (email: string, password: string) => Promise<boolean>;
@@ -68,7 +68,7 @@ export function LoginPage({ onLogin, loading = false, error }: LoginPageProps) {
             <Title level={2} style={{ margin: 0 }}>
               Agor
             </Title>
-            <Text type="secondary">Next-gen agent orchestration</Text>
+            <Typography.Text type="secondary">Next-gen agent orchestration</Typography.Text>
           </div>
         </Space>
 
@@ -121,9 +121,9 @@ export function LoginPage({ onLogin, loading = false, error }: LoginPageProps) {
         {/* Footer */}
         <div style={{ textAlign: 'center', marginTop: 24 }}>
           <Space direction="vertical" size={4}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               CLI: <code>$ agor user create</code>
-            </Text>
+            </Typography.Text>
           </Space>
         </div>
       </Card>

@@ -39,7 +39,7 @@ import {
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
-const { Text, Paragraph, Title } = Typography;
+const { Paragraph, Title } = Typography;
 const { TextArea } = Input;
 
 interface EnvironmentTabProps {
@@ -66,10 +66,10 @@ const CommandPreview: React.FC<{
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 32 }}>
-      <Text type="secondary" style={{ minWidth: 80, textAlign: 'right', fontSize: 13 }}>
+      <Typography.Text type="secondary" style={{ minWidth: 80, textAlign: 'right', fontSize: 13 }}>
         {label}:
-      </Text>
-      <Text
+      </Typography.Text>
+      <Typography.Text
         code
         style={{
           flex: 1,
@@ -85,7 +85,7 @@ const CommandPreview: React.FC<{
         title="Click to copy"
       >
         {preview.result}
-      </Text>
+      </Typography.Text>
       <Button
         type="text"
         size="small"
@@ -110,10 +110,10 @@ const TemplateField: React.FC<{ label: string; value: string }> = ({ label, valu
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 32 }}>
-      <Text type="secondary" style={{ minWidth: 120, textAlign: 'right', fontSize: 13 }}>
+      <Typography.Text type="secondary" style={{ minWidth: 120, textAlign: 'right', fontSize: 13 }}>
         {label}:
-      </Text>
-      <Text
+      </Typography.Text>
+      <Typography.Text
         code
         style={{
           flex: 1,
@@ -129,7 +129,7 @@ const TemplateField: React.FC<{ label: string; value: string }> = ({ label, valu
         title={value ? 'Click to copy' : undefined}
       >
         {value || 'Not configured'}
-      </Text>
+      </Typography.Text>
       {value && (
         <Button
           type="text"
@@ -358,16 +358,16 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
   const getStatusBadge = () => {
     switch (envStatus) {
       case 'running':
-        return <Text>Running</Text>;
+        return <Typography.Text>Running</Typography.Text>;
       case 'starting':
-        return <Text>Starting...</Text>;
+        return <Typography.Text>Starting...</Typography.Text>;
       case 'stopping':
-        return <Text type="warning">Stopping...</Text>;
+        return <Typography.Text type="warning">Stopping...</Typography.Text>;
       case 'error':
-        return <Text type="danger">Error</Text>;
+        return <Typography.Text type="danger">Error</Typography.Text>;
       case 'stopped':
       default:
-        return <Text type="secondary">Stopped</Text>;
+        return <Typography.Text type="secondary">Stopped</Typography.Text>;
     }
   };
 
@@ -522,45 +522,60 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
               <>
                 {/* Up Command */}
                 <div>
-                  <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                  <Typography.Text
+                    strong
+                    style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
+                  >
                     Up Command (Start Environment)
-                  </Text>
-                  <TextArea
+                  </Typography.Text>
+                  <Typography.TextArea
                     value={upCommand}
                     onChange={e => setUpCommand(e.target.value)}
                     placeholder="DAEMON_PORT={{add 3000 worktree.unique_id}} UI_PORT={{add 5000 worktree.unique_id}} docker compose -p {{worktree.name}} up -d"
                     rows={3}
                     style={{ fontFamily: 'monospace', fontSize: 11 }}
                   />
-                  <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 4 }}>
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 10, display: 'block', marginTop: 4 }}
+                  >
                     ⚠️ Command should start services in the background and return (e.g., docker
                     compose up -d, systemctl start, etc.)
-                  </Text>
+                  </Typography.Text>
                 </div>
 
                 {/* Down Command */}
                 <div>
-                  <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                  <Typography.Text
+                    strong
+                    style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
+                  >
                     Down Command (Stop Environment)
-                  </Text>
-                  <TextArea
+                  </Typography.Text>
+                  <Typography.TextArea
                     value={downCommand}
                     onChange={e => setDownCommand(e.target.value)}
                     placeholder="docker compose -p {{worktree.name}} down"
                     rows={2}
                     style={{ fontFamily: 'monospace', fontSize: 11 }}
                   />
-                  <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 4 }}>
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 10, display: 'block', marginTop: 4 }}
+                  >
                     Command should stop services and return (e.g., docker compose down, systemctl
                     stop, etc.)
-                  </Text>
+                  </Typography.Text>
                 </div>
 
                 {/* Health Check URL */}
                 <div>
-                  <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                  <Typography.Text
+                    strong
+                    style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
+                  >
                     Health Check URL (Optional)
-                  </Text>
+                  </Typography.Text>
                   <Input
                     value={healthCheckUrl}
                     onChange={e => setHealthCheckUrl(e.target.value)}
@@ -571,19 +586,25 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
 
                 {/* App URL */}
                 <div>
-                  <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                  <Typography.Text
+                    strong
+                    style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
+                  >
                     App URL
-                  </Text>
+                  </Typography.Text>
                   <Input
                     value={appUrl}
                     onChange={e => setAppUrl(e.target.value)}
                     placeholder="http://localhost:{{add 5000 worktree.unique_id}}"
                     style={{ fontFamily: 'monospace', fontSize: 11 }}
                   />
-                  <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 4 }}>
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 10, display: 'block', marginTop: 4 }}
+                  >
                     URL to access the running app. This will appear as a clickable link when the
                     environment is running.
-                  </Text>
+                  </Typography.Text>
                 </div>
               </>
             ) : (
@@ -602,23 +623,27 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
                 description={
                   <div style={{ fontSize: 11, lineHeight: '1.6' }}>
                     <div>
-                      <Text code>{'{{worktree.unique_id}}'}</Text> - Auto-assigned unique number (1,
-                      2, 3, ...)
+                      <Typography.Text code>{'{{worktree.unique_id}}'}</Typography.Text> -
+                      Auto-assigned unique number (1, 2, 3, ...)
                     </div>
                     <div>
-                      <Text code>{'{{worktree.name}}'}</Text> - Worktree name (e.g., "feat-auth")
+                      <Typography.Text code>{'{{worktree.name}}'}</Typography.Text> - Worktree name
+                      (e.g., "feat-auth")
                     </div>
                     <div>
-                      <Text code>{'{{worktree.path}}'}</Text> - Absolute path to worktree directory
+                      <Typography.Text code>{'{{worktree.path}}'}</Typography.Text> - Absolute path
+                      to worktree directory
                     </div>
                     <div>
-                      <Text code>{'{{repo.slug}}'}</Text> - Repository slug
+                      <Typography.Text code>{'{{repo.slug}}'}</Typography.Text> - Repository slug
                     </div>
                     <div>
-                      <Text code>{'{{add a b}}'}</Text> - Math helpers (add, sub, mul, div, mod)
+                      <Typography.Text code>{'{{add a b}}'}</Typography.Text> - Math helpers (add,
+                      sub, mul, div, mod)
                     </div>
                     <div>
-                      <Text code>{'{{custom.your_var}}'}</Text> - Custom variables (see below)
+                      <Typography.Text code>{'{{custom.your_var}}'}</Typography.Text> - Custom
+                      variables (see below)
                     </div>
                   </div>
                 }
@@ -660,23 +685,23 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             {/* Built-in Variables (Read-only) */}
             <div>
-              <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
+              <Typography.Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
                 Built-in Variables
-              </Text>
+              </Typography.Text>
               <Descriptions column={1} bordered size="small" style={{ fontSize: 11 }}>
                 <Descriptions.Item label="worktree.unique_id">
-                  <Text code>{worktree.worktree_unique_id}</Text>
+                  <Typography.Text code>{worktree.worktree_unique_id}</Typography.Text>
                 </Descriptions.Item>
                 <Descriptions.Item label="worktree.name">
-                  <Text code>{worktree.name}</Text>
+                  <Typography.Text code>{worktree.name}</Typography.Text>
                 </Descriptions.Item>
                 <Descriptions.Item label="worktree.path">
-                  <Text code style={{ fontSize: 10 }}>
+                  <Typography.Text code style={{ fontSize: 10 }}>
                     {worktree.path}
-                  </Text>
+                  </Typography.Text>
                 </Descriptions.Item>
                 <Descriptions.Item label="repo.slug">
-                  <Text code>{repo.slug}</Text>
+                  <Typography.Text code>{repo.slug}</Typography.Text>
                 </Descriptions.Item>
               </Descriptions>
             </div>
@@ -690,9 +715,9 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
                   marginBottom: 8,
                 }}
               >
-                <Text strong style={{ fontSize: 13 }}>
+                <Typography.Text strong style={{ fontSize: 13 }}>
                   Custom Context (JSON)
-                </Text>
+                </Typography.Text>
                 {!isEditingContext && (
                   <Button
                     type="text"
@@ -704,16 +729,19 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
                   </Button>
                 )}
               </Space>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 8 }}>
+              <Typography.Text
+                type="secondary"
+                style={{ fontSize: 11, display: 'block', marginBottom: 8 }}
+              >
                 Define custom variables accessible as{' '}
-                <Text code style={{ fontSize: 11 }}>
+                <Typography.Text code style={{ fontSize: 11 }}>
                   {'{{custom.your_var}}'}
-                </Text>{' '}
+                </Typography.Text>{' '}
                 in templates
-              </Text>
+              </Typography.Text>
               {isEditingContext ? (
                 <>
-                  <TextArea
+                  <Typography.TextArea
                     value={customContextJson}
                     onChange={e => setCustomContextJson(e.target.value)}
                     placeholder='{\n  "feature_name": "authentication",\n  "extra_port": 3001\n}'
@@ -751,9 +779,9 @@ export const EnvironmentTab: React.FC<EnvironmentTabProps> = ({
             {/* Resolved Commands Preview */}
             {hasEnvironmentConfig && (
               <div>
-                <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
+                <Typography.Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
                   Resolved Commands (Live Preview)
-                </Text>
+                </Typography.Text>
                 <Space direction="vertical" size={4} style={{ width: '100%' }}>
                   <CommandPreview label="Up" preview={upPreview} />
                   <CommandPreview label="Down" preview={downPreview} />
