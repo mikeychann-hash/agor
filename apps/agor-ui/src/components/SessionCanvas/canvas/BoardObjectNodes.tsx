@@ -434,7 +434,8 @@ const CommentNodeComponent = ({ data }: { data: CommentNodeData }) => {
       style={{
         position: 'relative',
         cursor: 'pointer',
-        transform: `scale(${scale})`,
+        // Combine scale with translate to offset pin tip to anchor point
+        transform: `scale(${scale}) translate(${PIN_OFFSET_X}px, ${PIN_OFFSET_Y}px)`,
         transformOrigin: 'top left',
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
@@ -448,9 +449,6 @@ const CommentNodeComponent = ({ data }: { data: CommentNodeData }) => {
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'center',
-          // Offset so pin tip (bottom-center) is the anchor point
-          marginLeft: `${PIN_OFFSET_X}px`,
-          marginTop: `${PIN_OFFSET_Y}px`,
         }}
       >
         {/* Circular top part */}
