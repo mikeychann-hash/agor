@@ -457,9 +457,9 @@ const CommentNodeComponent = ({ data }: { data: CommentNodeData }) => {
             width: `${PIN_CIRCULAR_SIZE}px`,
             height: `${PIN_CIRCULAR_SIZE}px`,
             borderRadius: '50% 50% 50% 0',
-            // Layered background: subtle backdrop + color overlay at 40%
+            // Layered background: subtle backdrop + color overlay at 50%
             background: `
-              linear-gradient(${pinColor}66, ${pinColor}66),
+              linear-gradient(${pinColor}80, ${pinColor}80),
               ${token.colorBgLayout}33
             `,
             border: `2px solid ${token.colorBgContainer}`,
@@ -489,7 +489,7 @@ const CommentNodeComponent = ({ data }: { data: CommentNodeData }) => {
               minWidth: '20px',
               height: '20px',
               borderRadius: '10px',
-              background: token.colorError,
+              background: token.colorPrimary,
               border: `2px solid ${token.colorBgContainer}`,
               color: token.colorBgContainer,
               fontSize: '11px',
