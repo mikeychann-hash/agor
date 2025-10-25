@@ -109,7 +109,14 @@ In Agor (currently):
   - Fork from the subsession
   - Spawn nested subsessions
 
-**You can still close the loop manually** if needed - just post-prompt the parent session with findings from the subtask.
+**You can still close the loop manually** since subsessions are live and accessible:
+
+1. **Two-step approach**: Prompt the subsession to produce a report, then ask the parent session to read it
+2. **One-step approach**: Include "produce a report in `/tmp/subtask-results.md` when done" right in your spawn prompt
+
+Example spawn prompt: `"Implement payment gateway integration. When complete, write a summary of the implementation and any issues to /tmp/payment-report.md"`
+
+Then later, prompt the parent: `"Read /tmp/payment-report.md and integrate the payment module"`
 
 **Note**: You can still use Claude Code's Task tool and subagent workflows in Agor exactly like the CLI - those follow the normal Claude Code flow with waiting and callbacks.
 
