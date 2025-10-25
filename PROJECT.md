@@ -8,7 +8,7 @@ Simple todo list for launch preparation.
 
 - [ ] Troubleshoot Claude session edge cases (unclear/incomplete results)
 - [x] Session forking UI with genealogy visualization in WorktreeCard
-- [x] Session spawning UI with genealogy visualization in WorktreeCard
+- [ ] Session spawning UI with genealogy visualization in WorktreeCard
 
 ### Documentation
 
