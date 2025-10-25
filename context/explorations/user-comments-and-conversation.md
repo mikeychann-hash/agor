@@ -1,7 +1,9 @@
 # User Comments and Conversation
 
-**Status:** ✅ Phase 2 Complete (Threading + Reactions)
-**Related:** [multiplayer.md](../concepts/multiplayer.md), [websockets.md](../concepts/websockets.md), [auth.md](../concepts/auth.md)
+**Status:** ✅ Phase 4 Complete (Spatial Annotations + Canvas Pins)
+**Related:** [multiplayer.md](../concepts/multiplayer.md), [websockets.md](../concepts/websockets.md), [auth.md](../concepts/auth.md), [social-features.md](../concepts/social-features.md)
+
+**Note:** See [social-features.md](../concepts/social-features.md) for implementation details of completed features. This document remains in explorations/ for future phases (Object Attachments, Mentions, Advanced UX).
 
 ---
 
@@ -1778,17 +1780,20 @@ const conversationComments = comments.filter(c => !c.position);
 
 **Effort:** ~2 days
 
-### Phase 4: Spatial Annotations (Canvas Pins)
+### Phase 4: Spatial Annotations (Canvas Pins) ✅ COMPLETE
 
-- [ ] "Add comment" canvas mode (Figma-style)
-- [ ] Render comment pins as React Flow nodes
-- [ ] Absolute positioning (empty space comments)
-- [ ] Relative positioning (session-attached comments)
-- [ ] Click pin → open thread in drawer/popover
-- [ ] Drag to reposition (optional)
-- [ ] Filter: show/hide spatial comments
+- [x] "Add comment" canvas mode (Figma-style)
+- [x] Render comment pins as React Flow nodes
+- [x] Absolute positioning (empty space comments)
+- [x] Click pin → highlight thread in panel + scroll-to-view
+- [x] Hover pin → temporary highlight in panel
+- [x] Toggle: click same pin to deselect
+- [x] Filter modes: "Active" (non-resolved) and "All"
+- [x] Visual hierarchy in minimap (comments top layer, 100% alpha)
+- [ ] Relative positioning (session-attached comments) - FUTURE
+- [ ] Drag to reposition pins - FUTURE
 
-**Effort:** ~2-3 days
+**Completed:** October 2025
 
 ### Phase 5: Mentions & Notifications
 
