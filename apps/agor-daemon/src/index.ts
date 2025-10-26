@@ -185,6 +185,15 @@ async function main() {
       app.use('/ui/*', ((_req: unknown, res: express.Response) => {
         res.sendFile(path.join(uiPath, 'index.html'));
       }) as never);
+
+      // Redirect root to UI
+      app.use('/', ((req: express.Request, res: express.Response, next: express.NextFunction) => {
+        if (req.path === '/' && req.method === 'GET') {
+          res.redirect('/ui/');
+        } else {
+          next();
+        }
+      }) as never);
     } else {
       console.warn(`⚠️  UI directory not found at ${uiPath} - UI will not be served`);
       console.warn(`   This is expected in development mode (UI runs on port ${UI_PORT})`);
