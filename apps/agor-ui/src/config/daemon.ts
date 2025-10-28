@@ -16,8 +16,11 @@ interface WindowWithAgorConfig extends Window {
 
 export function getDaemonUrl(): string {
   // 1. Check runtime window global (if daemon injected config)
-  if (typeof window !== 'undefined' && (window as WindowWithAgorConfig).AGOR_DAEMON_URL) {
-    return (window as WindowWithAgorConfig).AGOR_DAEMON_URL;
+  if (typeof window !== 'undefined') {
+    const injectedUrl = (window as WindowWithAgorConfig).AGOR_DAEMON_URL;
+    if (injectedUrl) {
+      return injectedUrl;
+    }
   }
 
   // 2. Check build-time environment variable (set via .env.local or at build time)
