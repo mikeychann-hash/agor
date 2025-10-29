@@ -85,19 +85,24 @@ function AppContent() {
   const [openNewWorktree, setOpenNewWorktree] = useState(false);
   const [inOnboardingFlow, setInOnboardingFlow] = useState(false);
 
+  // Get current user from users array (real-time updates via WebSocket)
+  // This ensures we get the latest onboarding_completed status
+  // Fall back to user from auth if users array hasn't loaded yet
+  const currentUser = user ? users.find(u => u.user_id === user.user_id) || user : null;
+
   // Show welcome modal if user hasn't completed onboarding
   useEffect(() => {
     console.log('[Onboarding] Check:', {
       loading,
-      user: user?.email,
-      onboarding_completed: user?.onboarding_completed,
+      user: currentUser?.email,
+      onboarding_completed: currentUser?.onboarding_completed,
     });
 
-    if (!loading && user && !user.onboarding_completed) {
-      console.log('[Onboarding] Showing welcome modal for', user.email);
+    if (!loading && currentUser && !currentUser.onboarding_completed) {
+      console.log('[Onboarding] Showing welcome modal for', currentUser.email);
       setWelcomeModalOpen(true);
     }
-  }, [loading, user]);
+  }, [loading, currentUser]);
 
   // NOW handle conditional rendering based on state
   // Show loading while fetching auth config
@@ -682,10 +687,10 @@ function AppContent() {
       const currentIds = sessionMcpServerIds[sessionId] || [];
 
       // Find servers to add (in new list but not in current)
-      const toAdd = mcpServerIds.filter((id) => !currentIds.includes(id));
+      const toAdd = mcpServerIds.filter(id => !currentIds.includes(id));
 
       // Find servers to remove (in current list but not in new)
-      const toRemove = currentIds.filter((id) => !mcpServerIds.includes(id));
+      const toRemove = currentIds.filter(id => !mcpServerIds.includes(id));
 
       // Add new relationships
       for (const serverId of toAdd) {
@@ -727,7 +732,7 @@ function AppContent() {
   const handleResolveComment = async (commentId: string) => {
     if (!client) return;
     try {
-      const comment = comments.find((c) => c.comment_id === commentId);
+      const comment = comments.find(c => c.comment_id === commentId);
       await client.service('board-comments').patch(commentId, {
         resolved: !comment?.resolved,
       });
@@ -782,8 +787,8 @@ function AppContent() {
 
   // Generate repo reference options for dropdowns
   const allOptions = getRepoReferenceOptions(repos, worktrees);
-  const _worktreeOptions = allOptions.filter((opt) => opt.type === 'managed-worktree');
-  const _repoOptions = allOptions.filter((opt) => opt.type === 'managed');
+  const _worktreeOptions = allOptions.filter(opt => opt.type === 'managed-worktree');
+  const _repoOptions = allOptions.filter(opt => opt.type === 'managed');
 
   // Handle onboarding dismissal
   const handleDismissOnboarding = async () => {
@@ -823,7 +828,7 @@ function AppContent() {
   const handleSettingsClose = () => {
     setSettingsTabToOpen(null);
     // Re-open welcome modal if still in onboarding flow
-    if (inOnboardingFlow && user && !user.onboarding_completed) {
+    if (inOnboardingFlow && currentUser && !currentUser.onboarding_completed) {
       setWelcomeModalOpen(true);
     }
   };
@@ -831,7 +836,7 @@ function AppContent() {
   const handleNewWorktreeModalClose = () => {
     setOpenNewWorktree(false);
     // Re-open welcome modal if still in onboarding flow
-    if (inOnboardingFlow && user && !user.onboarding_completed) {
+    if (inOnboardingFlow && currentUser && !currentUser.onboarding_completed) {
       setWelcomeModalOpen(true);
     }
   };
