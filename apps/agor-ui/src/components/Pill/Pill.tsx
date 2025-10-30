@@ -286,40 +286,55 @@ export const GitStatePill: React.FC<GitStatePillProps> = ({
 
 interface SessionIdPillProps extends BasePillProps {
   sessionId: string;
+  sdkSessionId?: string; // SDK session ID (Claude Agent SDK, Codex thread, etc.)
+  agenticTool?: string; // Agentic tool name (claude-code, codex, gemini) for tooltip
   showCopy?: boolean;
 }
 
 export const SessionIdPill: React.FC<SessionIdPillProps> = ({
   sessionId,
+  sdkSessionId,
+  agenticTool,
   showCopy = true,
   size = 'small',
   style,
 }) => {
   const { token } = theme.useToken();
-  const shortId = sessionId.substring(0, 8);
+  // Prefer SDK session ID (more useful for CLI/logs) over Agor internal ID
+  const displayId = sdkSessionId || sessionId;
+  const shortId = displayId.substring(0, 8);
+
+  // Generate tooltip based on what we're showing
+  const tooltipTitle = sdkSessionId
+    ? `${agenticTool || 'SDK'} session ID: ${displayId}`
+    : `Agor session ID: ${displayId}`;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(sessionId);
-    message.success('Session ID copied to clipboard');
+    navigator.clipboard.writeText(displayId);
+    message.success(`${sdkSessionId ? 'SDK' : 'Agor'} Session ID copied to clipboard`);
   };
 
   if (showCopy) {
     return (
-      <Tag
-        icon={<CopyOutlined />}
-        color={PILL_COLORS.session}
-        style={{ cursor: 'pointer', ...style }}
-        onClick={handleCopy}
-      >
-        <span style={{ fontFamily: token.fontFamilyCode }}>{shortId}</span>
-      </Tag>
+      <Tooltip title={tooltipTitle}>
+        <Tag
+          icon={<CopyOutlined />}
+          color={PILL_COLORS.session}
+          style={{ cursor: 'pointer', ...style }}
+          onClick={handleCopy}
+        >
+          <span style={{ fontFamily: token.fontFamilyCode }}>{shortId}</span>
+        </Tag>
+      </Tooltip>
     );
   }
 
   return (
-    <Tag icon={<CodeOutlined />} color={PILL_COLORS.session} style={style}>
-      <span style={{ fontFamily: token.fontFamilyCode }}>{shortId}</span>
-    </Tag>
+    <Tooltip title={tooltipTitle}>
+      <Tag icon={<CodeOutlined />} color={PILL_COLORS.session} style={style}>
+        <span style={{ fontFamily: token.fontFamilyCode }}>{shortId}</span>
+      </Tag>
+    </Tooltip>
   );
 };
 

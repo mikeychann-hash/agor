@@ -516,7 +516,12 @@ const SessionDrawer = ({
           />
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Space size={8}>
-              <SessionIdPill sessionId={session.session_id} showCopy={true} />
+              <SessionIdPill
+                sessionId={session.session_id}
+                sdkSessionId={session.sdk_session_id}
+                agenticTool={session.agentic_tool}
+                showCopy={true}
+              />
               <MessageCountPill count={session.message_count} />
               <ToolCountPill count={session.tool_use_count} />
               {tokenBreakdown.total > 0 && (
