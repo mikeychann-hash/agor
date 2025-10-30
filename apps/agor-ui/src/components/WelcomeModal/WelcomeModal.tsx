@@ -32,6 +32,7 @@ export interface WelcomeModalProps {
   onCreateWorktree: () => void;
   onNewSession: () => void;
   onDismiss: () => void; // Mark onboarding as completed
+  onOpenApiKeys?: () => void; // Open Settings → API Keys tab
 }
 
 export const WelcomeModal: React.FC<WelcomeModalProps> = ({
@@ -42,6 +43,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
   onCreateWorktree,
   onNewSession,
   onDismiss,
+  onOpenApiKeys,
 }) => {
   const isEmpty = stats.repoCount === 0 && stats.worktreeCount === 0 && stats.sessionCount === 0;
   const isActive = stats.sessionCount > 0;
@@ -51,6 +53,47 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
     onDismiss();
     onClose();
   };
+
+  // Reusable authentication section
+  const AuthenticationSection = (
+    <Space
+      direction="vertical"
+      size="small"
+      style={{
+        width: '100%',
+        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+        paddingTop: 16,
+        marginTop: 8,
+      }}
+    >
+      <Space>
+        <InfoCircleOutlined style={{ color: '#1890ff', fontSize: 20 }} />
+        <Text strong>Authentication (Optional)</Text>
+      </Space>
+      <Paragraph type="secondary" style={{ marginLeft: 32, marginBottom: 8 }}>
+        To use AI tools, authenticate with one of these methods:
+        <br />
+        1. <Text strong>CLI tools</Text> (e.g., <Text code>claude login</Text>)
+        <br />
+        2. <Text strong>Environment variables</Text> (set before starting daemon)
+        <br />
+        3. <Text strong>Settings → API Keys</Text> (recommended for Codespaces)
+      </Paragraph>
+      {onOpenApiKeys && (
+        <Button
+          type="link"
+          icon={<InfoCircleOutlined />}
+          onClick={() => {
+            onClose();
+            onOpenApiKeys();
+          }}
+          style={{ marginLeft: 32, padding: 0 }}
+        >
+          Configure API Keys
+        </Button>
+      )}
+    </Space>
+  );
 
   // Empty system - first user experience
   if (isEmpty) {
@@ -163,27 +206,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
             </Text>
           </Space>
 
-          {/* Configure Integrations - Informational step */}
-          <Space
-            direction="vertical"
-            size="small"
-            style={{
-              width: '100%',
-              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-              paddingTop: 16,
-              marginTop: 8,
-            }}
-          >
-            <Space>
-              <InfoCircleOutlined style={{ color: '#1890ff', fontSize: 20 }} />
-              <Text strong>Configure Integrations</Text>
-            </Space>
-            <Paragraph type="secondary" style={{ marginLeft: 32, marginBottom: 0 }}>
-              Set up API keys for Claude Code, Codex, or Gemini:
-              <br />• Settings → API Keys
-              <br />• Or use <Text code>agor config set</Text> in your terminal
-            </Paragraph>
-          </Space>
+          {AuthenticationSection}
 
           <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
             <Button type="primary" onClick={handleDismiss}>
@@ -244,6 +267,8 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
           <Paragraph type="secondary" style={{ marginTop: 8 }}>
             You can start using existing resources or create your own!
           </Paragraph>
+
+          {AuthenticationSection}
 
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Button type="link" href="https://agor.live/guide/getting-started" target="_blank">
@@ -335,6 +360,8 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
             </Space>
           )}
         </Space>
+
+        {AuthenticationSection}
 
         <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
           <Button type="primary" onClick={handleDismiss}>

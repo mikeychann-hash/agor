@@ -1,6 +1,6 @@
 import { getRepoReferenceOptions } from '@agor/core/config/browser';
 import { Alert, App as AntApp, ConfigProvider, Spin, theme } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { App as AgorApp } from './components/App';
 import { LoginPage } from './components/LoginPage';
 import { SandboxBanner } from './components/SandboxBanner';
@@ -821,6 +821,12 @@ function AppContent() {
     // TODO: Should this open a new session modal instead? For now just close.
   };
 
+  const handleWelcomeOpenApiKeys = () => {
+    setInOnboardingFlow(true);
+    setWelcomeModalOpen(false);
+    setSettingsTabToOpen('api-keys');
+  };
+
   // Re-open welcome modal after completing sub-actions during onboarding
   const handleSettingsClose = () => {
     setSettingsTabToOpen(null);
@@ -838,23 +844,32 @@ function AppContent() {
     }
   };
 
+  // Memoize welcome modal stats to prevent unnecessary re-renders
+  const welcomeStats = useMemo(
+    () => ({
+      repoCount: repos.length,
+      worktreeCount: worktrees.length,
+      sessionCount: sessions.length,
+    }),
+    [repos.length, worktrees.length, sessions.length]
+  );
+
   // Render main app
   return (
     <>
       <SandboxBanner />
-      <WelcomeModal
-        open={welcomeModalOpen}
-        onClose={() => setWelcomeModalOpen(false)}
-        stats={{
-          repoCount: repos.length,
-          worktreeCount: worktrees.length,
-          sessionCount: sessions.length,
-        }}
-        onAddRepo={handleWelcomeAddRepo}
-        onCreateWorktree={handleWelcomeCreateWorktree}
-        onNewSession={handleWelcomeNewSession}
-        onDismiss={handleDismissOnboarding}
-      />
+      {welcomeModalOpen && (
+        <WelcomeModal
+          open={welcomeModalOpen}
+          onClose={() => setWelcomeModalOpen(false)}
+          stats={welcomeStats}
+          onAddRepo={handleWelcomeAddRepo}
+          onCreateWorktree={handleWelcomeCreateWorktree}
+          onNewSession={handleWelcomeNewSession}
+          onOpenApiKeys={handleWelcomeOpenApiKeys}
+          onDismiss={handleDismissOnboarding}
+        />
+      )}
       <AgorApp
         client={client}
         user={user}

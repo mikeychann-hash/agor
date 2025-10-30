@@ -89,7 +89,7 @@ export default class Init extends Command {
   private async listDirs(path: string): Promise<string[]> {
     try {
       const entries = await readdir(path, { withFileTypes: true });
-      return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+      return entries.filter(e => e.isDirectory()).map(e => e.name);
     } catch {
       return [];
     }
@@ -100,6 +100,15 @@ export default class Init extends Command {
    */
   private isCodespaces(): boolean {
     return process.env.CODESPACES === 'true' || process.env.CODESPACE_NAME !== undefined;
+  }
+
+  /**
+   * Detect if running in dev mode (from source) vs agor-live (npm package)
+   */
+  private async isDevMode(): Promise<boolean> {
+    // Check if we're in the monorepo by looking for packages/core
+    const corePackagePath = join(process.cwd(), 'packages', 'core');
+    return this.pathExists(corePackagePath);
   }
 
   async run(): Promise<void> {
@@ -335,6 +344,7 @@ export default class Init extends Command {
     const host = config.daemon?.host || 'localhost';
     const port = config.daemon?.port || 3030;
     const daemonRunning = await isDaemonRunning(`http://${host}:${port}`);
+    const isDevMode = await this.isDevMode();
 
     this.log(chalk.bold('Next steps:'));
     if (daemonRunning) {
@@ -342,14 +352,24 @@ export default class Init extends Command {
       this.log(chalk.yellow('   Please restart the daemon to apply changes:'));
       this.log('');
       this.log('   1. Stop the daemon (Ctrl+C in the daemon terminal)');
-      this.log('   2. Restart: cd apps/agor-daemon && pnpm dev');
-      this.log('   3. Or: pnpm agor daemon');
+      if (isDevMode) {
+        this.log('   2. Restart: cd apps/agor-daemon && pnpm dev');
+      } else {
+        this.log('   2. Restart: agor daemon start');
+      }
     } else {
-      this.log('   - Start the daemon: pnpm agor daemon');
-      this.log('   - Or in dev mode: cd apps/agor-daemon && pnpm dev');
+      if (isDevMode) {
+        this.log('   - Start the daemon: cd apps/agor-daemon && pnpm dev');
+      } else {
+        this.log('   - Start the daemon: agor daemon start');
+      }
     }
     this.log('');
-    this.log('   - View sessions: pnpm agor session list');
+    if (isDevMode) {
+      this.log('   - View sessions: pnpm agor session list');
+    } else {
+      this.log('   - View sessions: agor session list');
+    }
     this.log('');
   }
 

@@ -6,27 +6,41 @@
  */
 
 import 'dotenv/config';
-import { loadConfig, type UnknownJson } from '@agor/core/config';
 
 // Read package version once at startup (not on every /health request)
+// Use fs.readFile instead of import (works reliably with tsx and node)
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadConfig, type UnknownJson } from '@agor/core/config';
+
 let DAEMON_VERSION = '0.0.0';
 try {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+
   // Try to read from ../package.json (development) or ../../package.json (agor-live)
-  let pkgPath = new URL('../package.json', import.meta.url);
-  let pkg: { default?: { version?: string } } | undefined;
+  let pkgPath = join(__dirname, '../package.json');
+  let pkgData: string | undefined;
 
   try {
-    pkg = await import(pkgPath.href, { assert: { type: 'json' } });
+    pkgData = await readFile(pkgPath, 'utf-8');
   } catch {
     // If ../package.json doesn't exist, try ../../package.json (agor-live structure)
-    pkgPath = new URL('../../package.json', import.meta.url);
-    pkg = await import(pkgPath.href, { assert: { type: 'json' } });
+    pkgPath = join(__dirname, '../../package.json');
+    try {
+      pkgData = await readFile(pkgPath, 'utf-8');
+    } catch {
+      // Silently fail - will use default version
+    }
   }
 
-  DAEMON_VERSION = pkg?.default?.version || DAEMON_VERSION;
-} catch {
+  if (pkgData) {
+    const pkg = JSON.parse(pkgData);
+    DAEMON_VERSION = pkg.version || DAEMON_VERSION;
+  }
+} catch (err) {
   // Fallback if package.json can't be read
-  console.warn('⚠️  Could not read package.json for version - using fallback 0.0.0');
+  console.warn('⚠️  Could not read package.json for version - using fallback 0.0.0', err);
 }
 
 import {
@@ -67,7 +81,6 @@ function isPaginated<T>(result: T[] | Paginated<T>): result is Paginated<T> {
 }
 
 import { homedir } from 'node:os';
-import { join } from 'node:path';
 import cors from 'cors';
 import express from 'express';
 import swagger from 'feathers-swagger';
