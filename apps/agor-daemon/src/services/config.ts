@@ -78,10 +78,21 @@ export class ConfigService {
 
     // Only allow updating credentials section for security
     if (data.credentials) {
-      config.credentials = {
-        ...config.credentials,
-        ...data.credentials,
-      };
+      // Initialize credentials if not present
+      if (!config.credentials) {
+        config.credentials = {};
+      }
+
+      // Update or delete credential keys
+      for (const [key, value] of Object.entries(data.credentials)) {
+        if (value === undefined || value === null) {
+          // Explicitly delete the key when value is undefined or null
+          delete config.credentials[key as keyof typeof config.credentials];
+        } else {
+          // Set the key
+          (config.credentials as Record<string, string>)[key] = value;
+        }
+      }
     }
 
     await saveConfig(config);
