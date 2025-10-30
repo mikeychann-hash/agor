@@ -527,7 +527,7 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
           groupKey = `zone-${parent_id}`;
           const zone = boardObjects?.[`zone-${parent_id}`]; // Zone keys have 'zone-' prefix
           // Zone objects have a label field and color
-          groupLabel = zone && 'label' in zone ? `📍 ${zone.label}` : `📍 Zone`;
+          groupLabel = zone && 'label' in zone ? zone.label : 'Zone';
           groupColor = zone && 'color' in zone ? zone.color : undefined;
           groupType = 'zone';
         } else if (parent_type === 'worktree') {
@@ -668,7 +668,6 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
         style={{
           flex: 1,
           overflow: 'auto',
-          padding: '0 12px',
           backgroundColor: token.colorBgLayout,
         }}
       >
@@ -693,7 +692,7 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
             defaultActiveKey={Object.keys(groupedThreads)}
             style={{ border: 'none', backgroundColor: 'transparent' }}
             styles={{
-              content: { padding: '4px 0' }, // Reduced padding
+              content: { padding: '4px 0' }, // Reduced outer padding
             }}
             items={sortedGroupEntries.map(([groupKey, group]) => ({
               key: groupKey,
