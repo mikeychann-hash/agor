@@ -323,6 +323,7 @@ const SessionDrawer = ({
         permission_config: {
           ...session.permission_config,
           codex: {
+            ...session.permission_config?.codex,
             sandboxMode: sandbox,
             approvalPolicy: approval,
           },
