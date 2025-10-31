@@ -3,15 +3,19 @@ import { FloatButton } from 'antd';
 
 export interface NewSessionButtonProps {
   onClick?: () => void;
+  disabled?: boolean;
 }
 
-export const NewSessionButton: React.FC<NewSessionButtonProps> = ({ onClick }) => {
+export const NewSessionButton: React.FC<NewSessionButtonProps> = ({ onClick, disabled }) => {
+  const tooltip = disabled ? 'Create a repository first' : 'Create new worktree';
+
   return (
     <FloatButton
       icon={<PlusOutlined />}
       type="primary"
       onClick={onClick}
-      tooltip="Create new worktree"
+      disabled={disabled}
+      tooltip={tooltip}
       style={{ right: 24, top: 80 }}
     />
   );

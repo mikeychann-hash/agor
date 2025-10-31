@@ -463,7 +463,10 @@ export const App: React.FC<AppProps> = ({
               setSelectedCommentId(prev => (prev === commentId ? null : commentId));
             }}
           />
-          <NewSessionButton onClick={() => setNewWorktreeModalOpen(true)} />
+          <NewSessionButton
+            onClick={() => setNewWorktreeModalOpen(true)}
+            disabled={repos.length === 0}
+          />
         </div>
       </Content>
       {newSessionWorktreeId && (
