@@ -80,7 +80,7 @@ const ReactionDisplay: React.FC<{
   }
 
   return (
-    <>
+    <Space size={token.sizeUnit}>
       {Object.entries(grouped).map(([emoji, userIds]) => {
         const hasReacted = userIds.includes(currentUserId);
 
@@ -122,7 +122,7 @@ const ReactionDisplay: React.FC<{
           </Tooltip>
         );
       })}
-    </>
+    </Space>
   );
 };
 
@@ -211,14 +211,12 @@ const ReplyItem: React.FC<{
               {/* Reactions Row (always visible if reactions exist) */}
               {onToggleReaction && (reply.reactions || []).length > 0 && (
                 <div style={{ marginTop: 4 }}>
-                  <Space size="small">
-                    <ReactionDisplay
-                      reactions={reply.reactions || []}
-                      currentUserId={currentUserId}
-                      users={users}
-                      onToggle={emoji => onToggleReaction(reply.comment_id, emoji)}
-                    />
-                  </Space>
+                  <ReactionDisplay
+                    reactions={reply.reactions || []}
+                    currentUserId={currentUserId}
+                    users={users}
+                    onToggle={emoji => onToggleReaction(reply.comment_id, emoji)}
+                  />
                 </div>
               )}
             </>
@@ -344,14 +342,12 @@ const CommentThread: React.FC<{
               {/* Reactions Row (always visible if reactions exist) */}
               {onToggleReaction && (comment.reactions || []).length > 0 && (
                 <div style={{ marginTop: 4 }}>
-                  <Space size="small">
-                    <ReactionDisplay
-                      reactions={comment.reactions || []}
-                      currentUserId={currentUserId}
-                      users={users}
-                      onToggle={emoji => onToggleReaction(comment.comment_id, emoji)}
-                    />
-                  </Space>
+                  <ReactionDisplay
+                    reactions={comment.reactions || []}
+                    currentUserId={currentUserId}
+                    users={users}
+                    onToggle={emoji => onToggleReaction(comment.comment_id, emoji)}
+                  />
                 </div>
               )}
             </>
