@@ -24,7 +24,7 @@ import {
   type ResumedSessionData,
 } from '@google/gemini-cli-core';
 import type { Content, Part } from '@google/genai';
-import { resolveUserEnvironment } from '../../config';
+import { resolveApiKey, resolveUserEnvironment } from '../../config';
 import type { Database } from '../../db/client';
 import type { MCPServerRepository } from '../../db/repositories/mcp-servers';
 import type { MessagesRepository } from '../../db/repositories/messages';
@@ -451,7 +451,7 @@ export class GeminiPromptService {
       // Find session file matching pattern: session-*-{sessionId-first8}.json
       const sessionIdShort = sessionId.slice(0, 8);
       const files = await fs.readdir(chatsDir);
-      const sessionFile = files.find((f) => f.includes(sessionIdShort) && f.endsWith('.json'));
+      const sessionFile = files.find(f => f.includes(sessionIdShort) && f.endsWith('.json'));
 
       if (!sessionFile) {
         console.debug(`No session file found for ${sessionId} (looking for *${sessionIdShort}*)`);
@@ -747,6 +747,20 @@ export class GeminiPromptService {
 
     // CRITICAL: Initialize config first to set up tool registry, etc.
     await config.initialize();
+
+    // Resolve per-user API key with precedence: per-user > global config > env var
+    // This allows each user to have their own GEMINI_API_KEY
+    const userIdForApiKey = session.created_by as import('../../types').UserID | undefined;
+    const resolvedApiKey = await resolveApiKey('GEMINI_API_KEY', {
+      userId: userIdForApiKey,
+      db: this.db,
+    });
+    if (resolvedApiKey) {
+      process.env.GEMINI_API_KEY = resolvedApiKey;
+      console.log(
+        `🔑 [Gemini] Using per-user/global API key for ${userIdForApiKey?.substring(0, 8) ?? 'unknown user'}`
+      );
+    }
 
     // CRITICAL: Set up authentication (creates ContentGenerator and BaseLlmClient)
     // Use AuthType.USE_GEMINI for API key authentication

@@ -8,7 +8,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { Codex, type Thread, type ThreadItem } from '@openai/codex-sdk';
-import { getCredential, resolveUserEnvironment } from '../../config';
+import { getCredential, resolveApiKey, resolveUserEnvironment } from '../../config';
 import type { Database } from '../../db/client';
 import type { MessagesRepository } from '../../db/repositories/messages';
 import type { SessionMCPServerRepository } from '../../db/repositories/session-mcp-servers';
@@ -161,12 +161,12 @@ export class CodexPromptService {
 
     console.log(`📊 [Codex MCP] Found ${mcpServers.length} MCP server(s) for session`);
     if (mcpServers.length > 0) {
-      console.log(`   Servers: ${mcpServers.map((s) => `${s.name} (${s.transport})`).join(', ')}`);
+      console.log(`   Servers: ${mcpServers.map(s => `${s.name} (${s.transport})`).join(', ')}`);
     }
 
     // Filter MCP servers: Codex ONLY supports stdio transport (not HTTP/SSE)
-    const stdioServers = mcpServers.filter((s) => s.transport === 'stdio');
-    const unsupportedServers = mcpServers.filter((s) => s.transport !== 'stdio');
+    const stdioServers = mcpServers.filter(s => s.transport === 'stdio');
+    const unsupportedServers = mcpServers.filter(s => s.transport !== 'stdio');
 
     if (unsupportedServers.length > 0) {
       console.warn(
@@ -216,7 +216,7 @@ approval_policy = "${approvalPolicy}"
 ${mcpServersToml}`;
 
     // Create hash to detect changes (only stdio servers count)
-    const configHash = `${approvalPolicy}:${JSON.stringify(stdioServers.map((s) => s.mcp_server_id))}`;
+    const configHash = `${approvalPolicy}:${JSON.stringify(stdioServers.map(s => s.mcp_server_id))}`;
 
     // Skip if config hasn't changed (avoid unnecessary file I/O)
     if (this.lastMCPServersHash === configHash) {
@@ -246,7 +246,7 @@ ${mcpServersToml}`;
     this.reinitializeCodex();
     if (stdioServers.length > 0) {
       console.log(
-        `✅ [Codex MCP] Configured ${stdioServers.length} STDIO MCP server(s): ${stdioServers.map((s) => s.name).join(', ')}`
+        `✅ [Codex MCP] Configured ${stdioServers.length} STDIO MCP server(s): ${stdioServers.map(s => s.name).join(', ')}`
       );
     }
 
@@ -336,15 +336,29 @@ ${mcpServersToml}`;
     _taskId?: TaskID,
     permissionMode?: PermissionMode
   ): AsyncGenerator<CodexStreamEvent> {
-    // Recreate Codex client with fresh API key on every prompt
-    // This ensures hot-reload of credentials from Settings UI
-    this.refreshClient();
-
     // Get session to check for existing thread ID and working directory
     const session = await this.sessionsRepo.findById(sessionId);
     if (!session) {
       throw new Error(`Session ${sessionId} not found`);
     }
+
+    // Resolve per-user API key with precedence: per-user > global config > env var
+    // This allows each user to have their own OPENAI_API_KEY
+    const userIdForApiKey = session.created_by as import('../../types').UserID | undefined;
+    const resolvedApiKey = await resolveApiKey('OPENAI_API_KEY', {
+      userId: userIdForApiKey,
+      db: this.db,
+    });
+    if (resolvedApiKey) {
+      process.env.OPENAI_API_KEY = resolvedApiKey;
+      console.log(
+        `🔑 [Codex] Using per-user/global API key for ${userIdForApiKey?.substring(0, 8) ?? 'unknown user'}`
+      );
+    }
+
+    // Recreate Codex client with fresh API key on every prompt
+    // This ensures hot-reload of credentials from Settings UI (and picks up per-user key from process.env)
+    this.refreshClient();
 
     console.log(`🔍 [Codex] Starting prompt execution for session ${sessionId.substring(0, 8)}`);
     console.log(`   Permission mode: ${permissionMode || 'not specified (will use default)'}`);
@@ -643,10 +657,7 @@ ${mcpServersToml}`;
     taskId?: TaskID,
     permissionMode?: PermissionMode
   ): Promise<CodexPromptResult> {
-    // Recreate Codex client with fresh API key on every prompt
-    // This ensures hot-reload of credentials from Settings UI
-    this.refreshClient();
-
+    // Note: promptSessionStreaming will handle per-user API key resolution and refreshClient()
     const messages: CodexPromptResult['messages'] = [];
     let threadId = '';
     const inputTokens = 0;
