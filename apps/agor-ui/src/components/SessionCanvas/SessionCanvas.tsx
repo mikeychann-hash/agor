@@ -37,8 +37,17 @@ import WorktreeCard from '../WorktreeCard';
 import { CommentNode, ZoneNode } from './canvas/BoardObjectNodes';
 import { CursorNode } from './canvas/CursorNode';
 import { useBoardObjects } from './canvas/useBoardObjects';
-import { findIntersectingObjects } from './canvas/utils/collisionDetection';
+import {
+  findIntersectingObjects,
+  findZoneForNode,
+  type ZoneCollision,
+} from './canvas/utils/collisionDetection';
 import { getWorktreeParentInfo, getZoneParentInfo } from './canvas/utils/commentUtils';
+import {
+  calculateStoragePosition,
+  getDragAbsolutePosition,
+  type ParentInfo,
+} from './canvas/utils/coordinateTransforms';
 import { getAbsoluteNodePosition } from './canvas/utils/nodePositionUtils';
 import { ZoneTriggerModal } from './canvas/ZoneTriggerModal';
 
@@ -894,6 +903,7 @@ const SessionCanvas = ({
             position: { x: number; y: number };
             parentId?: string;
             parentType?: 'zone' | 'worktree';
+            newReactFlowParentId?: string;
           }> = [];
 
           // Find all current nodes to check types
@@ -909,28 +919,8 @@ const SessionCanvas = ({
               // Comment pin moved - extract comment_id from node id
               const commentId = nodeId.replace('comment-', '');
 
-              // Calculate absolute position from the drag event
-              // React Flow gives us relative position if node has a parent, absolute if not
-              let absolutePosition: { x: number; y: number };
-
-              if (draggedNode.parentId) {
-                // Node has a parent - position is relative, convert to absolute
-                const parentNode = currentNodes.find(n => n.id === draggedNode.parentId);
-                if (parentNode) {
-                  // Get the parent's absolute position (in case parent is also nested)
-                  const parentAbsPos = getAbsoluteNodePosition(parentNode, currentNodes);
-                  absolutePosition = {
-                    x: parentAbsPos.x + position.x,
-                    y: parentAbsPos.y + position.y,
-                  };
-                } else {
-                  // Fallback: parent not found, treat as absolute
-                  absolutePosition = { ...position };
-                }
-              } else {
-                // No parent - position is already absolute
-                absolutePosition = { ...position };
-              }
+              // Get absolute position (handles relative positions correctly)
+              const absolutePosition = getDragAbsolutePosition(draggedNode, currentNodes);
 
               // Find zones/worktrees that the comment intersects with at this absolute position
               const { worktreeNode, zoneNode } = findIntersectingObjects(
@@ -940,13 +930,16 @@ const SessionCanvas = ({
 
               let parentId: string | undefined;
               let parentType: 'zone' | 'worktree' | undefined;
+              let newReactFlowParentId: string | undefined;
 
               if (worktreeNode) {
                 parentId = worktreeNode.id; // Worktree ID has no prefix
                 parentType = 'worktree';
+                newReactFlowParentId = worktreeNode.id; // React Flow uses same ID
               } else if (zoneNode) {
-                parentId = zoneNode.id.replace('zone-', '');
+                parentId = zoneNode.id.replace('zone-', ''); // Database uses ID without prefix
                 parentType = 'zone';
+                newReactFlowParentId = zoneNode.id; // React Flow uses 'zone-{id}'
               }
 
               commentUpdates.push({
@@ -954,28 +947,34 @@ const SessionCanvas = ({
                 position: absolutePosition, // Always use absolute position for DB storage calculation
                 parentId,
                 parentType,
+                newReactFlowParentId, // Track new parentId for immediate React Flow update
               });
             } else if (draggedNode?.type === 'worktreeNode') {
-              // Check if worktree was dropped on a zone
-              const zoneIntersection = findIntersectingZone(position);
-              const droppedZoneId = zoneIntersection?.zoneId;
+              // Get absolute position for collision detection (handles relative positions correctly)
+              const absolutePosition = getDragAbsolutePosition(draggedNode, currentNodes);
+
+              // Check if worktree was dropped on a zone (using absolute coordinates)
+              const zoneCollision = findZoneForNode(draggedNode, currentNodes, board.objects);
+              const droppedZoneId = zoneCollision?.zoneId;
 
               // Check if worktree was already pinned to a zone before this drag
               const existingBoardObject = boardObjects.find(
                 bo => bo.worktree_id === nodeId && bo.board_id === board.board_id
               );
-              const wasPinned = !!existingBoardObject?.zone_id;
+              const oldZoneId = existingBoardObject?.zone_id;
 
-              // Calculate position to store
-              let positionToStore = position;
-              if (droppedZoneId && !wasPinned) {
-                // First-time pinning: convert absolute position to relative
-                const zoneData = zoneIntersection.zoneData;
-                positionToStore = {
-                  x: position.x - zoneData.x,
-                  y: position.y - zoneData.y,
-                };
-              }
+              // Calculate position to store based on new parent
+              const newParent: ParentInfo | null = droppedZoneId
+                ? {
+                    id: droppedZoneId,
+                    position: {
+                      x: zoneCollision!.zoneData.x,
+                      y: zoneCollision!.zoneData.y,
+                    },
+                  }
+                : null;
+
+              const positionToStore = calculateStoragePosition(absolutePosition, newParent);
 
               // Worktree moved - update board_object position (and zone_id if dropped on zone)
               worktreeUpdates.push({
@@ -984,11 +983,11 @@ const SessionCanvas = ({
                 zone_id: droppedZoneId,
               });
 
-              if (zoneIntersection) {
-                const { zoneId, zoneData } = zoneIntersection;
+              if (zoneCollision) {
+                const { zoneId, zoneData } = zoneCollision;
 
-                // Only trigger if zone assignment changed (not already pinned to this zone)
-                const zoneChanged = !wasPinned || existingBoardObject?.zone_id !== zoneId;
+                // Only trigger if zone assignment changed (moved to different zone or first-time pinning)
+                const zoneChanged = oldZoneId !== zoneId;
 
                 // Handle trigger if zone has one AND zone assignment changed
                 const trigger = zoneData.trigger;
@@ -1097,25 +1096,33 @@ const SessionCanvas = ({
           }
 
           // Update comment positions
-          for (const { comment_id, position, parentId, parentType } of commentUpdates) {
-            // Get the parent's position to calculate relative offset
+          for (const {
+            comment_id,
+            position,
+            parentId,
+            parentType,
+            newReactFlowParentId,
+          } of commentUpdates) {
             const commentData: Partial<BoardComment> = {};
 
             if (parentId && parentType === 'zone') {
-              // Comment pinned to zone - find zone node for CURRENT position
+              // Comment pinned to zone
               const zoneNode = currentNodes.find(n => n.id === `zone-${parentId}`);
               if (zoneNode) {
-                const zoneAbsPos = getAbsoluteNodePosition(zoneNode, currentNodes);
+                const zoneAbsPos = getNodeAbsolutePosition(zoneNode, currentNodes);
+                const relativePos = calculateStoragePosition(position, {
+                  id: parentId,
+                  position: zoneAbsPos,
+                });
                 commentData.position = {
                   relative: {
                     parent_id: parentId,
                     parent_type: 'zone',
-                    offset_x: position.x - zoneAbsPos.x,
-                    offset_y: position.y - zoneAbsPos.y,
+                    offset_x: relativePos.x,
+                    offset_y: relativePos.y,
                   },
                 };
               } else {
-                // Zone not found - fallback to absolute positioning
                 console.warn(
                   `⚠️ Zone ${parentId} not found for comment ${comment_id}, using absolute position`
                 );
@@ -1123,21 +1130,24 @@ const SessionCanvas = ({
                 commentData.worktree_id = undefined;
               }
             } else if (parentId && parentType === 'worktree') {
-              // Comment pinned to worktree - find worktree node for position
-              const worktreeNode = currentNodes.find(n => n.id === parentId); // No prefix for worktree IDs
+              // Comment pinned to worktree
+              const worktreeNode = currentNodes.find(n => n.id === parentId);
               if (worktreeNode) {
-                const worktreeAbsPos = getAbsoluteNodePosition(worktreeNode, currentNodes);
+                const worktreeAbsPos = getNodeAbsolutePosition(worktreeNode, currentNodes);
+                const relativePos = calculateStoragePosition(position, {
+                  id: parentId,
+                  position: worktreeAbsPos,
+                });
                 commentData.worktree_id = parentId as WorktreeID;
                 commentData.position = {
                   relative: {
                     parent_id: parentId,
                     parent_type: 'worktree',
-                    offset_x: position.x - worktreeAbsPos.x,
-                    offset_y: position.y - worktreeAbsPos.y,
+                    offset_x: relativePos.x,
+                    offset_y: relativePos.y,
                   },
                 };
               } else {
-                // Worktree not found - fallback to absolute positioning
                 console.warn(
                   `⚠️ Worktree ${parentId} not found for comment ${comment_id}, using absolute position`
                 );
@@ -1146,29 +1156,50 @@ const SessionCanvas = ({
               }
             } else {
               // Free-floating comment - use absolute positioning
-              commentData.position = {
-                absolute: position,
-              };
-              // Clear worktree_id if it was previously pinned
+              commentData.position = { absolute: position };
               commentData.worktree_id = undefined;
             }
 
             await client.service('board-comments').patch(comment_id, commentData);
+
+            // Immediately update React Flow node to reflect new parentId
+            // This prevents visual glitches while waiting for WebSocket sync
+            setNodes(prevNodes =>
+              prevNodes.map(n => {
+                if (n.id === `comment-${comment_id}`) {
+                  // Update parentId to match new parent (or undefined if free-floating)
+                  const updates: Partial<Node> = { parentId: newReactFlowParentId };
+
+                  // If parent changed, also update position
+                  if (newReactFlowParentId !== n.parentId) {
+                    if (newReactFlowParentId) {
+                      // Now has parent - convert to relative position
+                      const parent = prevNodes.find(p => p.id === newReactFlowParentId);
+                      if (parent) {
+                        const parentAbsPos = getNodeAbsolutePosition(parent, prevNodes);
+                        updates.position = calculateStoragePosition(position, {
+                          id: newReactFlowParentId,
+                          position: parentAbsPos,
+                        });
+                      }
+                    } else {
+                      // No parent - use absolute position
+                      updates.position = position;
+                    }
+                  }
+
+                  return { ...n, ...updates };
+                }
+                return n;
+              })
+            );
           }
         } catch (error) {
           console.error('Failed to persist layout:', error);
         }
       }, 500);
     },
-    [
-      board,
-      client,
-      batchUpdateObjectPositions,
-      nodes,
-      boardObjects,
-      findIntersectingZone,
-      worktrees,
-    ]
+    [board, client, batchUpdateObjectPositions, nodes, boardObjects, worktrees, setNodes]
   );
 
   // Cleanup debounce timers on unmount
