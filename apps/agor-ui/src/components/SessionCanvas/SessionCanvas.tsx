@@ -1703,7 +1703,7 @@ const SessionCanvas = ({
             backgroundColor: token.colorBgElevated,
             border: `1px solid ${token.colorBorder}`,
           }}
-          maskColor="rgba(0, 0, 0, 0.3)"
+          maskColor="rgba(0, 0, 0, 0.5)"
           maskStrokeColor={token.colorPrimary}
           maskStrokeWidth={2}
         />
