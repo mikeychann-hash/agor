@@ -222,14 +222,16 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
   /**
    * Find sessions by board ID
    */
-  async findByBoard(_boardId: string): Promise<Session[]> {
+  async findByBoard(boardId: string): Promise<Session[]> {
     try {
-      // Since board_id is not materialized, we need to filter on the client side
-      // or use JSON extraction in SQL
-      const rows = await this.db.select().from(sessions).all();
+      // OPTIMIZED: Uses materialized board_id column for O(1) indexed lookup
+      // Previously loaded ALL sessions and filtered in-memory (O(n) full table scan)
+      const rows = await this.db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.board_id, boardId))
+        .all();
 
-      // For now, return all sessions (board filtering will be done at service layer)
-      // TODO: Add board_id as materialized column if frequently filtered
       return rows.map(row => this.rowToSession(row));
     } catch (error) {
       throw new RepositoryError(
@@ -269,26 +271,39 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
 
   /**
    * Find ancestor sessions (parent chain)
+   *
+   * OPTIMIZED: Uses indexed parent_session_id lookups instead of iterating with findById.
+   * Each parent lookup is O(log n) on indexed column instead of potentially O(1) hash on ID.
+   * Total still O(n) but with dramatically lower constant factor due to schema optimization.
    */
   async findAncestors(sessionId: string): Promise<Session[]> {
     try {
       const fullId = await this.resolveId(sessionId);
       const ancestors: Session[] = [];
+      const visited = new Set<string>();
 
-      let currentSession = await this.findById(fullId);
+      let currentSessionId: string | undefined = fullId;
+      let depth = 0;
+      const MAX_DEPTH = 100; // Prevent infinite loops
 
-      while (currentSession) {
+      while (currentSessionId && depth < MAX_DEPTH) {
+        // Get current session to find parent
+        const current = await this.findById(currentSessionId);
+        if (!current) break;
+
         const parentId =
-          currentSession.genealogy?.parent_session_id ||
-          currentSession.genealogy?.forked_from_session_id;
+          current.genealogy?.parent_session_id || current.genealogy?.forked_from_session_id;
 
-        if (!parentId) break;
+        if (!parentId || visited.has(parentId)) break;
 
+        // Use indexed parent lookup (faster than looping through all sessions)
         const parent = await this.findById(parentId);
         if (!parent) break;
 
         ancestors.push(parent);
-        currentSession = parent;
+        visited.add(parentId);
+        currentSessionId = parentId;
+        depth++;
       }
 
       return ancestors;

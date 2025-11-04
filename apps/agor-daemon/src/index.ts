@@ -495,12 +495,16 @@ async function main() {
         });
 
         // Log connection metrics only when count changes (every 30 seconds)
-        setInterval(() => {
+        // FIX: Store interval handle to prevent memory leak
+        const metricsInterval = setInterval(() => {
           if (activeConnections !== lastLoggedCount) {
             console.log(`📊 Active WebSocket connections: ${activeConnections}`);
             lastLoggedCount = activeConnections;
           }
         }, 30000);
+
+        // Ensure interval is cleared on shutdown
+        process.once('beforeExit', () => clearInterval(metricsInterval));
       }
     )
   );
@@ -1161,7 +1165,8 @@ async function main() {
   };
 
   // Cleanup old rate limit entries every hour
-  setInterval(
+  // FIX: Store interval handle to prevent memory leak
+  const rateLimitCleanupInterval = setInterval(
     () => {
       const now = Date.now();
       for (const [key, record] of authAttempts.entries()) {
@@ -1172,6 +1177,9 @@ async function main() {
     },
     60 * 60 * 1000
   );
+
+  // Ensure cleanup interval is cleared on shutdown
+  process.once('beforeExit', () => clearInterval(rateLimitCleanupInterval));
 
   app.use('/authentication', authentication);
 
