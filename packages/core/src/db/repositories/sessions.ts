@@ -16,6 +16,7 @@ import {
   EntityNotFoundError,
   RepositoryError,
 } from './base';
+import { deepMerge } from './merge-utils';
 
 /**
  * Session repository implementation
@@ -300,61 +301,63 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
   }
 
   /**
-   * Update session by ID
+   * Update session by ID (atomic with database-level transaction)
+   *
+   * Uses a transaction to ensure read-merge-write is atomic, preventing race conditions
+   * when multiple updates happen concurrently (e.g., user changes settings while permission
+   * hook is saving allowedTools).
    */
   async update(id: string, updates: Partial<Session>): Promise<Session> {
     try {
       const fullId = await this.resolveId(id);
 
-      // Get current session to merge updates
-      const current = await this.findById(fullId);
-      if (!current) {
-        throw new EntityNotFoundError('Session', id);
-      }
+      // Use transaction to make read-merge-write atomic
+      // This prevents race conditions where another update happens between read and write
+      return await this.db.transaction(async tx => {
+        // STEP 1: Read current session (within transaction)
+        const currentRow = await tx
+          .select()
+          .from(sessions)
+          .where(eq(sessions.session_id, fullId))
+          .get();
 
-      // Merge updates into current session
-      const merged = {
-        ...current,
-        ...updates,
-      };
+        if (!currentRow) {
+          throw new EntityNotFoundError('Session', id);
+        }
 
-      // Debug logging for permission_config persistence
-      if (updates.permission_config) {
-        console.log(`📝 [SessionRepository] Merging permission_config update`);
-        console.log(
-          `   Before merge - current.permission_config: ${JSON.stringify(current.permission_config)}`
-        );
-        console.log(`   Update permission_config: ${JSON.stringify(updates.permission_config)}`);
-        console.log(
-          `   After merge - merged.permission_config: ${JSON.stringify(merged.permission_config)}`
-        );
-      }
+        const current = this.rowToSession(currentRow);
 
-      const insert = this.sessionToInsert(merged);
+        // STEP 2: Deep merge updates into current session (in memory)
+        // IMPORTANT: Receiver-side merge for nested objects (permission_config, model_config, etc.)
+        // This prevents partial updates from losing existing nested fields.
+        // Strategy: Objects = deep merge, Arrays = replace, Primitives = replace
+        const merged = deepMerge(current, updates);
 
-      // Debug: Log what we're about to write to DB
-      console.log(`🗄️  [SessionRepository] Writing to DB:`);
-      console.log(
-        `   insert.data.permission_config: ${JSON.stringify(insert.data.permission_config)}`
-      );
+        // Debug logging for permission_config persistence
+        if (updates.permission_config) {
+          console.log(`📝 [SessionRepository] Merging permission_config update (atomic tx)`);
+          console.log(`   Before merge: ${JSON.stringify(current.permission_config)}`);
+          console.log(`   Update: ${JSON.stringify(updates.permission_config)}`);
+          console.log(`   After merge: ${JSON.stringify(merged.permission_config)}`);
+        }
 
-      await this.db
-        .update(sessions)
-        .set({
-          status: insert.status,
-          updated_at: new Date(),
-          data: insert.data,
-        })
-        .where(eq(sessions.session_id, fullId));
+        const insert = this.sessionToInsert(merged);
 
-      console.log(`✅ [SessionRepository] DB update complete`);
+        // STEP 3: Write merged session (within same transaction)
+        await tx
+          .update(sessions)
+          .set({
+            status: insert.status,
+            updated_at: new Date(),
+            data: insert.data,
+          })
+          .where(eq(sessions.session_id, fullId));
 
-      const updated = await this.findById(fullId);
-      if (!updated) {
-        throw new RepositoryError('Failed to retrieve updated session');
-      }
+        console.log(`✅ [SessionRepository] Atomic update complete`);
 
-      return updated;
+        // Return merged session (no need to re-fetch, we have it in memory)
+        return merged;
+      });
     } catch (error) {
       if (error instanceof RepositoryError) throw error;
       if (error instanceof EntityNotFoundError) throw error;

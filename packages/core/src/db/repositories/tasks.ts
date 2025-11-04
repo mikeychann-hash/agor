@@ -16,6 +16,7 @@ import {
   EntityNotFoundError,
   RepositoryError,
 } from './base';
+import { deepMerge } from './merge-utils';
 
 /**
  * Task repository implementation
@@ -111,7 +112,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
       throw new AmbiguousIdError(
         'Task',
         id,
-        results.map((r) => formatShortId(r.task_id as UUID))
+        results.map(r => formatShortId(r.task_id as UUID))
       );
     }
 
@@ -152,21 +153,19 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
         return [];
       }
 
-      const inserts = taskList.map((task) => this.taskToInsert(task));
+      const inserts = taskList.map(task => this.taskToInsert(task));
 
       // Bulk insert all tasks
       await this.db.insert(tasks).values(inserts);
 
       // Retrieve all inserted tasks
-      const taskIds = inserts.map((t) => t.task_id);
+      const taskIds = inserts.map(t => t.task_id);
       const rows = await this.db
         .select()
         .from(tasks)
-        .where(
-          sql`${tasks.task_id} IN ${sql.raw(`(${taskIds.map((id) => `'${id}'`).join(',')})`)}`
-        );
+        .where(sql`${tasks.task_id} IN ${sql.raw(`(${taskIds.map(id => `'${id}'`).join(',')})`)}`);
 
-      return rows.map((row) => this.rowToTask(row));
+      return rows.map(row => this.rowToTask(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to bulk create tasks: ${error instanceof Error ? error.message : String(error)}`,
@@ -200,7 +199,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
   async findAll(): Promise<Task[]> {
     try {
       const rows = await this.db.select().from(tasks).all();
-      return rows.map((row) => this.rowToTask(row));
+      return rows.map(row => this.rowToTask(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find all tasks: ${error instanceof Error ? error.message : String(error)}`,
@@ -221,7 +220,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
         .orderBy(tasks.created_at)
         .all();
 
-      return rows.map((row) => this.rowToTask(row));
+      return rows.map(row => this.rowToTask(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find tasks by session: ${error instanceof Error ? error.message : String(error)}`,
@@ -241,7 +240,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
         .where(eq(tasks.status, TaskStatus.RUNNING))
         .all();
 
-      return rows.map((row) => this.rowToTask(row));
+      return rows.map(row => this.rowToTask(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find running tasks: ${error instanceof Error ? error.message : String(error)}`,
@@ -257,7 +256,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
     try {
       const rows = await this.db.select().from(tasks).where(eq(tasks.status, status)).all();
 
-      return rows.map((row) => this.rowToTask(row));
+      return rows.map(row => this.rowToTask(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find tasks by status: ${error instanceof Error ? error.message : String(error)}`,
@@ -267,36 +266,44 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
   }
 
   /**
-   * Update task by ID
+   * Update task by ID (atomic with database-level transaction)
+   *
+   * Uses a transaction to ensure read-merge-write is atomic, preventing race conditions
+   * when multiple updates happen concurrently (e.g., task status + message_range updates).
    */
   async update(id: string, updates: Partial<Task>): Promise<Task> {
     try {
       const fullId = await this.resolveId(id);
 
-      // Get current task to merge updates
-      const current = await this.findById(fullId);
-      if (!current) {
-        throw new EntityNotFoundError('Task', id);
-      }
+      // Use transaction to make read-merge-write atomic
+      return await this.db.transaction(async tx => {
+        // STEP 1: Read current task (within transaction)
+        const currentRow = await tx.select().from(tasks).where(eq(tasks.task_id, fullId)).get();
 
-      const merged = { ...current, ...updates };
-      const insert = this.taskToInsert(merged);
+        if (!currentRow) {
+          throw new EntityNotFoundError('Task', id);
+        }
 
-      await this.db
-        .update(tasks)
-        .set({
-          status: insert.status,
-          completed_at: insert.completed_at,
-          data: insert.data,
-        })
-        .where(eq(tasks.task_id, fullId));
+        const current = this.rowToTask(currentRow);
 
-      const updated = await this.findById(fullId);
-      if (!updated) {
-        throw new RepositoryError('Failed to retrieve updated task');
-      }
+        // STEP 2: Deep merge updates into current task (in memory)
+        // Preserves nested objects like message_range when doing partial updates
+        const merged = deepMerge(current, updates);
+        const insert = this.taskToInsert(merged);
 
-      return updated;
+        // STEP 3: Write merged task (within same transaction)
+        await tx
+          .update(tasks)
+          .set({
+            status: insert.status,
+            completed_at: insert.completed_at,
+            data: insert.data,
+          })
+          .where(eq(tasks.task_id, fullId));
+
+        // Return merged task (no need to re-fetch, we have it in memory)
+        return merged;
+      });
     } catch (error) {
       if (error instanceof RepositoryError) throw error;
       if (error instanceof EntityNotFoundError) throw error;

@@ -10,6 +10,7 @@ import { formatShortId, generateId } from '../../lib/ids';
 import type { Database } from '../client';
 import { type WorktreeInsert, type WorktreeRow, worktrees } from '../schema';
 import { AmbiguousIdError, type BaseRepository, EntityNotFoundError } from './base';
+import { deepMerge } from './merge-utils';
 
 /**
  * Worktree repository implementation
@@ -141,32 +142,54 @@ export class WorktreeRepository implements BaseRepository<Worktree, Partial<Work
   }
 
   /**
-   * Update worktree by ID
+   * Update worktree by ID (atomic with database-level transaction)
+   *
+   * Uses a transaction to ensure read-merge-write is atomic, preventing race conditions
+   * when multiple updates happen concurrently (e.g., schedule config + environment updates).
    */
   async update(id: string, updates: Partial<Worktree>): Promise<Worktree> {
+    // STEP 1: Read current worktree (outside transaction for short ID resolution)
     const existing = await this.findById(id);
     if (!existing) {
       throw new EntityNotFoundError('Worktree', id);
     }
 
-    const merged: Partial<Worktree> = {
-      ...existing,
-      ...updates,
-      worktree_id: existing.worktree_id,
-      repo_id: existing.repo_id,
-      created_at: existing.created_at,
-      updated_at: new Date().toISOString(),
-    };
+    // Use transaction to make read-merge-write atomic
+    return await this.db.transaction(async tx => {
+      // STEP 2: Re-read within transaction to ensure we have latest data
+      const currentRow = await tx
+        .select()
+        .from(worktrees)
+        .where(eq(worktrees.worktree_id, existing.worktree_id))
+        .get();
 
-    const insert = this.worktreeToInsert(merged);
+      if (!currentRow) {
+        throw new EntityNotFoundError('Worktree', id);
+      }
 
-    const [row] = await this.db
-      .update(worktrees)
-      .set(insert)
-      .where(eq(worktrees.worktree_id, existing.worktree_id))
-      .returning();
+      const current = this.rowToWorktree(currentRow);
 
-    return this.rowToWorktree(row);
+      // STEP 3: Deep merge updates into current worktree (in memory)
+      // Preserves nested objects like schedule, environment_instance, custom_context
+      const merged = deepMerge(current, {
+        ...updates,
+        worktree_id: current.worktree_id, // Never change ID
+        repo_id: current.repo_id, // Never change repo
+        created_at: current.created_at, // Never change created timestamp
+        updated_at: new Date().toISOString(), // Always update timestamp
+      });
+
+      const insert = this.worktreeToInsert(merged);
+
+      // STEP 4: Write merged worktree (within same transaction)
+      const [row] = await tx
+        .update(worktrees)
+        .set(insert)
+        .where(eq(worktrees.worktree_id, current.worktree_id))
+        .returning();
+
+      return this.rowToWorktree(row);
+    });
   }
 
   /**

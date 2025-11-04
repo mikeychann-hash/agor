@@ -15,6 +15,7 @@ import {
   EntityNotFoundError,
   RepositoryError,
 } from './base';
+import { deepMerge } from './merge-utils';
 
 /**
  * Repo repository implementation
@@ -94,7 +95,7 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
       throw new AmbiguousIdError(
         'Repo',
         id,
-        results.map((r) => formatShortId(r.repo_id as UUID))
+        results.map(r => formatShortId(r.repo_id as UUID))
       );
     }
 
@@ -166,7 +167,7 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
   async findAll(): Promise<Repo[]> {
     try {
       const rows = await this.db.select().from(repos).all();
-      return rows.map((row) => this.rowToRepo(row));
+      return rows.map(row => this.rowToRepo(row));
     } catch (error) {
       throw new RepositoryError(
         `Failed to find all repos: ${error instanceof Error ? error.message : String(error)}`,
@@ -185,36 +186,44 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
   }
 
   /**
-   * Update repo by ID
+   * Update repo by ID (atomic with database-level transaction)
+   *
+   * Uses a transaction to ensure read-merge-write is atomic, preventing race conditions
+   * when multiple updates happen concurrently (e.g., permission_config updates).
    */
   async update(id: string, updates: Partial<Repo>): Promise<Repo> {
     try {
       const fullId = await this.resolveId(id);
 
-      // Get current repo to merge updates
-      const current = await this.findById(fullId);
-      if (!current) {
-        throw new EntityNotFoundError('Repo', id);
-      }
+      // Use transaction to make read-merge-write atomic
+      return await this.db.transaction(async tx => {
+        // STEP 1: Read current repo (within transaction)
+        const currentRow = await tx.select().from(repos).where(eq(repos.repo_id, fullId)).get();
 
-      const merged = { ...current, ...updates };
-      const insert = this.repoToInsert(merged);
+        if (!currentRow) {
+          throw new EntityNotFoundError('Repo', id);
+        }
 
-      await this.db
-        .update(repos)
-        .set({
-          slug: insert.slug,
-          updated_at: new Date(),
-          data: insert.data,
-        })
-        .where(eq(repos.repo_id, fullId));
+        const current = this.rowToRepo(currentRow);
 
-      const updated = await this.findById(fullId);
-      if (!updated) {
-        throw new RepositoryError('Failed to retrieve updated repo');
-      }
+        // STEP 2: Deep merge updates into current repo (in memory)
+        // Preserves nested objects like permission_config when doing partial updates
+        const merged = deepMerge(current, updates);
+        const insert = this.repoToInsert(merged);
 
-      return updated;
+        // STEP 3: Write merged repo (within same transaction)
+        await tx
+          .update(repos)
+          .set({
+            slug: insert.slug,
+            updated_at: new Date(),
+            data: insert.data,
+          })
+          .where(eq(repos.repo_id, fullId));
+
+        // Return merged repo (no need to re-fetch, we have it in memory)
+        return merged;
+      });
     } catch (error) {
       if (error instanceof RepositoryError) throw error;
       if (error instanceof EntityNotFoundError) throw error;
@@ -267,7 +276,10 @@ export class RepoRepository implements BaseRepository<Repo, Partial<Repo>> {
    */
   async count(): Promise<number> {
     try {
-      const result = await this.db.select({ count: sql<number>`count(*)` }).from(repos).get();
+      const result = await this.db
+        .select({ count: sql<number>`count(*)` })
+        .from(repos)
+        .get();
 
       return result?.count ?? 0;
     } catch (error) {
