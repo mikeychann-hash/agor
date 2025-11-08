@@ -148,9 +148,9 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
 
       try {
         // First, check if a board_object already exists
-        const existingObject = (await boardObjectsService.findByWorktreeId(id)) as
-          | { object_id: string }
-          | null;
+        const existingObject = (await boardObjectsService.findByWorktreeId(id)) as {
+          object_id: string;
+        } | null;
 
         if (existingObject) {
           // Board object exists - delete it first
@@ -360,11 +360,10 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
    */
   async startEnvironment(id: WorktreeID, params?: WorktreeParams): Promise<Worktree> {
     const worktree = await this.get(id, params);
-    const repo = (await this.app.service('repos').get(worktree.repo_id)) as Repo;
 
-    // Validate environment config exists
-    if (!repo.environment_config?.up_command) {
-      throw new Error('No environment configuration found for this repository');
+    // Validate static start command exists
+    if (!worktree.start_command) {
+      throw new Error('No start command configured for this worktree');
     }
 
     // Check if already running
@@ -383,11 +382,8 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
     );
 
     try {
-      // Build template context
-      const templateContext = this.buildTemplateContext(worktree, repo);
-
-      // Render command
-      const command = renderTemplate(repo.environment_config.up_command, templateContext);
+      // Use static start_command (initialized from template at worktree creation)
+      const command = worktree.start_command;
 
       console.log(`🚀 Starting environment for worktree ${worktree.name}: ${command}`);
 
@@ -423,11 +419,10 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
         childProcess.on('error', reject);
       });
 
-      // Compute access URLs from app_url_template if available
+      // Use static app_url (initialized from template at worktree creation)
       let access_urls: Array<{ name: string; url: string }> | undefined;
-      if (repo.environment_config.app_url_template) {
-        const url = renderTemplate(repo.environment_config.app_url_template, templateContext);
-        access_urls = [{ name: 'App', url }];
+      if (worktree.app_url) {
+        access_urls = [{ name: 'App', url: worktree.app_url }];
       }
 
       // Keep status as 'starting' - let health checks transition to 'running'
@@ -465,7 +460,6 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
    */
   async stopEnvironment(id: WorktreeID, params?: WorktreeParams): Promise<Worktree> {
     const worktree = await this.get(id, params);
-    const repo = (await this.app.service('repos').get(worktree.repo_id)) as Repo;
 
     // Set status to 'stopping'
     await this.updateEnvironment(
@@ -477,13 +471,10 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
     );
 
     try {
-      // Check if we have a down command
-      if (repo.environment_config?.down_command) {
-        // Build template context
-        const templateContext = this.buildTemplateContext(worktree, repo);
-
-        // Render command
-        const command = renderTemplate(repo.environment_config.down_command, templateContext);
+      // Check if we have a static stop command
+      if (worktree.stop_command) {
+        // Use static stop_command (initialized from template at worktree creation)
+        const command = worktree.stop_command;
 
         console.log(`🛑 Stopping environment for worktree ${worktree.name}: ${command}`);
 
@@ -587,8 +578,8 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
       return worktree;
     }
 
-    // Check if we have a health check URL
-    if (!repo.environment_config?.health_check?.url_template) {
+    // Check if we have a health check URL (static field, not template)
+    if (!worktree.health_check_url) {
       // No health check configured - stay in 'starting' forever (manual intervention required)
       // Don't auto-transition to 'running' without health check confirmation
       const managedProcess = this.processes.get(id);
@@ -607,12 +598,8 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
       );
     }
 
-    // Build template context and render health check URL
-    const templateContext = this.buildTemplateContext(worktree, repo);
-    const healthUrl = renderTemplate(
-      repo.environment_config.health_check.url_template,
-      templateContext
-    );
+    // Use static health_check_url (initialized from template at worktree creation)
+    const healthUrl = worktree.health_check_url;
 
     // Track previous health status to detect changes
     const previousHealthStatus = worktree.environment_instance?.last_health_check?.status;
@@ -715,10 +702,9 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
     truncated?: boolean;
   }> {
     const worktree = await this.get(id, params);
-    const repo = (await this.app.service('repos').get(worktree.repo_id)) as Repo;
 
-    // Check if logs command is configured
-    if (!repo.environment_config?.logs_command) {
+    // Check if static logs command is configured
+    if (!worktree.logs_command) {
       return {
         logs: '',
         timestamp: new Date().toISOString(),
@@ -727,9 +713,8 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
     }
 
     try {
-      // Build template context and render command
-      const templateContext = this.buildTemplateContext(worktree, repo);
-      const command = renderTemplate(repo.environment_config.logs_command, templateContext);
+      // Use static logs_command (initialized from template at worktree creation)
+      const command = worktree.logs_command;
 
       console.log(`📋 Fetching logs for worktree ${worktree.name}: ${command}`);
 
@@ -821,43 +806,6 @@ export class WorktreesService extends DrizzleService<Worktree, Partial<Worktree>
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
-  }
-
-  /**
-   * Custom method: Recompute access URLs for a running environment
-   *
-   * Called when repo environment_config is updated to refresh URLs without restart
-   */
-  async recomputeAccessUrls(id: WorktreeID, params?: WorktreeParams): Promise<Worktree> {
-    const worktree = await this.get(id, params);
-    const repo = (await this.app.service('repos').get(worktree.repo_id)) as Repo;
-
-    // Only recompute if environment is running or starting
-    const status = worktree.environment_instance?.status;
-    if (status !== 'running' && status !== 'starting') {
-      console.log(`   Skipping ${worktree.name} - not active (status: ${status})`);
-      return worktree;
-    }
-
-    // Compute access URLs from app_url_template
-    let access_urls: Array<{ name: string; url: string }> | undefined;
-    if (repo.environment_config?.app_url_template) {
-      const templateContext = this.buildTemplateContext(worktree, repo);
-      const url = renderTemplate(repo.environment_config.app_url_template, templateContext);
-      access_urls = [{ name: 'App', url }];
-      console.log(`   Recomputed access URL for ${worktree.name}: ${url}`);
-    } else {
-      console.log(`   Cleared access URL for ${worktree.name} - no template configured`);
-    }
-
-    // Update environment with new URLs (this will broadcast via WebSocket if changed)
-    return await this.updateEnvironment(
-      id,
-      {
-        access_urls,
-      },
-      params
-    );
   }
 
   /**
