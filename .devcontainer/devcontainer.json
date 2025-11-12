@@ -1,6 +1,6 @@
 {
   "name": "Agor Playground (Recommended - Fast npm install)",
-  // Cache bust: 2025-11-09-v15 - Bump to agor-live v0.7.7
+  // Cache bust: 2025-11-11-v16 - Bump to agor-live v0.7.8
   "build": {
     "dockerfile": "playground/Dockerfile",
     "context": ".."
