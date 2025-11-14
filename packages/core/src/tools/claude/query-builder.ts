@@ -5,7 +5,6 @@
  * Manages MCP server configuration, resume/fork/spawn logic, and working directory validation.
  */
 
-import { execSync } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk/sdk';
@@ -20,42 +19,12 @@ import type { WorktreeRepository } from '../../db/repositories/worktrees';
 import { validateDirectory } from '../../lib/validation';
 import type { PermissionService } from '../../permissions/permission-service';
 import type { MCPServersConfig, SessionID, TaskID } from '../../types';
+import { getClaudeCodePath } from '../../utils/executable-finder';
 import type { MessagesService, SessionsService, TasksService } from './claude-tool';
 import { DEFAULT_CLAUDE_MODEL } from './models';
 import { createCanUseToolCallback } from './permissions/permission-hooks';
 import { generateSessionContext } from './session-context';
 import { detectThinkingLevel, resolveThinkingBudget } from './thinking-detector';
-
-/**
- * Get path to Claude Code executable
- * Uses `which claude` to find it in PATH
- */
-function getClaudeCodePath(): string {
-  try {
-    const path = execSync('which claude', { encoding: 'utf-8' }).trim();
-    if (path) return path;
-  } catch {
-    // which failed, try common paths
-  }
-
-  // Fallback to common installation paths
-  const commonPaths = [
-    '/usr/local/bin/claude',
-    '/opt/homebrew/bin/claude',
-    `${process.env.HOME}/.nvm/versions/node/v20.19.4/bin/claude`,
-  ];
-
-  for (const path of commonPaths) {
-    try {
-      execSync(`test -x "${path}"`, { encoding: 'utf-8' });
-      return path;
-    } catch {}
-  }
-
-  throw new Error(
-    'Claude Code executable not found. Install with: npm install -g @anthropic-ai/claude-code'
-  );
-}
 
 /**
  * Log prompt start with context

@@ -30,9 +30,10 @@ try {
     }
   }
 
-  // Create symlink
-  symlinkSync(coreTarget, coreSymlink, 'dir');
-  console.log(chalk.green('✓ Created @agor/core symlink for package resolution'));
+  // Create symlink (use junction on Windows for compatibility - doesn't require admin rights)
+  const symlinkType = process.platform === 'win32' ? 'junction' : 'dir';
+  symlinkSync(coreTarget, coreSymlink, symlinkType);
+  console.log(chalk.green(`✓ Created @agor/core ${symlinkType} for package resolution`));
 } catch (error) {
   // Don't fail the install if symlink creation fails
   console.warn(chalk.yellow('⚠️  Could not create @agor/core symlink:'), error.message);

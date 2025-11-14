@@ -3,6 +3,7 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
+import { getDefaultShell, getShellInteractiveArgs } from '@agor/core/utils/platform-constants';
 
 export interface SpawnShellOptions {
   /**
@@ -30,8 +31,8 @@ export interface SpawnShellOptions {
  * Spawn an interactive shell in the specified directory.
  *
  * This will:
- * - Use the user's preferred shell ($SHELL)
- * - Run in interactive mode (loads .zshrc, .bashrc, etc.)
+ * - Use the user's preferred shell ($SHELL on Unix, PowerShell/cmd on Windows)
+ * - Run in interactive mode on Unix (loads .zshrc, .bashrc, etc.)
  * - Inherit stdio for full interactivity
  * - Preserve all environment variables
  *
@@ -41,12 +42,13 @@ export interface SpawnShellOptions {
 export function spawnInteractiveShell(options: SpawnShellOptions): ChildProcess {
   const { cwd, env = {}, onExit, onError } = options;
 
-  // Get user's preferred shell
-  const shell = process.env.SHELL || '/bin/bash';
+  // Get user's preferred shell (cross-platform)
+  const shell = getDefaultShell();
+  const shellArgs = getShellInteractiveArgs(shell);
 
-  // Spawn shell in interactive mode (-i flag)
-  // This ensures it loads the user's config files (.zshrc, .bashrc, etc.)
-  const shellProcess = spawn(shell, ['-i'], {
+  // Spawn shell in interactive mode (Unix) or default mode (Windows)
+  // This ensures it loads the user's config files on Unix (.zshrc, .bashrc, etc.)
+  const shellProcess = spawn(shell, shellArgs, {
     cwd,
     stdio: 'inherit',
     env: {

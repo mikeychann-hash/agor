@@ -10,29 +10,8 @@ import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { simpleGit } from 'simple-git';
-
-/**
- * Get git binary path
- *
- * Searches common locations for git executable.
- * Needed because daemon may not have git in PATH.
- */
-function getGitBinary(): string | undefined {
-  const commonPaths = [
-    '/opt/homebrew/bin/git', // Homebrew on Apple Silicon
-    '/usr/local/bin/git', // Homebrew on Intel
-    '/usr/bin/git', // System git (Docker and Linux)
-  ];
-
-  for (const path of commonPaths) {
-    if (existsSync(path)) {
-      return path;
-    }
-  }
-
-  // Fall back to 'git' in PATH
-  return undefined;
-}
+import { getGitBinary } from '../utils/executable-finder';
+import { NULL_DEVICE } from '../utils/platform-constants';
 
 /**
  * Create a configured simple-git instance with user environment variables.
@@ -41,7 +20,7 @@ function createGit(baseDir?: string, env?: Record<string, string>) {
   const gitBinary = getGitBinary();
 
   const config = [
-    'core.sshCommand=ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null',
+    `core.sshCommand=ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=${NULL_DEVICE}`,
   ];
 
   // Configure credential helper for GitHub tokens

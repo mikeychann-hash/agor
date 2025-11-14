@@ -10,7 +10,6 @@
  * - ❌ Session creation (handled via live execution)
  */
 
-import { execSync } from 'node:child_process';
 import type { Database } from '../../db/client';
 import type { MCPServerRepository } from '../../db/repositories/mcp-servers';
 import type { MessagesRepository } from '../../db/repositories/messages';
@@ -36,6 +35,7 @@ import type {
   NormalizedSdkResponse,
   RawSdkResponse,
 } from '../../types/sdk-response';
+import { getGeminiPath } from '../../utils/executable-finder';
 import { DEFAULT_GEMINI_MODEL, getGeminiContextWindowLimit } from './models';
 import { GeminiPromptService } from './prompt-service';
 
@@ -93,13 +93,8 @@ export class GeminiTool implements ITool {
   }
 
   async checkInstalled(): Promise<boolean> {
-    try {
-      // Check if gemini CLI is installed
-      execSync('which gemini', { encoding: 'utf-8' });
-      return true;
-    } catch {
-      return false;
-    }
+    // Check if gemini CLI is installed using cross-platform executable finder
+    return getGeminiPath() !== null;
   }
 
   /**
