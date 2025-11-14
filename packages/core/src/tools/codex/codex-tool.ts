@@ -7,7 +7,6 @@
  * - ❌ Session creation (handled via live execution)
  */
 
-import { execSync } from 'node:child_process';
 import type { Database } from '../../db/client';
 import type { MessagesRepository } from '../../db/repositories/messages';
 import type { SessionMCPServerRepository } from '../../db/repositories/session-mcp-servers';
@@ -30,6 +29,7 @@ import type {
   NormalizedSdkResponse,
   RawSdkResponse,
 } from '../../types/sdk-response';
+import { getCodexPath } from '../../utils/executable-finder';
 import type { ITool, StreamingCallbacks, ToolCapabilities } from '../base';
 import type { MessagesService, TasksService } from '../claude/claude-tool';
 import { DEFAULT_CODEX_MODEL, getCodexContextWindowLimit } from './models';
@@ -94,13 +94,8 @@ export class CodexTool implements ITool {
   }
 
   async checkInstalled(): Promise<boolean> {
-    try {
-      // Check if codex CLI is installed
-      execSync('which codex', { encoding: 'utf-8' });
-      return true;
-    } catch {
-      return false;
-    }
+    // Check if codex CLI is installed using cross-platform executable finder
+    return getCodexPath() !== null;
   }
 
   /**

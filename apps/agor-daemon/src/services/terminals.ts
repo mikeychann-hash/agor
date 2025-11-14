@@ -18,6 +18,8 @@ import { resolveUserEnvironment } from '@agor/core/config';
 import { formatShortId, WorktreeRepository, type Database } from '@agor/core/db';
 import type { Application } from '@agor/core/feathers';
 import type { UserID, WorktreeID } from '@agor/core/types';
+import { findExecutable } from '@agor/core/utils/executable-finder';
+import { isWindows } from '@agor/core/utils/platform-constants';
 import type { IPty } from '@homebridge/node-pty-prebuilt-multiarch';
 import * as pty from '@homebridge/node-pty-prebuilt-multiarch';
 
@@ -47,21 +49,27 @@ interface ResizeTerminalData {
 }
 
 /**
- * Check if tmux is installed
+ * Check if tmux is installed (Unix-only)
  */
 function isTmuxAvailable(): boolean {
-  try {
-    execSync('which tmux', { stdio: 'pipe' });
-    return true;
-  } catch {
+  // tmux is not available on Windows
+  if (isWindows) {
     return false;
   }
+
+  // Use cross-platform executable finder
+  return findExecutable('tmux') !== null;
 }
 
 /**
- * Check if a tmux session exists
+ * Check if a tmux session exists (Unix-only)
  */
 function tmuxSessionExists(sessionName: string): boolean {
+  // tmux is Unix-only
+  if (isWindows) {
+    return false;
+  }
+
   try {
     execSync(`tmux has-session -t "${sessionName}" 2>/dev/null`, { stdio: 'pipe' });
     return true;
@@ -71,10 +79,15 @@ function tmuxSessionExists(sessionName: string): boolean {
 }
 
 /**
- * Find a tmux window by name in a session
+ * Find a tmux window by name in a session (Unix-only)
  * Returns the window index if found, null otherwise
  */
 function findTmuxWindow(sessionName: string, windowName: string): number | null {
+  // tmux is Unix-only
+  if (isWindows) {
+    return null;
+  }
+
   try {
     // List windows in session and grep for the window name
     const output = execSync(

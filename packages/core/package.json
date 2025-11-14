@@ -130,6 +130,16 @@
       "import": "./dist/utils/logger.js",
       "require": "./dist/utils/logger.cjs"
     },
+    "./utils/platform-constants": {
+      "types": "./dist/utils/platform-constants.d.ts",
+      "import": "./dist/utils/platform-constants.js",
+      "require": "./dist/utils/platform-constants.cjs"
+    },
+    "./utils/executable-finder": {
+      "types": "./dist/utils/executable-finder.d.ts",
+      "import": "./dist/utils/executable-finder.js",
+      "require": "./dist/utils/executable-finder.cjs"
+    },
     "./seed": {
       "types": "./dist/seed/index.d.ts",
       "import": "./dist/seed/index.js",
@@ -176,7 +186,8 @@
     "js-yaml": "^4.1.0",
     "simple-git": "^3.28.0",
     "socket.io-client": "^4.8.1",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "which-pm-runs": "^1.1.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

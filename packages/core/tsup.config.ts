@@ -28,6 +28,8 @@ export default defineConfig({
     'utils/context-window': 'src/utils/context-window.ts', // Context window calculation utilities
     'utils/path': 'src/utils/path.ts', // Path expansion utilities (tilde to home directory)
     'utils/logger': 'src/utils/logger.ts', // Console monkey-patch for log level filtering
+    'utils/platform-constants': 'src/utils/platform-constants.ts', // Cross-platform constants (Windows/Unix)
+    'utils/executable-finder': 'src/utils/executable-finder.ts', // Cross-platform executable detection
     'seed/index': 'src/seed/index.ts', // Development database seeding
   },
   format: ['cjs', 'esm'],
