@@ -50,15 +50,27 @@ agor/
 ├── apps/
 │   ├── agor-daemon/         # FeathersJS backend (REST + WebSocket)
 │   ├── agor-cli/            # CLI tool (oclif-based)
-│   └── agor-ui/             # React UI (Ant Design + React Flow)
+│   ├── agor-ui/             # React UI (Ant Design + React Flow)
+│   └── agor-docs/           # Nextra documentation site
 │
 ├── packages/
-│   └── core/                # Shared @agor/core package
-│       ├── types/           # TypeScript types (Session, Task, Worktree, etc.)
-│       ├── db/              # Drizzle ORM + repositories + schema
-│       ├── git/             # Git utils (simple-git only, no subprocess)
-│       ├── claude/          # Claude Code session loading utilities
-│       └── api/             # FeathersJS client utilities
+│   ├── core/                # Shared @agor/core package
+│   │   ├── api/             # FeathersJS client utilities
+│   │   ├── claude/          # Claude-specific utilities (message conversion, SDK integration)
+│   │   ├── config/          # Configuration management (~/.agor/config.yaml)
+│   │   ├── db/              # Drizzle ORM + repositories + schema
+│   │   ├── environment/     # Environment instance management (Docker, process control)
+│   │   ├── feathers/        # FeathersJS utilities (client creation, hooks)
+│   │   ├── git/             # Git utils (simple-git only, no subprocess)
+│   │   ├── lib/             # Shared libraries (crypto, validation, etc.)
+│   │   ├── permissions/     # Permission system (modes, approval workflows)
+│   │   ├── seed/            # Database seeding for development
+│   │   ├── templates/       # Handlebars templates for zones and reports
+│   │   ├── tools/           # Agent integrations (Claude, Codex, Gemini, OpenCode)
+│   │   ├── types/           # TypeScript types (Session, Task, Worktree, etc.)
+│   │   └── utils/           # Utility functions (ID generation, short IDs, etc.)
+│   │
+│   └── agor-live/           # Distribution package (npx agor-live)
 │
 ├── context/                 # 📚 Architecture documentation (READ THIS!)
 │   ├── concepts/            # Core design docs
@@ -66,6 +78,47 @@ agor/
 │
 ├── README.md               # Product vision and overview
 └── PROJECT.md              # Launch checklist
+```
+
+---
+
+## Distribution Package
+
+**agor-live** is the npm distribution package that bundles the entire Agor stack for easy installation.
+
+**Location:** `packages/agor-live/`
+
+**Installation:**
+
+```bash
+# Global installation
+npm install -g agor-live
+
+# Or run directly with npx
+npx agor-live
+```
+
+**What it includes:**
+- `agor` CLI (symlink to `apps/agor-cli`)
+- `agor-daemon` server (symlink to `apps/agor-daemon`)
+- All dependencies bundled
+
+**Why a separate package?**
+- **Development:** Monorepo structure with apps/ and packages/
+- **Distribution:** Single package for end users
+- **Simplicity:** One command to install everything
+
+**Usage:**
+
+```bash
+# After installation, start Agor
+agor init              # Initialize config
+agor daemon start      # Start background daemon
+agor open              # Open UI in browser
+
+# Or use npx without installation
+npx agor-live init
+npx agor-live open
 ```
 
 ---
@@ -376,8 +429,33 @@ cd apps/agor-daemon && pnpm dev
 
 - `packages/core/src/types/` - Canonical type definitions
 - `packages/core/src/db/schema.ts` - Database schema
-- `apps/agor-daemon/src/services/` - FeathersJS services
 - `context/concepts/` - Architecture documentation
+
+**Services:**
+
+- `apps/agor-daemon/src/services/` - All FeathersJS services (18 total)
+
+  **Core Primitives:**
+  - `sessions.ts` - Session CRUD, fork, spawn, prompt execution, genealogy
+  - `tasks.ts` - Task CRUD, completion tracking, git state
+  - `messages.ts` - Message storage, streaming, content types
+  - `boards.ts` - Board CRUD, layout management
+  - `repos.ts` - Repository management, git operations, cloning
+  - `worktrees.ts` - Worktree CRUD, environment control, start/stop
+
+  **Supporting Services:**
+  - `board-objects.ts` - Board layout (position tracking, zone pinning)
+  - `board-comments.ts` - Spatial comments, reactions, threads
+  - `users.ts` - User management, authentication
+  - `mcp-servers.ts` - MCP server configuration (stdio, http, sse)
+  - `session-mcp-servers.ts` - Session-MCP server associations
+  - `terminals.ts` - WebSocket terminal proxy (xterm.js + node-pty)
+  - `context.ts` - Context file browser (CLAUDE.md, context/*.md)
+  - `files.ts` - File operations (read, write, list)
+  - `config.ts` - Configuration management (~/.agor/config.yaml)
+  - `health-monitor.ts` - Real-time diagnostics and health checks
+  - `scheduler.ts` - Worktree-scoped cron scheduler (autonomous sessions)
+  - `leaderboard.ts` - User activity tracking and scoring
 
 ---
 
