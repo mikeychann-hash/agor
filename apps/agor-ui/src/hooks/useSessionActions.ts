@@ -62,7 +62,7 @@ export function useSessionActions(
         permissionConfig.codex = {
           sandboxMode: config.codexSandboxMode || 'workspace-write',
           approvalPolicy: config.codexApprovalPolicy || 'on-request',
-          networkAccess: config.codexNetworkAccess ?? false,
+          networkAccess: config.codexNetworkAccess ?? true, // Default to true (required for npm/pip)
         };
       }
 

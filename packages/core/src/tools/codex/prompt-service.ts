@@ -413,11 +413,29 @@ ${networkAccessToml}${mcpServersToml}`;
     // 2. approval_policy (via config.toml) - controls WHETHER agent asks before executing
     // 3. network_access (via config.toml) - controls network connectivity
 
+    // Check for developer mode override via environment variable
+    // Dev mode enables full permissions for local development (no approval prompts, network enabled)
+    const devMode = process.env.AGOR_CODEX_DEV_MODE === 'true' ||
+                    process.env.AGOR_FULL_DEV_PERMISSIONS === 'true';
+
+    if (devMode) {
+      console.log('🔧 [Codex] Developer mode ENABLED - full dev permissions active');
+      console.log('   - approvalPolicy: never (auto-approve all)');
+      console.log('   - networkAccess: true (npm/pip enabled)');
+      console.log('   - sandboxMode: workspace-write (safe file edits)');
+    }
+
     // Read from session.permission_config.codex (dual config), fallback to defaults
     const codexConfig = session.permission_config?.codex;
-    const sandboxMode = codexConfig?.sandboxMode || 'workspace-write';
-    const approvalPolicy = codexConfig?.approvalPolicy || 'on-request';
-    const networkAccess = codexConfig?.networkAccess ?? false; // Default: disabled
+    const sandboxMode = devMode
+      ? 'workspace-write'
+      : (codexConfig?.sandboxMode || 'workspace-write');
+    const approvalPolicy = devMode
+      ? 'never'  // Auto-approve all in dev mode (no interruptions)
+      : (codexConfig?.approvalPolicy || 'on-request');
+    const networkAccess = devMode
+      ? true     // Enable network in dev mode (required for npm/pip/curl)
+      : (codexConfig?.networkAccess ?? true); // Default to true (changed from false)
 
     console.log(
       `   Using Codex permissions: sandboxMode=${sandboxMode}, approvalPolicy=${approvalPolicy}, networkAccess=${networkAccess}`
