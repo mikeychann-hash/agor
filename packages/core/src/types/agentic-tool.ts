@@ -82,10 +82,18 @@ export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-ac
 /**
  * Codex approval policy - controls WHETHER agent asks before executing
  *
- * - untrusted: Ask for every operation
- * - on-request: Model decides when to ask (recommended)
- * - on-failure: Only ask when operations fail
- * - never: Auto-approve everything
+ * - untrusted: Ask for every operation (not recommended for local dev)
+ * - on-request: Model decides when to ask (balanced, default)
+ * - on-failure: Only ask when operations fail (good for local dev)
+ * - never: Auto-approve everything (best for local dev)
+ *
+ * For local development without interruptions, use environment variable:
+ *   AGOR_CODEX_DEV_MODE=true
+ *
+ * This enables full dev permissions:
+ *   - approvalPolicy: 'never' (no approval prompts)
+ *   - networkAccess: true (npm/pip/curl enabled)
+ *   - sandboxMode: 'workspace-write' (safe file edits)
  */
 export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'on-failure' | 'never';
 
@@ -95,8 +103,11 @@ export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'on-failure' | 'n
  * Network access is only available when sandboxMode = 'workspace-write'.
  * Configured via [sandbox_workspace_write].network_access in config.toml.
  *
- * - disabled: No network access (default, most secure)
- * - enabled: Full outbound HTTP/HTTPS access (security risk - prompt injection, data exfiltration)
+ * - disabled: No network access (blocks npm/pip/curl)
+ * - enabled: Full outbound HTTP/HTTPS access (default, required for package managers)
+ *
+ * Default is now ENABLED to support standard dev workflows (npm install, pip install, etc.).
+ * For maximum security in untrusted environments, explicitly set networkAccess: false
  *
  * Note: The 'web_search' tool is separate and controlled by the --search CLI flag.
  * This setting enables ALL network requests, not just web search.
