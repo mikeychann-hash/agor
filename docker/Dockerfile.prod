@@ -59,5 +59,9 @@ RUN sudo chmod +x /usr/local/bin/docker-entrypoint-prod.sh && \
 # Expose daemon port (UI will be served via static files by daemon)
 EXPOSE ${DAEMON_PORT:-3030}
 
+# Health check to ensure daemon is running properly
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:${DAEMON_PORT:-3030}/health || exit 1
+
 # Use production entrypoint script
 ENTRYPOINT ["docker-entrypoint-prod.sh"]

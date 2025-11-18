@@ -6,7 +6,7 @@
 
 import type { Task, UUID } from '@agor/core/types';
 import { TaskStatus } from '@agor/core/types';
-import { eq, like, sql } from 'drizzle-orm';
+import { eq, inArray, like, sql } from 'drizzle-orm';
 import { formatShortId, generateId } from '../../lib/ids';
 import type { Database } from '../client';
 import { type TaskInsert, type TaskRow, tasks } from '../schema';
@@ -161,7 +161,7 @@ export class TaskRepository implements BaseRepository<Task, Partial<Task>> {
       const rows = await this.db
         .select()
         .from(tasks)
-        .where(sql`${tasks.task_id} IN ${sql.raw(`(${taskIds.map(id => `'${id}'`).join(',')})`)}`);
+        .where(inArray(tasks.task_id, taskIds));
 
       return rows.map(row => this.rowToTask(row));
     } catch (error) {

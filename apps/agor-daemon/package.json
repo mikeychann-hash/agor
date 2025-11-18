@@ -23,6 +23,7 @@
     "cron-parser": "^5.4.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-rate-limit": "^7.1.5",
     "express-static-gzip": "^3.0.0",
     "feathers-swagger": "^3.0.0",
     "handlebars": "^4.7.8",

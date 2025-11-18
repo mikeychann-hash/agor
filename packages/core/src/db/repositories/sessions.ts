@@ -265,14 +265,15 @@ export class SessionRepository implements BaseRepository<Session, Partial<Sessio
     try {
       const fullId = await this.resolveId(sessionId);
 
-      // Query sessions where parent_session_id or forked_from_session_id matches
+      // OPTIMIZED: Uses materialized parent_session_id and forked_from_session_id columns
+      // for O(log n) indexed lookup instead of O(n) JSON extraction
       const rows = await this.db
         .select()
         .from(sessions)
         .where(
           or(
-            sql`json_extract(${sessions.data}, '$.genealogy.parent_session_id') = ${fullId}`,
-            sql`json_extract(${sessions.data}, '$.genealogy.forked_from_session_id') = ${fullId}`
+            eq(sessions.parent_session_id, fullId),
+            eq(sessions.forked_from_session_id, fullId)
           )
         )
         .all();

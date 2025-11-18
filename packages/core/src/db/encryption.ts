@@ -13,6 +13,12 @@ function getMasterSecret(): string {
   const secret = process.env.AGOR_MASTER_SECRET;
 
   if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'AGOR_MASTER_SECRET is required in production. ' +
+          'Generate one with: openssl rand -base64 32'
+      );
+    }
     console.warn(
       '⚠️  AGOR_MASTER_SECRET not set - API keys will be stored in plaintext. ' +
         'Set this environment variable to enable encryption.'

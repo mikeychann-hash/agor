@@ -32,8 +32,8 @@ export class TasksService extends DrizzleService<Task, Partial<Task>, TaskParams
       id: 'task_id',
       resourceType: 'Task',
       paginate: {
-        default: 100,
-        max: 500,
+        default: 50,
+        max: 1000,
       },
       multi: ['patch', 'remove'],
     });

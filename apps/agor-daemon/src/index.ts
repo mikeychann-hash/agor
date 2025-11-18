@@ -121,6 +121,7 @@ import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import expressStaticGzip from 'express-static-gzip';
+import rateLimit from 'express-rate-limit';
 import swagger from 'feathers-swagger';
 import jwt from 'jsonwebtoken';
 import type { Socket } from 'socket.io';
@@ -344,6 +345,16 @@ async function main() {
   // Parse JSON with size limits (security: prevent DoS via large payloads)
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Rate limiting middleware (security: prevent abuse)
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // Limit each IP to 1000 requests per window
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use(apiLimiter);
 
   // Serve static UI files in production BEFORE compression middleware
   // This ensures pre-compressed .br files are served directly

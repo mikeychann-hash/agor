@@ -23,7 +23,7 @@ import { Space, Spin, Tooltip, Typography, theme } from 'antd';
 
 const { Text } = Typography;
 
-import type React from 'react';
+import React from 'react';
 import { formatTimestampWithRelative } from '../../utils/time';
 import { AgorAvatar } from '../AgorAvatar';
 import { CollapsibleMarkdown } from '../CollapsibleText/CollapsibleMarkdown';
@@ -121,7 +121,7 @@ function isTaskToolResult(message: Message): boolean {
   return hasToolResult;
 }
 
-export const MessageBlock: React.FC<MessageBlockProps> = ({
+const MessageBlockComponent: React.FC<MessageBlockProps> = ({
   message,
   users = [],
   currentUserId,
@@ -506,3 +506,24 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
     </>
   );
 };
+
+// Memoize MessageBlock to prevent unnecessary re-renders
+export const MessageBlock = React.memo(
+  MessageBlockComponent,
+  (prevProps, nextProps) => {
+    // Custom comparison - return true if should NOT re-render
+    return (
+      prevProps.message.message_id === nextProps.message.message_id &&
+      prevProps.message.timestamp === nextProps.message.timestamp &&
+      prevProps.isTaskRunning === nextProps.isTaskRunning &&
+      prevProps.isFirstPendingPermission === nextProps.isFirstPendingPermission &&
+      prevProps.isLatestMessage === nextProps.isLatestMessage &&
+      // Check if message is streaming (special case where we need to re-render)
+      ('isStreaming' in prevProps.message ? prevProps.message.isStreaming : false) ===
+      ('isStreaming' in nextProps.message ? nextProps.message.isStreaming : false) &&
+      // Check thinking state
+      ('isThinking' in prevProps.message ? prevProps.message.isThinking : false) ===
+      ('isThinking' in nextProps.message ? nextProps.message.isThinking : false)
+    );
+  }
+);

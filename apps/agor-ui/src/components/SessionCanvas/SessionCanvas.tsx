@@ -1661,6 +1661,18 @@ const SessionCanvas = ({
           zoomActivationKeyCode={null}
           disableKeyboardA11y={true}
           style={{ background: 'transparent' }}
+          // Accessibility improvements
+          aria-label="Session workflow canvas"
+          role="application"
+          onKeyDown={(event) => {
+            // Basic keyboard navigation
+            if (event.key === 'Escape') {
+              // Clear selection
+              if (selectedSessionId) {
+                onSessionClick?.(null as any);
+              }
+            }
+          }}
         >
           {!board?.background_color && <Background />}
           <Controls position="top-left" showInteractive={false}>

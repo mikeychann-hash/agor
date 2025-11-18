@@ -31,7 +31,7 @@ export class MessagesService extends DrizzleService<Message, Partial<Message>, M
       id: 'message_id',
       resourceType: 'Message',
       paginate: {
-        default: 100,
+        default: 50,
         max: 1000, // Allow larger page size for bulk message retrieval
       },
       multi: ['create', 'remove'], // Allow bulk creates and removes
