@@ -11,6 +11,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import { App, Button, Card, Collapse, Space, Tag, Typography } from 'antd';
+import React from 'react';
 import { useConnectionDisabled } from '../../contexts/ConnectionContext';
 import { CreatedByTag } from '../metadata';
 import TaskListItem from '../TaskListItem';
@@ -39,7 +40,7 @@ interface SessionCardProps {
   defaultExpanded?: boolean;
 }
 
-const SessionCard = ({
+const SessionCardComponent = ({
   session,
   tasks,
   users,
@@ -327,5 +328,24 @@ const SessionCard = ({
     </Card>
   );
 };
+
+// Memoize SessionCard to prevent unnecessary re-renders
+const SessionCard = React.memo(
+  SessionCardComponent,
+  (prevProps, nextProps) => {
+    // Custom comparison - return true if should NOT re-render
+    return (
+      prevProps.session.session_id === nextProps.session.session_id &&
+      prevProps.session.updated_at === nextProps.session.updated_at &&
+      prevProps.session.status === nextProps.session.status &&
+      prevProps.session.message_count === nextProps.session.message_count &&
+      prevProps.tasks.length === nextProps.tasks.length &&
+      prevProps.isPinned === nextProps.isPinned &&
+      prevProps.zoneName === nextProps.zoneName &&
+      prevProps.zoneColor === nextProps.zoneColor &&
+      prevProps.defaultExpanded === nextProps.defaultExpanded
+    );
+  }
+);
 
 export default SessionCard;

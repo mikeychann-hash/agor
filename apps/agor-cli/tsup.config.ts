@@ -23,4 +23,5 @@ export default defineConfig({
   splitting: false,
   outDir: 'dist',
   external: [/^@agor\/core/],
+  sourcemap: process.env.NODE_ENV === 'production' ? 'external' : true,
 });

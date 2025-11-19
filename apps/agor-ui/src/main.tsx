@@ -3,6 +3,7 @@ import App from './App.tsx';
 import './index.css';
 import { installClipboardPolyfill } from './utils/clipboard-polyfill';
 import { initializeHandlebarsHelpers } from './utils/handlebars-helpers';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Install clipboard polyfill for non-HTTPS environments
 // This ensures Streamdown's copy buttons work on HTTP and local network IPs
@@ -35,6 +36,8 @@ createRoot(document.getElementById('root')!).render(
   // Temporarily disable StrictMode to avoid double socket connections in dev
   // TODO: Make useAgorClient StrictMode-compatible by handling double-mount properly
   // <StrictMode>
-  <App />
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
   // </StrictMode>
 );

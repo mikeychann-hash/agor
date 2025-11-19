@@ -27,6 +27,7 @@ export default defineConfig({
 
   // Mark Node.js-only packages as external so they're not bundled
   build: {
+    sourcemap: true,
     rollupOptions: {
       external: ['@openai/codex-sdk', '@anthropic-ai/claude-agent-sdk', '@google/gemini-cli-core'],
     },

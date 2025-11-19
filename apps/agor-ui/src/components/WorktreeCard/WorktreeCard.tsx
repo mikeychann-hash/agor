@@ -14,7 +14,7 @@ import {
 import type { MenuProps } from 'antd';
 import { Badge, Button, Card, Collapse, Space, Spin, Tag, Tree, Typography, theme } from 'antd';
 import { AggregationColor } from 'antd/es/color-picker/color';
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useConnectionDisabled } from '../../contexts/ConnectionContext';
 import { ArchiveDeleteWorktreeModal } from '../ArchiveDeleteWorktreeModal';
 import { EnvironmentPill } from '../EnvironmentPill';
@@ -80,7 +80,7 @@ interface WorktreeCardProps {
   defaultExpanded?: boolean;
 }
 
-const WorktreeCard = ({
+const WorktreeCardComponent = ({
   worktree,
   repo,
   sessions,
@@ -706,5 +706,25 @@ const WorktreeCard = ({
     </Card>
   );
 };
+
+// Memoize WorktreeCard to prevent unnecessary re-renders
+const WorktreeCard = React.memo(
+  WorktreeCardComponent,
+  (prevProps, nextProps) => {
+    // Custom comparison - return true if should NOT re-render
+    return (
+      prevProps.worktree.worktree_id === nextProps.worktree.worktree_id &&
+      prevProps.worktree.updated_at === nextProps.worktree.updated_at &&
+      prevProps.worktree.needs_attention === nextProps.worktree.needs_attention &&
+      prevProps.worktree.environment_instance?.status === nextProps.worktree.environment_instance?.status &&
+      prevProps.sessions.length === nextProps.sessions.length &&
+      prevProps.selectedSessionId === nextProps.selectedSessionId &&
+      prevProps.isPinned === nextProps.isPinned &&
+      prevProps.zoneName === nextProps.zoneName &&
+      prevProps.zoneColor === nextProps.zoneColor &&
+      prevProps.defaultExpanded === nextProps.defaultExpanded
+    );
+  }
+);
 
 export default WorktreeCard;
