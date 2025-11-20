@@ -19,20 +19,14 @@ import {
   type MessageID,
   MessageRole,
   type PermissionMode,
-  type Session,
   type SessionID,
   type TaskID,
 } from '../../types';
-import type { TokenUsage } from '../../utils/pricing';
-import { calculateTokenCost } from '../../utils/pricing';
-import type {
-  CodexSdkResponse,
-  NormalizedSdkResponse,
-  RawSdkResponse,
-} from '../../types/sdk-response';
+import type { NormalizedSdkResponse, RawSdkResponse } from '../../types/sdk-response';
+import type { TokenUsage } from '../../types/token-usage';
 import type { ITool, StreamingCallbacks, ToolCapabilities } from '../base';
 import type { MessagesService, TasksService } from '../claude/claude-tool';
-import { DEFAULT_CODEX_MODEL, getCodexContextWindowLimit } from './models';
+import { DEFAULT_CODEX_MODEL } from './models';
 import { CodexPromptService } from './prompt-service';
 
 interface CodexExecutionResult {
@@ -42,6 +36,8 @@ interface CodexExecutionResult {
   contextWindow?: number;
   contextWindowLimit?: number;
   model?: string;
+  rawSdkResponse?: unknown; // Raw SDK event from Codex
+  wasStopped?: boolean; // True if execution was stopped early via stopTask()
 }
 
 export class CodexTool implements ITool {
@@ -62,7 +58,7 @@ export class CodexTool implements ITool {
     apiKey?: string,
     messagesService?: MessagesService,
     tasksService?: TasksService,
-    private db?: Database
+    db?: Database
   ) {
     this.messagesRepo = messagesRepo;
     this.sessionsRepo = sessionsRepo;
@@ -146,6 +142,8 @@ export class CodexTool implements ITool {
     let tokenUsage: TokenUsage | undefined;
     let _streamStartTime = Date.now();
     let _firstTokenTime: number | null = null;
+    let rawSdkResponse: unknown;
+    let wasStopped = false;
 
     for await (const event of this.promptService.promptSessionStreaming(
       sessionId,
@@ -153,6 +151,12 @@ export class CodexTool implements ITool {
       taskId,
       permissionMode
     )) {
+      // Detect if execution was stopped early
+      if (event.type === 'stopped') {
+        wasStopped = true;
+        console.log(`🛑 Codex execution was stopped for session ${sessionId}`);
+        continue; // Skip processing this event
+      }
       // Capture resolved model from partial/complete events
       if (!resolvedModel) {
         if (event.type === 'partial') {
@@ -164,6 +168,11 @@ export class CodexTool implements ITool {
 
       if (event.type === 'complete' && event.usage) {
         tokenUsage = event.usage;
+      }
+
+      // Capture raw SDK response for token accounting
+      if (event.type === 'complete' && event.rawSdkEvent) {
+        rawSdkResponse = event.rawSdkEvent;
       }
 
       // Capture Codex thread ID
@@ -249,14 +258,14 @@ export class CodexTool implements ITool {
         // Filter out tool_use and tool_result blocks (already saved via tool_complete events)
         // But KEEP text blocks - these contain the response
         const textOnlyContent = event.content.filter(
-          block => block.type === 'text' // Only keep text blocks
+          (block) => block.type === 'text' // Only keep text blocks
         );
 
         // Only create message if there's text content (not just tools)
         if (textOnlyContent.length > 0) {
           // Extract full text for client-side streaming
           const _fullText = textOnlyContent
-            .map(block => (block as { text?: string }).text || '')
+            .map((block) => (block as { text?: string }).text || '')
             .join('');
 
           // Use existing message ID from streaming (if any) or generate new
@@ -296,6 +305,8 @@ export class CodexTool implements ITool {
       contextWindow: undefined,
       contextWindowLimit: undefined,
       model: resolvedModel || DEFAULT_CODEX_MODEL,
+      rawSdkResponse,
+      wasStopped,
     };
   }
 
@@ -359,7 +370,7 @@ export class CodexTool implements ITool {
     tokenUsage?: TokenUsage
   ): Promise<Message> {
     // Extract text content for preview
-    const textBlocks = content.filter(b => b.type === 'text').map(b => b.text || '');
+    const textBlocks = content.filter((b) => b.type === 'text').map((b) => b.text || '');
     const fullTextContent = textBlocks.join('');
     const contentPreview = fullTextContent.substring(0, 200);
 
@@ -430,8 +441,10 @@ export class CodexTool implements ITool {
     let capturedThreadId: string | undefined;
     let resolvedModel: string | undefined;
     let tokenUsage: TokenUsage | undefined;
-    let contextWindow: number | undefined;
-    let contextWindowLimit: number | undefined;
+    let _contextWindow: number | undefined;
+    let _contextWindowLimit: number | undefined;
+    let rawSdkResponse: unknown;
+    let wasStopped = false;
 
     for await (const event of this.promptService.promptSessionStreaming(
       sessionId,
@@ -439,6 +452,13 @@ export class CodexTool implements ITool {
       taskId,
       permissionMode
     )) {
+      // Detect if execution was stopped early
+      if (event.type === 'stopped') {
+        wasStopped = true;
+        console.log(`🛑 Codex execution was stopped for session ${sessionId}`);
+        continue; // Skip processing this event
+      }
+
       // Capture resolved model from partial/complete events
       if (!resolvedModel) {
         if (event.type === 'partial') {
@@ -450,6 +470,11 @@ export class CodexTool implements ITool {
 
       if (event.type === 'complete' && event.usage) {
         tokenUsage = event.usage;
+      }
+
+      // Capture raw SDK response for token accounting
+      if (event.type === 'complete' && event.rawSdkEvent) {
+        rawSdkResponse = event.rawSdkEvent;
       }
 
       // Capture Codex thread ID
@@ -493,6 +518,8 @@ export class CodexTool implements ITool {
       contextWindow: undefined,
       contextWindowLimit: undefined,
       model: resolvedModel || DEFAULT_CODEX_MODEL,
+      rawSdkResponse,
+      wasStopped,
     };
   }
 
@@ -542,37 +569,54 @@ export class CodexTool implements ITool {
   /**
    * Normalize Codex SDK response to common format
    *
-   * Codex doesn't support caching, so cache tokens are always 0.
+   * @deprecated This method is deprecated - use normalizeRawSdkResponse() from utils/sdk-normalizer instead
+   * This stub remains for API compatibility but should not be used.
    */
-  normalizedSdkResponse(rawResponse: RawSdkResponse): NormalizedSdkResponse {
-    if (rawResponse.tool !== 'codex') {
-      throw new Error(`Expected codex response, got ${rawResponse.tool}`);
-    }
-
-    const codexResponse = rawResponse as CodexSdkResponse;
-
-    // Extract token usage with defaults
-    const tokenUsage = codexResponse.tokenUsage || {
-      input_tokens: 0,
-      output_tokens: 0,
-      total_tokens: 0,
-    };
-
-    return {
-      userMessageId: codexResponse.userMessageId,
-      assistantMessageIds: codexResponse.assistantMessageIds,
-      tokenUsage: {
-        inputTokens: tokenUsage.input_tokens || 0,
-        outputTokens: tokenUsage.output_tokens || 0,
-        totalTokens: tokenUsage.total_tokens || tokenUsage.input_tokens! + tokenUsage.output_tokens! || 0,
-        cacheReadTokens: 0, // Codex doesn't support caching
-        cacheCreationTokens: 0, // Codex doesn't support caching
-      },
-      contextWindow: codexResponse.contextWindow,
-      contextWindowLimit: codexResponse.contextWindowLimit,
-      model: codexResponse.model,
-      durationMs: codexResponse.durationMs,
-    };
+  normalizedSdkResponse(_rawResponse: RawSdkResponse): NormalizedSdkResponse {
+    throw new Error(
+      'normalizedSdkResponse() is deprecated - use normalizeRawSdkResponse() from utils/sdk-normalizer instead'
+    );
   }
 
+  /**
+   * Compute cumulative context window usage for a Codex session
+   *
+   * For Codex, the SDK already provides cumulative token counts in each task's response.
+   * The inputTokens field includes the full conversation history up to that point.
+   * We just need to extract and return the contextWindow from the current task's SDK response.
+   *
+   * @param sessionId - Session ID to compute context for
+   * @param currentTaskId - Optional current task ID (not used for Codex, kept for interface consistency)
+   * @param currentRawSdkResponse - Optional raw SDK response from current task (if available in memory)
+   * @returns Promise resolving to computed context window usage in tokens
+   */
+  async computeContextWindow(
+    sessionId: string,
+    _currentTaskId?: string,
+    currentRawSdkResponse?: unknown
+  ): Promise<number> {
+    // Codex SDK provides cumulative tokens in each turn.completed event
+    // Simply extract input_tokens + output_tokens from the raw response
+    if (currentRawSdkResponse) {
+      const response = currentRawSdkResponse as import('../../types/sdk-response').CodexSdkResponse;
+      const inputTokens = response.usage?.input_tokens || 0;
+      const outputTokens = response.usage?.output_tokens || 0;
+      const cumulativeTokens = inputTokens + outputTokens;
+      console.log(
+        `✅ Computed context window for Codex session ${sessionId}: ${cumulativeTokens} tokens (from current task)`
+      );
+      return cumulativeTokens;
+    }
+
+    // IMPORTANT: Do NOT query database when currentRawSdkResponse is not provided
+    // This method is called during task UPDATE operations, and querying the database
+    // during a pending UPDATE causes deadlocks in PostgreSQL due to read-while-write
+    // in the same transaction. The caller should ALWAYS provide currentRawSdkResponse
+    // during task completion.
+    console.warn(
+      `⚠️  computeContextWindow called without currentRawSdkResponse for session ${sessionId}. ` +
+        'This should not happen during task completion. Returning 0 to avoid database deadlock.'
+    );
+    return 0;
+  }
 }

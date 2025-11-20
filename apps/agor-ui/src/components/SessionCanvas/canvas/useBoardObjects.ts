@@ -6,44 +6,55 @@ import type { AgorClient } from '@agor/core/api';
 import type { Board, BoardEntityObject, BoardObject, Session, Worktree } from '@agor/core/types';
 import { useCallback, useMemo, useRef } from 'react';
 import type { Node } from 'reactflow';
+import { findInMap, mapToArray } from '@/utils/mapHelpers';
 
 interface UseBoardObjectsProps {
   board: Board | null;
   client: AgorClient | null;
-  sessions: Session[];
+  sessionsByWorktree: Map<string, Session[]>; // O(1) worktree filtering
   worktrees: Worktree[];
-  boardObjects: BoardEntityObject[];
+  boardObjectById: Map<string, BoardEntityObject>; // Map-based board object storage
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   deletedObjectsRef: React.MutableRefObject<Set<string>>;
   eraserMode?: boolean;
   selectedSessionId?: string | null;
+  onEditMarkdown?: (objectId: string, content: string, width: number) => void;
 }
 
 export const useBoardObjects = ({
   board,
   client,
-  sessions,
+  sessionsByWorktree,
   worktrees,
-  boardObjects,
+  boardObjectById,
   setNodes,
   deletedObjectsRef,
   eraserMode = false,
   selectedSessionId,
+  onEditMarkdown,
 }: UseBoardObjectsProps) => {
   // Use ref to avoid recreating callbacks when board changes
   const boardRef = useRef(board);
   boardRef.current = board;
 
+  // Stabilize board.objects reference using deep equality comparison
+  // This prevents unnecessary re-renders when board object changes but content is identical
+  const boardObjectsJson = board?.objects ? JSON.stringify(board.objects) : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Intentionally using JSON serialization for deep equality
+  const boardObjects = useMemo(() => board?.objects, [boardObjectsJson]);
+
   // Get session IDs for this board (worktree-centric model)
   const _boardSessionIds = useMemo(() => {
     if (!board) return [];
-    const boardWorktreeIds = new Set(
-      worktrees.filter(w => w.board_id === board.board_id).map(w => w.worktree_id)
-    );
-    return sessions
-      .filter(s => s.worktree_id && boardWorktreeIds.has(s.worktree_id))
-      .map(s => s.session_id);
-  }, [board, worktrees, sessions]);
+    const boardWorktreeIds = worktrees
+      .filter((w) => w.board_id === board.board_id)
+      .map((w) => w.worktree_id);
+
+    // Use O(1) Map lookups to get sessions for each worktree
+    return boardWorktreeIds
+      .flatMap((worktreeId) => sessionsByWorktree.get(worktreeId) || [])
+      .map((s) => s.session_id);
+  }, [board, worktrees, sessionsByWorktree]);
 
   /**
    * Update an existing board object
@@ -79,33 +90,34 @@ export const useBoardObjects = ({
 
       // Find worktrees that are pinned to this zone (via board_objects.zone_id)
       const affectedWorktreeIds: string[] = [];
-      for (const boardObj of boardObjects) {
+      for (const boardObj of mapToArray(boardObjectById)) {
         if (boardObj.zone_id === objectId) {
           affectedWorktreeIds.push(boardObj.worktree_id);
         }
       }
 
       // Optimistic removal of zone (just the zone node, worktrees remain but unpinned)
-      setNodes(nodes => nodes.filter(n => n.id !== objectId));
+      setNodes((nodes) => nodes.filter((n) => n.id !== objectId));
 
       try {
-        await client.service('boards').patch(board.board_id, {
-          _action: 'deleteZone',
-          objectId,
-          // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
-        } as any);
-
-        // Unpin any worktrees that were pinned to this zone
+        // IMPORTANT: Unpin worktrees FIRST before deleting the zone
+        // This prevents a race condition where worktrees have parentId pointing to a deleted zone
         for (const worktreeId of affectedWorktreeIds) {
-          const boardObj = boardObjects.find(
-            (obj: BoardEntityObject) => obj.worktree_id === worktreeId
-          );
+          // boardObjectById is keyed by object_id, not worktree_id, so we need to find by worktree_id
+          const boardObj = findInMap(boardObjectById, (obj) => obj.worktree_id === worktreeId);
           if (boardObj) {
             await client.service('board-objects').patch(boardObj.object_id, {
               zone_id: null,
             });
           }
         }
+
+        // Now delete the zone after all worktrees are unpinned
+        await client.service('boards').patch(board.board_id, {
+          _action: 'deleteZone',
+          objectId,
+          // biome-ignore lint/suspicious/noExplicitAny: Board patch with custom _action field
+        } as any);
 
         // After successful deletion, we can remove from the tracking set
         setTimeout(() => {
@@ -118,16 +130,16 @@ export const useBoardObjects = ({
         // Note: WebSocket update should restore the actual state
       }
     },
-    [board, client, setNodes, deletedObjectsRef, boardObjects]
+    [board, client, setNodes, deletedObjectsRef, boardObjectById]
   );
 
   /**
    * Convert board.objects to React Flow nodes
    */
   const getBoardObjectNodes = useCallback((): Node[] => {
-    if (!board?.objects) return [];
+    if (!boardObjects) return [];
 
-    return Object.entries(board.objects)
+    return Object.entries(boardObjects)
       .filter(([, objectData]) => {
         // Filter out objects with invalid positions (prevents NaN errors in React Flow)
         const hasValidPosition =
@@ -143,14 +155,34 @@ export const useBoardObjects = ({
         return hasValidPosition;
       })
       .map(([objectId, objectData]) => {
+        // Markdown note node
+        if (objectData.type === 'markdown') {
+          return {
+            id: objectId,
+            type: 'markdown',
+            position: { x: objectData.x, y: objectData.y },
+            draggable: true,
+            selectable: true,
+            zIndex: 300, // Above zones (100), below worktrees (500)
+            className: eraserMode ? 'eraser-mode' : undefined,
+            data: {
+              objectId,
+              content: objectData.content,
+              width: objectData.width,
+              onUpdate: handleUpdateObject,
+              onEdit: onEditMarkdown,
+            },
+          };
+        }
+
         // Calculate worktree count for this zone (worktree-centric model)
         let sessionCount = 0;
         if (objectData.type === 'zone') {
           // Count worktrees pinned to this zone via board_objects.zone_id
-          for (const boardObj of boardObjects) {
+          for (const boardObj of mapToArray(boardObjectById)) {
             if (boardObj.zone_id === objectId) {
-              // Count sessions in this worktree
-              const worktreeSessions = sessions.filter(s => s.worktree_id === boardObj.worktree_id);
+              // Count sessions in this worktree using O(1) Map lookup
+              const worktreeSessions = sessionsByWorktree.get(boardObj.worktree_id) || [];
               sessionCount += worktreeSessions.length;
             }
           }
@@ -191,7 +223,15 @@ export const useBoardObjects = ({
           },
         };
       });
-  }, [board?.objects, boardObjects, sessions, handleUpdateObject, deleteZone, eraserMode]);
+  }, [
+    boardObjects, // Use stabilized boardObjects instead of board?.objects
+    boardObjectById,
+    sessionsByWorktree,
+    handleUpdateObject,
+    deleteZone,
+    eraserMode,
+    onEditMarkdown,
+  ]);
 
   /**
    * Add a zone node at the specified position
@@ -206,7 +246,7 @@ export const useBoardObjects = ({
       const height = 600;
 
       // Optimistic update
-      setNodes(nodes => [
+      setNodes((nodes) => [
         ...nodes,
         {
           id: objectId,
@@ -248,7 +288,7 @@ export const useBoardObjects = ({
       } catch (error) {
         console.error('Failed to add zone node:', error);
         // Rollback
-        setNodes(nodes => nodes.filter(n => n.id !== objectId));
+        setNodes((nodes) => nodes.filter((n) => n.id !== objectId));
       }
     },
     [client, setNodes, handleUpdateObject] // Removed board dependency
@@ -266,7 +306,7 @@ export const useBoardObjects = ({
       deletedObjectsRef.current.add(objectId);
 
       // Optimistic removal
-      setNodes(nodes => nodes.filter(n => n.id !== objectId));
+      setNodes((nodes) => nodes.filter((n) => n.id !== objectId));
 
       try {
         await client.service('boards').patch(currentBoard.board_id, {

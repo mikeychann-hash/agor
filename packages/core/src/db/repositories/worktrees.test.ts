@@ -22,6 +22,7 @@ function createRepoData(overrides?: { repo_id?: UUID; slug?: string }) {
     repo_id: overrides?.repo_id ?? generateId(),
     slug,
     name: slug,
+    repo_type: 'remote' as const,
     remote_url: 'https://github.com/test/repo.git',
     local_path: `/home/user/.agor/repos/${slug}`,
     default_branch: 'main',
@@ -96,7 +97,7 @@ describe('WorktreeRepository.create', () => {
 
     const repo = await repoRepo.create(createRepoData());
     const boardId = generateId() as UUID;
-    await db.insert(boards).values({
+    await (db as any).insert(boards).values({
       board_id: boardId,
       created_at: new Date(),
       created_by: 'anonymous' as UUID,
@@ -467,7 +468,7 @@ describe('WorktreeRepository.update', () => {
 
     const repo = await repoRepo.create(createRepoData());
     const boardId = generateId() as UUID;
-    await db.insert(boards).values({
+    await (db as any).insert(boards).values({
       board_id: boardId,
       created_at: new Date(),
       created_by: 'anonymous' as UUID,
@@ -531,7 +532,7 @@ describe('WorktreeRepository.update', () => {
 
     const repo = await repoRepo.create(createRepoData());
     const boardId = generateId() as UUID;
-    await db.insert(boards).values({
+    await (db as any).insert(boards).values({
       board_id: boardId,
       created_at: new Date(),
       created_by: 'anonymous' as UUID,

@@ -11,7 +11,9 @@
 
 import type { AgorClient } from '@agor/core/api';
 import {
+  type AgenticToolName,
   type Message,
+  type MessageID,
   MessageRole,
   type PermissionRequestContent,
   type PermissionScope,
@@ -21,6 +23,7 @@ import {
   TaskStatus,
   type User,
 } from '@agor/core/types';
+import { normalizeRawSdkResponse } from '@agor/core/utils/sdk-normalizer';
 import {
   DownOutlined,
   FileTextOutlined,
@@ -29,9 +32,9 @@ import {
   UpOutlined,
 } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
-import { Collapse, Flex, Space, Spin, Tag, Typography, theme } from 'antd';
+import { Collapse, Flex, Spin, Tag, Typography, theme } from 'antd';
 import React, { useMemo } from 'react';
-import { useStreamingMessages } from '../../hooks/useStreamingMessages';
+import type { StreamingMessage } from '../../hooks/useStreamingMessages';
 import { useTaskEvents } from '../../hooks/useTaskEvents';
 import { useTaskMessages } from '../../hooks/useTaskMessages';
 import { getContextWindowGradient } from '../../utils/contextWindow';
@@ -70,7 +73,7 @@ interface TaskBlockProps {
   client: AgorClient | null;
   agentic_tool?: string;
   sessionModel?: string;
-  users?: User[];
+  userById?: Map<string, User>;
   currentUserId?: string;
   isExpanded: boolean;
   onExpandChange: (expanded: boolean) => void;
@@ -82,8 +85,10 @@ interface TaskBlockProps {
     allow: boolean,
     scope: PermissionScope
   ) => void;
+  worktreeName?: string;
   scheduledFromWorktree?: boolean;
   scheduledRunAt?: number;
+  streamingMessages?: Map<MessageID, StreamingMessage>;
 }
 
 /**
@@ -94,7 +99,7 @@ function isAgentChainMessage(message: Message): boolean {
   // EXCEPTION: User messages with ONLY tool_result blocks are part of agent execution
   // (tool results are technically "user" role per Anthropic API, but they're automated responses)
   if (message.role === MessageRole.USER && Array.isArray(message.content)) {
-    const hasOnlyToolResults = message.content.every(block => block.type === 'tool_result');
+    const hasOnlyToolResults = message.content.every((block) => block.type === 'tool_result');
     if (hasOnlyToolResults) return true; // Part of agent chain, don't break it
   }
 
@@ -111,9 +116,9 @@ function isAgentChainMessage(message: Message): boolean {
 
   // Array content - check what types of blocks we have
   if (Array.isArray(message.content)) {
-    const hasTools = message.content.some(block => block.type === 'tool_use');
-    const hasThinking = message.content.some(block => block.type === 'thinking');
-    const hasText = message.content.some(block => block.type === 'text');
+    const hasTools = message.content.some((block) => block.type === 'tool_use');
+    const hasThinking = message.content.some((block) => block.type === 'thinking');
+    const hasText = message.content.some((block) => block.type === 'text');
 
     // SPECIAL: Task tools should display as regular agent messages, not in chain
     const hasOnlyTaskTool =
@@ -151,8 +156,8 @@ function isAgentChainMessage(message: Message): boolean {
  */
 function groupMessagesIntoBlocks(messages: Message[]): Block[] {
   // Separate top-level messages from nested (parent_tool_use_id)
-  const topLevel = messages.filter(m => !m.parent_tool_use_id);
-  const nested = messages.filter(m => m.parent_tool_use_id);
+  const topLevel = messages.filter((m) => !m.parent_tool_use_id);
+  const nested = messages.filter((m) => m.parent_tool_use_id);
 
   // Build compaction event map: task_id -> [start_message, complete_message?]
   // We aggregate compaction events that share the same task_id
@@ -160,7 +165,7 @@ function groupMessagesIntoBlocks(messages: Message[]): Block[] {
   for (const msg of topLevel) {
     if (msg.role === MessageRole.SYSTEM && Array.isArray(msg.content)) {
       const hasCompactionStatus = msg.content.some(
-        b =>
+        (b) =>
           (b.type === 'system_status' && 'status' in b && b.status === 'compacting') ||
           (b.type === 'system_complete' && 'systemType' in b && b.systemType === 'compaction')
       );
@@ -232,7 +237,7 @@ function groupMessagesIntoBlocks(messages: Message[]): Block[] {
       msg.role === MessageRole.USER &&
       Array.isArray(msg.content) &&
       msg.content.some(
-        block =>
+        (block) =>
           block.type === 'tool_result' &&
           taskToolIds.has((block as { tool_use_id?: string }).tool_use_id || '')
       );
@@ -259,7 +264,7 @@ function groupMessagesIntoBlocks(messages: Message[]): Block[] {
 
     // After processing the message, check if it has Task tool uses
     // If so, add nested operations + result as a regular agent-chain
-    const taskTools = msg.tool_uses?.filter(t => t.name === 'Task') || [];
+    const taskTools = msg.tool_uses?.filter((t) => t.name === 'Task') || [];
     for (const taskTool of taskTools) {
       const children = nestedByParent.get(taskTool.id) || [];
       const resultMsg = taskResultsByToolId.get(taskTool.id);
@@ -331,14 +336,16 @@ export const TaskBlock = React.memo<TaskBlockProps>(
     client,
     agentic_tool,
     sessionModel,
-    users = [],
+    userById = new Map(),
     currentUserId,
     isExpanded,
     onExpandChange,
     sessionId,
     onPermissionDecision,
+    worktreeName,
     scheduledFromWorktree,
     scheduledRunAt,
+    streamingMessages,
   }) => {
     const { token } = theme.useToken();
 
@@ -352,24 +359,23 @@ export const TaskBlock = React.memo<TaskBlockProps>(
       isExpanded
     );
 
-    // Track real-time streaming messages (for running tasks)
-    const streamingMessages = useStreamingMessages(client, sessionId ?? undefined);
+    // Convert streaming messages map to array once the reference changes
+    const streamingForTask = useMemo(
+      () => (streamingMessages ? Array.from(streamingMessages.values()) : []),
+      [streamingMessages]
+    );
 
     // Merge task messages with streaming messages (for running tasks)
     const messages = useMemo(() => {
-      // Filter streaming messages for this task
-      const streamingForTask = Array.from(streamingMessages.values()).filter(
-        msg => msg.task_id === task.task_id
-      );
+      const dbOnlyMessages =
+        streamingMessages && streamingMessages.size > 0
+          ? taskMessages.filter((msg) => !streamingMessages.has(msg.message_id))
+          : taskMessages;
 
-      // Filter out DB messages that are already in streaming (avoid duplicates)
-      const dbOnlyMessages = taskMessages.filter(msg => !streamingMessages.has(msg.message_id));
-
-      // Combine and sort by index
       return ([...dbOnlyMessages, ...streamingForTask] as Message[]).sort(
         (a, b) => a.index - b.index
       );
-    }, [taskMessages, streamingMessages, task.task_id]);
+    }, [taskMessages, streamingForTask, streamingMessages]);
 
     // Group messages into blocks
     const blocks = useMemo(() => groupMessagesIntoBlocks(messages), [messages]);
@@ -385,15 +391,17 @@ export const TaskBlock = React.memo<TaskBlockProps>(
         ? task.tool_use_count
         : messages.reduce((sum, msg) => sum + (msg.tool_uses?.length || 0), 0);
 
-    // Get context window directly from raw SDK response
-    // Only Claude, Codex, and Gemini provide contextWindow (OpenCode doesn't)
+    // Normalize raw SDK response to get computed values
     const sdkResponse = task.raw_sdk_response;
-    const contextWindowUsed =
-      sdkResponse && 'contextWindow' in sdkResponse ? sdkResponse.contextWindow ?? 0 : 0;
-    const contextWindowLimit =
-      sdkResponse && 'contextWindowLimit' in sdkResponse
-        ? sdkResponse.contextWindowLimit ?? 200000
-        : 200000;
+    const normalized =
+      sdkResponse && agentic_tool
+        ? normalizeRawSdkResponse(sdkResponse, agentic_tool as AgenticToolName)
+        : null;
+
+    // Use computed context window from database (already summed across tasks since last compaction)
+    // If undefined, it means the backend computation failed or hasn't run yet
+    const contextWindowUsed = task.computed_context_window ?? 0;
+    const contextWindowLimit = normalized?.contextWindowLimit ?? 200000;
     const taskHeaderGradient = getContextWindowGradient(contextWindowUsed, contextWindowLimit);
 
     // Task header shows when collapsed
@@ -445,43 +453,58 @@ export const TaskBlock = React.memo<TaskBlockProps>(
               <CreatedByTag
                 createdBy={task.created_by}
                 currentUserId={currentUserId}
-                users={users}
+                userById={userById}
                 prefix="By"
               />
             )}
             <MessageCountPill count={messageCount} />
             <ToolCountPill count={toolCount} />
-            {task.raw_sdk_response?.tokenUsage && (
+            {normalized && (
               <TokenCountPill
-                count={task.raw_sdk_response.tokenUsage.total_tokens ?? 0}
-                inputTokens={task.raw_sdk_response.tokenUsage.input_tokens}
-                outputTokens={task.raw_sdk_response.tokenUsage.output_tokens}
-                cacheReadTokens={task.raw_sdk_response.tokenUsage.cache_read_tokens}
-                cacheCreationTokens={task.raw_sdk_response.tokenUsage.cache_creation_tokens}
+                count={normalized.tokenUsage.totalTokens}
+                inputTokens={normalized.tokenUsage.inputTokens}
+                outputTokens={normalized.tokenUsage.outputTokens}
+                cacheReadTokens={normalized.tokenUsage.cacheReadTokens}
+                cacheCreationTokens={normalized.tokenUsage.cacheCreationTokens}
               />
             )}
-            {sdkResponse &&
-              'contextWindow' in sdkResponse &&
-              sdkResponse.contextWindow !== undefined &&
-              'contextWindowLimit' in sdkResponse &&
-              sdkResponse.contextWindowLimit && (
-                <ContextWindowPill
-                  used={sdkResponse.contextWindow}
-                  limit={sdkResponse.contextWindowLimit}
-                  taskMetadata={{
-                    model: task.model,
-                    duration_ms: task.duration_ms,
+            {(task.computed_context_window || normalized) && (
+              <ContextWindowPill
+                used={contextWindowUsed}
+                limit={contextWindowLimit || 0}
+                taskMetadata={{
+                  model: task.model,
+                  duration_ms: task.duration_ms,
+                  agentic_tool,
                   raw_sdk_response: task.raw_sdk_response,
                 }}
               />
             )}
             {task.model && task.model !== sessionModel && <ModelPill model={task.model} />}
             {task.git_state.sha_at_start && task.git_state.sha_at_start !== 'unknown' && (
-              <GitStatePill
-                branch={task.git_state.ref_at_start}
-                sha={task.git_state.sha_at_start}
-                style={{ fontSize: 11 }}
-              />
+              <Flex gap={token.sizeUnit / 2} align="center">
+                <GitStatePill
+                  branch={task.git_state.ref_at_start}
+                  sha={task.git_state.sha_at_start}
+                  worktreeName={worktreeName}
+                  style={{ fontSize: 11 }}
+                />
+                {task.git_state.sha_at_end &&
+                  task.git_state.sha_at_end !== 'unknown' &&
+                  task.git_state.sha_at_end !== task.git_state.sha_at_start && (
+                    <>
+                      <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                        →
+                      </Typography.Text>
+                      <GitStatePill
+                        sha={task.git_state.sha_at_end}
+                        worktreeName={worktreeName}
+                        showDirtyIndicator={true}
+                        style={{ fontSize: 11 }}
+                      />
+                    </>
+                  )}
+              </Flex>
             )}
             {task.report && (
               <Tag icon={<FileTextOutlined />} color="green" style={{ fontSize: 11 }}>
@@ -496,7 +519,7 @@ export const TaskBlock = React.memo<TaskBlockProps>(
     return (
       <Collapse
         activeKey={isExpanded ? ['task-content'] : []}
-        onChange={keys => onExpandChange(keys.length > 0)}
+        onChange={(keys) => onExpandChange(keys.length > 0)}
         expandIcon={() => null}
         style={{ background: 'transparent', margin: `${token.sizeUnit * 3}px 0` }}
         items={[
@@ -542,7 +565,7 @@ export const TaskBlock = React.memo<TaskBlockProps>(
                         const content = block.message.content as PermissionRequestContent;
                         if (content.status === PermissionStatus.PENDING) {
                           // Check if this is the first pending permission request
-                          isFirstPending = !blocks.slice(0, blockIndex).some(b => {
+                          isFirstPending = !blocks.slice(0, blockIndex).some((b) => {
                             if (b.type === 'message' && b.message.type === 'permission_request') {
                               const c = b.message.content as PermissionRequestContent;
                               return c.status === PermissionStatus.PENDING;
@@ -562,7 +585,7 @@ export const TaskBlock = React.memo<TaskBlockProps>(
                           key={block.message.message_id}
                           message={block.message}
                           agentic_tool={agentic_tool}
-                          users={users}
+                          userById={userById}
                           currentUserId={task.created_by}
                           isTaskRunning={task.status === TaskStatus.RUNNING}
                           sessionId={sessionId}

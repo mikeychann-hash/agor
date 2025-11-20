@@ -13,6 +13,7 @@ import { formatShortId, generateId } from '../../lib/ids';
 import type { Session, SessionID, TaskID, UserID } from '../../types';
 import { SessionStatus, TaskStatus } from '../../types';
 import { createDatabase } from '../client';
+import { isSQLiteDatabase } from '../database-wrapper';
 import { initializeDatabase, seedInitialData } from '../migrate';
 import {
   BoardRepository,
@@ -39,6 +40,7 @@ async function setupRepoAndWorktree(db: ReturnType<typeof createDatabase>) {
   const repo = await repoRepo.create({
     slug: 'test-repo',
     name: 'Test Repository',
+    repo_type: 'remote',
     remote_url: 'https://github.com/test/repo.git',
     local_path: '/Users/test/.agor/repos/test-repo',
     default_branch: 'main',
@@ -65,16 +67,24 @@ describe('Database Initialization', () => {
     const db = createTestDb();
     await initializeDatabase(db);
 
-    const result = await db.run(sql`
-      SELECT name FROM sqlite_master
-      WHERE type='table' AND name IN (
-        'sessions', 'tasks', 'boards', 'repos', 'worktrees',
-        'messages', 'users', 'board_comments', 'board_objects',
-        'mcp_servers', 'session_mcp_servers'
-      )
+    const result = isSQLiteDatabase(db)
+      ? await db.run(sql`
+          SELECT name FROM sqlite_master
+          WHERE type='table' AND name IN (
+            'sessions', 'tasks', 'boards', 'repos', 'worktrees',
+            'messages', 'users', 'board_comments', 'board_objects',
+            'mcp_servers', 'session_mcp_servers'
+          )`)
+      : await db.execute(sql`
+          SELECT table_name as name FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name IN (
+            'sessions', 'tasks', 'boards', 'repos', 'worktrees',
+            'messages', 'users', 'board_comments', 'board_objects',
+            'mcp_servers', 'session_mcp_servers'
+          )
     `);
 
-    expect(result.rows.length).toBeGreaterThanOrEqual(10);
+    expect((result as any).rows.length).toBeGreaterThanOrEqual(10);
   });
 
   it('should be idempotent - safe to call multiple times', async () => {
@@ -84,8 +94,12 @@ describe('Database Initialization', () => {
     await initializeDatabase(db);
     await initializeDatabase(db);
 
-    const result = await db.run(sql`SELECT name FROM sqlite_master WHERE type='table'`);
-    expect(result.rows.length).toBeGreaterThan(0);
+    const result = isSQLiteDatabase(db)
+      ? await db.run(sql`SELECT name FROM sqlite_master WHERE type='table'`)
+      : await db.execute(
+          sql`SELECT table_name as name FROM information_schema.tables WHERE table_schema = 'public'`
+        );
+    expect((result as any).rows.length).toBeGreaterThan(0);
   });
 
   it('should seed default board', async () => {
@@ -93,13 +107,13 @@ describe('Database Initialization', () => {
     await initializeDatabase(db);
     await seedInitialData(db);
 
-    const result = await db.run(sql`
-      SELECT board_id, name, slug FROM boards WHERE slug = 'default'
-    `);
+    const result = isSQLiteDatabase(db)
+      ? await db.run(sql`SELECT board_id, name, slug FROM boards WHERE slug = 'default'`)
+      : await db.execute(sql`SELECT board_id, name, slug FROM boards WHERE slug = 'default'`);
 
-    expect(result.rows.length).toBe(1);
-    expect((result.rows[0] as any).name).toBe('Main Board');
-    expect((result.rows[0] as any).slug).toBe('default');
+    expect((result as any).rows.length).toBe(1);
+    expect(((result as any).rows[0] as any).name).toBe('Main Board');
+    expect(((result as any).rows[0] as any).slug).toBe('default');
   });
 
   it('should not duplicate default board when called twice', async () => {
@@ -108,8 +122,10 @@ describe('Database Initialization', () => {
     await seedInitialData(db);
     await seedInitialData(db);
 
-    const result = await db.run(sql`SELECT board_id FROM boards WHERE slug = 'default'`);
-    expect(result.rows.length).toBe(1);
+    const result = isSQLiteDatabase(db)
+      ? await db.run(sql`SELECT board_id FROM boards WHERE slug = 'default'`)
+      : await db.execute(sql`SELECT board_id FROM boards WHERE slug = 'default'`);
+    expect((result as any).rows.length).toBe(1);
   });
 });
 
@@ -275,11 +291,7 @@ describe('Session Repository Integration', () => {
 
     const repo = new SessionRepository(db);
 
-    const tools: Array<'claude-code' | 'codex' | 'gemini'> = [
-      'claude-code',
-      'codex',
-      'gemini',
-    ];
+    const tools: Array<'claude-code' | 'codex' | 'gemini'> = ['claude-code', 'codex', 'gemini'];
 
     for (const tool of tools) {
       const session = await repo.create({
@@ -512,6 +524,7 @@ describe('Repo Repository Integration', () => {
     const created = await repo.create({
       slug: 'test-repo',
       name: 'Test Repository',
+      repo_type: 'remote',
       remote_url: 'https://github.com/test/test-repo.git',
       local_path: '/Users/test/.agor/repos/test-repo',
       default_branch: 'main',
@@ -530,6 +543,7 @@ describe('Repo Repository Integration', () => {
     const created = await repo.create({
       slug: 'my-repo',
       name: 'My Repository',
+      repo_type: 'remote',
       remote_url: 'https://github.com/test/repo.git',
       local_path: '/test/path',
       default_branch: 'main',
@@ -550,6 +564,7 @@ describe('Repo Repository Integration', () => {
     const github = await repo.create({
       slug: 'github-repo',
       name: 'GitHub Repo',
+      repo_type: 'remote',
       remote_url: 'https://github.com/user/repo.git',
       local_path: '/path',
       default_branch: 'main',
@@ -558,6 +573,7 @@ describe('Repo Repository Integration', () => {
     const gitlab = await repo.create({
       slug: 'gitlab-repo',
       name: 'GitLab Repo',
+      repo_type: 'remote',
       remote_url: 'https://gitlab.com/user/repo.git',
       local_path: '/path2',
       default_branch: 'main',

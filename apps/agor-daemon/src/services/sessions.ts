@@ -103,28 +103,31 @@ export class SessionsService extends DrizzleService<Session, Partial<Session>, S
    * Settings inheritance:
    * - If spawning the same agentic tool → inherit parent's settings (permission_config, model_config)
    * - If spawning a different tool → use user's preferred settings for that tool
+   * - Explicit overrides in SpawnConfig take precedence over both
    */
   async spawn(
     id: string,
-    data: {
-      prompt: string;
-      title?: string;
-      agentic_tool?: Session['agentic_tool'];
-      task_id?: string;
-    },
+    data: Partial<import('@agor/core/types').SpawnConfig>,
     params?: SessionParams
   ): Promise<Session> {
+    // Validate required fields
+    if (!data.prompt) {
+      throw new Error('Spawn requires a prompt');
+    }
     const parent = await this.get(id, params);
-    const targetTool = data.agentic_tool || parent.agentic_tool;
+    const targetTool = data.agent || parent.agentic_tool;
     const isSameTool = targetTool === parent.agentic_tool;
 
-    // Determine settings based on whether we're spawning the same tool or a different one
+    // Determine settings based on:
+    // 1. Explicit overrides in SpawnConfig (highest priority)
+    // 2. User preferences (if spawning different tool)
+    // 3. Parent settings (fallback)
+
     let permissionConfig = parent.permission_config;
     let modelConfig = parent.model_config;
 
-    if (!isSameTool) {
-      // Spawning a different tool - fetch user preferences
-      // We need access to the users service to get preferences
+    // If spawning a different tool and no explicit overrides, fetch user preferences
+    if (!isSameTool && !data.permissionMode && !data.modelConfig) {
       const userId = parent.created_by;
       if (userId && this.app) {
         try {
@@ -168,12 +171,60 @@ export class SessionsService extends DrizzleService<Session, Partial<Session>, S
       }
     }
 
+    // Apply explicit overrides from SpawnConfig
+    if (data.permissionMode) {
+      permissionConfig = {
+        mode: data.permissionMode,
+        ...(targetTool === 'codex' && data.codexSandboxMode && data.codexApprovalPolicy
+          ? {
+              codex: {
+                sandboxMode: data.codexSandboxMode,
+                approvalPolicy: data.codexApprovalPolicy,
+                networkAccess: data.codexNetworkAccess,
+              },
+            }
+          : permissionConfig?.codex
+            ? { codex: permissionConfig.codex }
+            : {}),
+      };
+    }
+
+    if (data.modelConfig) {
+      modelConfig = {
+        mode: data.modelConfig.mode || 'alias',
+        model: data.modelConfig.model || '',
+        updated_at: new Date().toISOString(),
+        thinkingMode: data.modelConfig.thinkingMode,
+        manualThinkingTokens: data.modelConfig.manualThinkingTokens,
+      };
+    }
+
+    // TODO: Handle MCP server attachment from data.mcpServerIds via session_mcp_servers junction table
+
+    // Build callback configuration - only store explicit overrides
+    // Leave fields undefined if not specified so parent's config applies
+    const callbackConfig = {
+      ...(data.enableCallback !== undefined ? { enabled: data.enableCallback } : {}),
+      ...(data.includeLastMessage !== undefined
+        ? { include_last_message: data.includeLastMessage }
+        : {}),
+      ...(data.includeOriginalPrompt !== undefined
+        ? { include_original_prompt: data.includeOriginalPrompt }
+        : {}),
+    };
+
+    // Build final prompt (append extra instructions if provided)
+    let finalPrompt = data.prompt;
+    if (data.extraInstructions) {
+      finalPrompt = `${data.prompt}\n\n${data.extraInstructions}`;
+    }
+
     const spawnedSession = await this.create(
       {
         agentic_tool: targetTool,
         status: SessionStatus.IDLE,
         title: data.title || data.prompt.substring(0, 100), // Use provided title or first 100 chars
-        description: data.prompt,
+        description: finalPrompt, // Use final prompt with extra instructions if provided
         worktree_id: parent.worktree_id,
         git_state: { ...parent.git_state },
         genealogy: {
@@ -187,7 +238,9 @@ export class SessionsService extends DrizzleService<Session, Partial<Session>, S
         message_count: 0,
         permission_config: permissionConfig,
         model_config: modelConfig,
+        callback_config: callbackConfig,
         // Don't copy sdk_session_id - spawn will get its own via forkSession:true
+        // TODO: Handle MCP server attachment via session_mcp_servers junction table
       },
       params
     );
@@ -209,6 +262,28 @@ export class SessionsService extends DrizzleService<Session, Partial<Session>, S
     );
 
     return session;
+  }
+
+  /**
+   * Custom method: Trigger queue processing
+   *
+   * Processes the next queued message for an idle session.
+   * Used by callback system to trigger immediate queue processing.
+   *
+   * NOTE: The actual implementation is provided by index.ts via setQueueProcessor
+   */
+  private queueProcessor?: (sessionId: string, params?: SessionParams) => Promise<void>;
+
+  setQueueProcessor(processor: (sessionId: string, params?: SessionParams) => Promise<void>): void {
+    this.queueProcessor = processor;
+  }
+
+  async triggerQueueProcessing(id: string, params?: SessionParams): Promise<void> {
+    if (this.queueProcessor) {
+      await this.queueProcessor(id, params);
+    } else {
+      console.warn('⚠️  [SessionsService] Queue processor not set, cannot trigger queue processing');
+    }
   }
 
   /**
@@ -269,10 +344,6 @@ export class SessionsService extends DrizzleService<Session, Partial<Session>, S
 
     // Recursively delete all children first
     if (children.length > 0) {
-      console.log(
-        `🗑️  Cascading delete: session ${String(id).substring(0, 8)} has ${children.length} children`
-      );
-
       for (const child of children) {
         await this.remove(child.session_id, params);
       }
@@ -280,8 +351,6 @@ export class SessionsService extends DrizzleService<Session, Partial<Session>, S
 
     // Now delete the current session (messages and tasks are cascade-deleted by DB)
     await this.sessionRepo.delete(id as string);
-
-    console.log(`✅ Deleted session ${String(id).substring(0, 8)} and all descendants`);
 
     // Emit removed event for WebSocket broadcasting
     this.emit?.('removed', session, params);

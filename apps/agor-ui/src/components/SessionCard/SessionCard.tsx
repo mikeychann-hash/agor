@@ -25,8 +25,8 @@ const SESSION_TITLE_FALLBACK_CHARS = 150; // Fallback truncation for unsupported
 
 interface SessionCardProps {
   session: Session;
-  tasks: Task[];
-  users: User[];
+  tasks?: Task[]; // Optional - will be fetched via useTasks if not provided
+  userById: Map<string, User>;
   currentUserId?: string;
   onTaskClick?: (taskId: string) => void;
   onSessionClick?: () => void;
@@ -41,8 +41,8 @@ interface SessionCardProps {
 
 const SessionCard = ({
   session,
-  tasks,
-  users,
+  tasks = [], // Default to empty array - tasks fetching will be added later via useTasks
+  userById,
   currentUserId,
   onTaskClick,
   onSessionClick,
@@ -109,7 +109,7 @@ const SessionCard = ({
             type="text"
             icon={<PlusCircleOutlined />}
             size="small"
-            onClick={e => {
+            onClick={(e) => {
               e.stopPropagation();
               onSessionClick?.();
             }}
@@ -119,7 +119,7 @@ const SessionCard = ({
         </div>
       )}
 
-      {visibleTasks.map(task => (
+      {visibleTasks.map((task) => (
         <TaskListItem key={task.task_id} task={task} onClick={() => onTaskClick?.(task.task_id)} />
       ))}
     </div>
@@ -170,7 +170,7 @@ const SessionCard = ({
               <Tag
                 icon={<PushpinFilled />}
                 color="blue"
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   onUnpin?.(session.session_id);
                 }}
@@ -194,7 +194,7 @@ const SessionCard = ({
                 type="text"
                 size="small"
                 icon={<ExpandOutlined />}
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   onSessionClick();
                 }}
@@ -206,7 +206,7 @@ const SessionCard = ({
                 type="text"
                 size="small"
                 icon={<SettingOutlined />}
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   onOpenSettings(session.session_id);
                 }}
@@ -219,7 +219,7 @@ const SessionCard = ({
                 size="small"
                 icon={<CloseOutlined />}
                 disabled={connectionDisabled}
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   handleDelete();
                 }}
@@ -267,7 +267,7 @@ const SessionCard = ({
             <CreatedByTag
               createdBy={session.created_by}
               currentUserId={currentUserId}
-              users={users}
+              userById={userById}
               prefix="Created by"
             />
           </div>

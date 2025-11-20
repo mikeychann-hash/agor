@@ -44,10 +44,10 @@ export interface CommentsPanelProps {
   client: AgorClient | null;
   boardId: string;
   comments: BoardComment[];
-  users: User[];
+  userById: Map<string, User>;
   currentUserId: string;
   boardObjects?: Record<string, BoardObject>; // For zone names
-  worktrees?: Worktree[]; // For worktree names
+  worktreeById?: Map<string, Worktree>; // For worktree names
   loading?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -69,9 +69,9 @@ type FilterMode = 'all' | 'active';
 const ReactionDisplay: React.FC<{
   reactions: CommentReaction[];
   currentUserId: string;
-  users: User[];
+  userById: Map<string, User>;
   onToggle: (emoji: string) => void;
-}> = ({ reactions, currentUserId, users, onToggle }) => {
+}> = ({ reactions, currentUserId, userById, onToggle }) => {
   const { token } = theme.useToken();
   const grouped: ReactionSummary = groupReactions(reactions);
 
@@ -86,9 +86,9 @@ const ReactionDisplay: React.FC<{
 
         // Build tooltip content with list of users who reacted
         const reactedUsers = userIds
-          .map(userId => users.find(u => u.user_id === userId))
+          .map((userId) => userById.get(userId))
           .filter(Boolean)
-          .map(user => user!.name || user!.email.split('@')[0]);
+          .map((user) => user!.name || user!.email.split('@')[0]);
 
         const tooltipContent =
           reactedUsers.length > 0 ? reactedUsers.join(', ') : 'Anonymous users';
@@ -108,10 +108,10 @@ const ReactionDisplay: React.FC<{
                 color: token.colorText,
                 transition: 'background-color 0.2s ease',
               }}
-              onMouseEnter={e => {
+              onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = token.colorPrimaryBgHover;
               }}
-              onMouseLeave={e => {
+              onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = hasReacted
                   ? token.colorPrimaryBg
                   : 'transparent';
@@ -139,7 +139,7 @@ const EmojiPickerButton: React.FC<{
     <Popover
       content={
         <EmojiPicker
-          onEmojiClick={emojiData => {
+          onEmojiClick={(emojiData) => {
             onToggle(emojiData.emoji);
             setPickerOpen(false);
           }}
@@ -169,14 +169,14 @@ const EmojiPickerButton: React.FC<{
  */
 const ReplyItem: React.FC<{
   reply: BoardComment;
-  users: User[];
+  userById: Map<string, User>;
   currentUserId: string;
   onToggleReaction?: (commentId: string, emoji: string) => void;
   onDelete?: (commentId: string) => void;
-}> = ({ reply, users, currentUserId, onToggleReaction, onDelete }) => {
+}> = ({ reply, userById, currentUserId, onToggleReaction, onDelete }) => {
   const { token } = theme.useToken();
   const [replyHovered, setReplyHovered] = useState(false);
-  const replyUser = users.find(u => u.user_id === reply.created_by);
+  const replyUser = userById.get(reply.created_by);
   const isReplyCurrentUser = reply.created_by === currentUserId;
 
   return (
@@ -214,8 +214,8 @@ const ReplyItem: React.FC<{
                   <ReactionDisplay
                     reactions={reply.reactions || []}
                     currentUserId={currentUserId}
-                    users={users}
-                    onToggle={emoji => onToggleReaction(reply.comment_id, emoji)}
+                    userById={userById}
+                    onToggle={(emoji) => onToggleReaction(reply.comment_id, emoji)}
                   />
                 </div>
               )}
@@ -238,7 +238,9 @@ const ReplyItem: React.FC<{
           >
             <Space size="small">
               {onToggleReaction && (
-                <EmojiPickerButton onToggle={emoji => onToggleReaction(reply.comment_id, emoji)} />
+                <EmojiPickerButton
+                  onToggle={(emoji) => onToggleReaction(reply.comment_id, emoji)}
+                />
               )}
               {onDelete && isReplyCurrentUser && (
                 <Button
@@ -265,7 +267,7 @@ const ReplyItem: React.FC<{
 const CommentThread: React.FC<{
   comment: BoardComment;
   replies: BoardComment[];
-  users: User[];
+  userById: Map<string, User>;
   currentUserId: string;
   onReply?: (parentId: string, content: string) => void;
   onResolve?: (commentId: string) => void;
@@ -276,7 +278,7 @@ const CommentThread: React.FC<{
 }> = ({
   comment,
   replies,
-  users,
+  userById,
   currentUserId,
   onReply,
   onResolve,
@@ -288,7 +290,7 @@ const CommentThread: React.FC<{
   const { token } = theme.useToken();
   const [showReplyInput, setShowReplyInput] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const user = users.find(u => u.user_id === comment.created_by);
+  const user = userById.get(comment.created_by);
   const isCurrentUser = comment.created_by === currentUserId;
 
   return (
@@ -345,8 +347,8 @@ const CommentThread: React.FC<{
                   <ReactionDisplay
                     reactions={comment.reactions || []}
                     currentUserId={currentUserId}
-                    users={users}
-                    onToggle={emoji => onToggleReaction(comment.comment_id, emoji)}
+                    userById={userById}
+                    onToggle={(emoji) => onToggleReaction(comment.comment_id, emoji)}
                   />
                 </div>
               )}
@@ -370,7 +372,7 @@ const CommentThread: React.FC<{
             <Space size="small">
               {onToggleReaction && (
                 <EmojiPickerButton
-                  onToggle={emoji => onToggleReaction(comment.comment_id, emoji)}
+                  onToggle={(emoji) => onToggleReaction(comment.comment_id, emoji)}
                 />
               )}
               {onReply && (
@@ -430,10 +432,10 @@ const CommentThread: React.FC<{
           >
             <List
               dataSource={replies}
-              renderItem={reply => (
+              renderItem={(reply) => (
                 <ReplyItem
                   reply={reply}
-                  users={users}
+                  userById={userById}
                   currentUserId={currentUserId}
                   onToggleReaction={onToggleReaction}
                   onDelete={onDelete}
@@ -449,7 +451,7 @@ const CommentThread: React.FC<{
             <Input.Search
               placeholder="Reply..."
               enterButton={<SendOutlined />}
-              onSearch={value => {
+              onSearch={(value) => {
                 if (value.trim()) {
                   onReply(comment.comment_id, value);
                   setShowReplyInput(false);
@@ -470,10 +472,10 @@ const CommentThread: React.FC<{
 export const CommentsPanel: React.FC<CommentsPanelProps> = ({
   boardId,
   comments,
-  users,
+  userById,
   currentUserId,
   boardObjects = {},
-  worktrees = [],
+  worktreeById,
   loading = false,
   collapsed = false,
   onToggleCollapse,
@@ -494,9 +496,9 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
   const commentRefs = React.useRef<Record<string, React.RefObject<HTMLDivElement>>>({});
 
   // Separate thread roots from replies
-  const threadRoots = useMemo(() => comments.filter(c => isThreadRoot(c)), [comments]);
+  const threadRoots = useMemo(() => comments.filter((c) => isThreadRoot(c)), [comments]);
 
-  const allReplies = useMemo(() => comments.filter(c => !isThreadRoot(c)), [comments]);
+  const allReplies = useMemo(() => comments.filter((c) => !isThreadRoot(c)), [comments]);
 
   // Group replies by parent
   const repliesByParent = useMemo(() => {
@@ -515,7 +517,7 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
   // Apply filters to thread roots only
   const filteredThreads = useMemo(() => {
     return threadRoots
-      .filter(thread => {
+      .filter((thread) => {
         if (filter === 'active' && thread.resolved) return false;
         return true;
       })
@@ -553,14 +555,14 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
           groupType = 'zone';
         } else if (parent_type === 'worktree') {
           groupKey = `worktree-${parent_id}`;
-          const worktree = worktrees.find(w => w.worktree_id === parent_id);
+          const worktree = worktreeById?.get(parent_id);
           groupLabel = worktree ? worktree.name : 'Unknown Worktree';
           groupType = 'worktree';
         }
       } else if (thread.worktree_id) {
         // Check for FK-based worktree attachment
         groupKey = `worktree-${thread.worktree_id}`;
-        const worktree = worktrees.find(w => w.worktree_id === thread.worktree_id);
+        const worktree = worktreeById?.get(thread.worktree_id);
         groupLabel = worktree ? worktree.name : 'Unknown Worktree';
         groupType = 'worktree';
       }
@@ -578,7 +580,7 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
     }
 
     return groups;
-  }, [filteredThreads, boardObjects, worktrees]);
+  }, [filteredThreads, boardObjects, worktreeById]);
 
   // Sort groups by scope hierarchy: Board → Zones → Worktrees (larger to smaller)
   const sortedGroupEntries = useMemo(() => {
@@ -747,7 +749,7 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
               children: (
                 <List
                   dataSource={group.threads}
-                  renderItem={thread => {
+                  renderItem={(thread) => {
                     // Create or get ref for this thread
                     if (!commentRefs.current[thread.comment_id]) {
                       commentRefs.current[thread.comment_id] = React.createRef<HTMLDivElement>();
@@ -761,7 +763,7 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
                       <CommentThread
                         comment={thread}
                         replies={repliesByParent[thread.comment_id] || []}
-                        users={users}
+                        userById={userById}
                         currentUserId={currentUserId}
                         onReply={onReplyComment}
                         onResolve={onResolveComment}
@@ -791,8 +793,8 @@ export const CommentsPanel: React.FC<CommentsPanelProps> = ({
           placeholder="Add a comment..."
           enterButton={<SendOutlined />}
           value={commentInputValue}
-          onChange={e => setCommentInputValue(e.target.value)}
-          onSearch={value => {
+          onChange={(e) => setCommentInputValue(e.target.value)}
+          onSearch={(value) => {
             if (value.trim()) {
               onSendComment(value);
               setCommentInputValue('');

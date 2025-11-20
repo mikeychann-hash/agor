@@ -6,7 +6,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { simpleGit } from 'simple-git';
@@ -129,11 +129,17 @@ export async function cloneRepo(options: CloneOptions): Promise<CloneResult> {
   // Inject token into URL for reliability (credential helper is also configured as backup)
   if (options.env?.GITHUB_TOKEN && cloneUrl.startsWith('https://github.com/')) {
     const token = options.env.GITHUB_TOKEN;
-    cloneUrl = cloneUrl.replace('https://github.com/', `https://x-access-token:${token}@github.com/`);
+    cloneUrl = cloneUrl.replace(
+      'https://github.com/',
+      `https://x-access-token:${token}@github.com/`
+    );
     console.debug('🔑 Injected GITHUB_TOKEN into URL');
   } else if (options.env?.GH_TOKEN && cloneUrl.startsWith('https://github.com/')) {
     const token = options.env.GH_TOKEN;
-    cloneUrl = cloneUrl.replace('https://github.com/', `https://x-access-token:${token}@github.com/`);
+    cloneUrl = cloneUrl.replace(
+      'https://github.com/',
+      `https://x-access-token:${token}@github.com/`
+    );
     console.debug('🔑 Injected GH_TOKEN into URL');
   }
 
@@ -193,14 +199,33 @@ export async function cloneRepo(options: CloneOptions): Promise<CloneResult> {
 /**
  * Check if a directory is a Git repository
  */
-export async function isGitRepo(path: string): Promise<boolean> {
+/**
+ * Validate that a path points to a git repository
+ *
+ * This checks both filesystem existence and git metadata.
+ */
+export async function isValidGitRepo(path: string): Promise<boolean> {
   try {
+    const stats = await stat(path);
+    if (!stats.isDirectory()) {
+      return false;
+    }
+
     const git = createGit(path);
-    await git.status();
+    await git.revparse(['--git-dir']);
     return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * @deprecated Use `isValidGitRepo` instead.
+ *
+ * Kept for backwards compatibility.
+ */
+export async function isGitRepo(path: string): Promise<boolean> {
+  return isValidGitRepo(path);
 }
 
 /**
@@ -271,11 +296,18 @@ export async function isClean(repoPath: string): Promise<boolean> {
 /**
  * Get remote URL
  */
-export async function getRemoteUrl(repoPath: string, remote: string = 'origin'): Promise<string> {
-  const git = createGit(repoPath);
-  const remotes = await git.getRemotes(true);
-  const remoteObj = remotes.find(r => r.name === remote);
-  return remoteObj?.refs.fetch || '';
+export async function getRemoteUrl(
+  repoPath: string,
+  remote: string = 'origin'
+): Promise<string | null> {
+  try {
+    const git = createGit(repoPath);
+    const remotes = await git.getRemotes(true);
+    const remoteObj = remotes.find((r) => r.name === remote);
+    return remoteObj?.refs.fetch ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -312,6 +344,19 @@ export async function createWorktree(
   sourceBranch?: string,
   env?: Record<string, string>
 ): Promise<void> {
+  console.log('🔍 createWorktree called with:', {
+    repoPath,
+    worktreePath,
+    ref,
+    createBranch,
+    pullLatest,
+    sourceBranch,
+  });
+
+  if (!repoPath) {
+    throw new Error('repoPath is required but was null/undefined');
+  }
+
   const git = createGit(repoPath, env);
 
   let fetchSucceeded = false;
@@ -484,7 +529,9 @@ export async function getRemoteBranches(
 ): Promise<string[]> {
   const git = createGit(repoPath);
   const branches = await git.branch(['-r']);
-  return branches.all.filter(b => b.startsWith(`${remote}/`)).map(b => b.replace(`${remote}/`, ''));
+  return branches.all
+    .filter((b) => b.startsWith(`${remote}/`))
+    .map((b) => b.replace(`${remote}/`, ''));
 }
 
 /**

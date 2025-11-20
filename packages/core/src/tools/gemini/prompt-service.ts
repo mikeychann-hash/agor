@@ -14,7 +14,6 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
-  ApprovalMode,
   AuthType,
   Config,
   executeToolCall,
@@ -23,7 +22,7 @@ import {
   MCPServerConfig,
   type ResumedSessionData,
 } from '@google/gemini-cli-core';
-import type { Content, Part } from '@google/genai';
+import type { Part } from '@google/genai';
 import { getDaemonUrl, resolveApiKey, resolveUserEnvironment } from '../../config';
 import type { Database } from '../../db/client';
 import type { MCPServerRepository } from '../../db/repositories/mcp-servers';
@@ -32,7 +31,7 @@ import type { SessionMCPServerRepository } from '../../db/repositories/session-m
 import type { SessionRepository } from '../../db/repositories/sessions';
 import type { WorktreeRepository } from '../../db/repositories/worktrees';
 import type { PermissionMode, SessionID, TaskID } from '../../types';
-import type { TokenUsage } from '../../utils/pricing';
+import type { TokenUsage } from '../../types/token-usage';
 import { convertConversationToHistory } from './conversation-converter';
 import { DEFAULT_GEMINI_MODEL, type GeminiModel } from './models';
 import { mapPermissionMode } from './permission-mapper';
@@ -70,6 +69,7 @@ export type GeminiStreamEvent =
       resolvedModel?: string;
       sessionId?: string;
       usage?: TokenUsage;
+      rawSdkResponse?: import('../../types/sdk-response').GeminiSdkResponse; // The actual response from Gemini SDK
     }
   | {
       type: 'tool_start';
@@ -266,10 +266,11 @@ export class GeminiPromptService {
                 `[Gemini Turn Finished] Text: ${fullTextContent.length} chars, Tools: ${toolUses.length}`
               );
 
+              // Type-assert event as ServerGeminiFinishedEvent since we're in Finished case
+              const finishedEvent = event as import('../../types/sdk-response').GeminiSdkResponse;
+
               // Extract token usage from SDK response
-              const mappedUsage = extractGeminiTokenUsage(
-                (event as { value?: { usageMetadata?: unknown } }).value?.usageMetadata
-              );
+              const mappedUsage = extractGeminiTokenUsage(finishedEvent.value?.usageMetadata);
 
               const content: Array<{
                 type: string;
@@ -306,6 +307,7 @@ export class GeminiPromptService {
                   resolvedModel: model,
                   sessionId,
                   usage: mappedUsage,
+                  rawSdkResponse: finishedEvent, // Pass through the actual SDK response (UNMUTATED)
                 };
               }
 
@@ -400,10 +402,21 @@ export class GeminiPromptService {
               },
               abortController.signal
             );
-            console.debug(`[Gemini Loop] Tool ${toolCall.name} executed successfully`);
+            console.debug(`[Gemini Loop] Tool ${toolCall.name} executed successfully:`, response);
 
-            // Add the response parts from the SDK (already formatted correctly)
-            functionResponseParts.push(...response.responseParts);
+            // In SDK 0.15.1, the response structure changed
+            // ToolCallResponseInfo has { callId, output } instead of { status, result }
+            // Create function response part from the tool call output
+            const responseOutput =
+              typeof response === 'object' && response && 'output' in response
+                ? response.output
+                : response;
+            functionResponseParts.push({
+              functionResponse: {
+                name: toolCall.name,
+                response: responseOutput,
+              },
+            } as Part);
           } catch (error) {
             console.error(`[Gemini Loop] Error executing tool ${toolCall.name}:`, error);
             // On error, create a function response part with the error
@@ -472,7 +485,7 @@ export class GeminiPromptService {
       // Find session file matching pattern: session-*-{sessionId-first8}.json
       const sessionIdShort = sessionId.slice(0, 8);
       const files = await fs.readdir(chatsDir);
-      const sessionFile = files.find(f => f.includes(sessionIdShort) && f.endsWith('.json'));
+      const sessionFile = files.find((f) => f.includes(sessionIdShort) && f.endsWith('.json'));
 
       if (!sessionFile) {
         console.debug(`No session file found for ${sessionId} (looking for *${sessionIdShort}*)`);

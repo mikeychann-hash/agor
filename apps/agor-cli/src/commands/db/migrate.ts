@@ -13,22 +13,26 @@ export default class DbMigrate extends Command {
   static examples = ['<%= config.bin %> <%= command.id %>'];
 
   async run(): Promise<void> {
+    await this.parse(DbMigrate);
+
     try {
-      // Determine database path (same logic as daemon)
-      const dbPath = expandPath(process.env.AGOR_DB_PATH || 'file:~/.agor/agor.db');
-      const dbFilePath = extractDbFilePath(dbPath);
+      // Determine database URL (same logic as daemon)
+      // Priority: DATABASE_URL > AGOR_DB_PATH > default SQLite path
+      const dbUrl =
+        process.env.DATABASE_URL || expandPath(process.env.AGOR_DB_PATH || 'file:~/.agor/agor.db');
+      const dbFilePath = extractDbFilePath(dbUrl);
 
       this.log(chalk.bold('🔍 Checking database migration status...'));
       this.log('');
 
-      const db = createDatabase({ url: dbPath });
+      const db = createDatabase({ url: dbUrl });
       const status = await checkMigrationStatus(db);
 
       if (!status.hasPending) {
-        this.log(chalk.green('✓') + ' Database is already up to date!');
+        this.log(`${chalk.green('✓')} Database is already up to date!`);
         this.log('');
         this.log(`Applied migrations (${status.applied.length}):`);
-        status.applied.forEach(tag => {
+        status.applied.forEach((tag) => {
           this.log(`  ${chalk.dim('•')} ${tag}`);
         });
         return;
@@ -37,7 +41,7 @@ export default class DbMigrate extends Command {
       // Show pending migrations
       this.log(chalk.yellow('⚠️  Found pending migrations:'));
       this.log('');
-      status.pending.forEach(tag => {
+      status.pending.forEach((tag) => {
         this.log(`  ${chalk.yellow('+')} ${tag}`);
       });
       this.log('');
@@ -53,7 +57,7 @@ export default class DbMigrate extends Command {
 
       // Wait for user confirmation (only in TTY mode)
       if (process.stdin.isTTY) {
-        await new Promise<void>(resolve => {
+        await new Promise<void>((resolve) => {
           process.stdin.once('data', () => resolve());
           process.stdin.setRawMode(true);
           process.stdin.resume();
@@ -64,7 +68,7 @@ export default class DbMigrate extends Command {
         process.stdin.pause();
       } else {
         // In non-TTY mode, wait for a newline
-        await new Promise<void>(resolve => {
+        await new Promise<void>((resolve) => {
           process.stdin.once('data', () => resolve());
           process.stdin.resume();
         });
@@ -83,7 +87,7 @@ export default class DbMigrate extends Command {
         this.log(chalk.red('✗ Migration verification failed!'));
         this.log('');
         this.log(`Still have ${afterStatus.pending.length} pending migration(s):`);
-        afterStatus.pending.forEach(tag => {
+        afterStatus.pending.forEach((tag) => {
           this.log(`  ${chalk.red('•')} ${tag}`);
         });
         this.log('');
@@ -104,7 +108,7 @@ export default class DbMigrate extends Command {
       }
 
       this.log('');
-      this.log(chalk.green('✓') + ' All migrations completed successfully!');
+      this.log(`${chalk.green('✓')} All migrations completed successfully!`);
       this.log('');
       this.log('You can now start the daemon with:');
       this.log(chalk.cyan('  agor daemon start'));

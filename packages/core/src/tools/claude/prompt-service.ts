@@ -186,7 +186,7 @@ export class ClaudePromptService {
         }
 
         // If we got an end event, break the outer loop
-        if (events.some(e => e.type === 'end')) {
+        if (events.some((e) => e.type === 'end')) {
           break;
         }
       }
@@ -312,8 +312,8 @@ export class ClaudePromptService {
           }
 
           // Capture token usage from result events
-          if (event.type === 'result' && event.token_usage) {
-            tokenUsage = event.token_usage as {
+          if (event.type === 'result' && event.raw_sdk_message?.usage) {
+            tokenUsage = event.raw_sdk_message.usage as {
               input_tokens?: number;
               output_tokens?: number;
               cache_creation_tokens?: number;

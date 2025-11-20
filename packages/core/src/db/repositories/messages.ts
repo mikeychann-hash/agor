@@ -8,6 +8,7 @@
 import type { Message, MessageID, SessionID, TaskID, UUID } from '@agor/core/types';
 import { eq } from 'drizzle-orm';
 import type { Database } from '../client';
+import { deleteFrom, insert, select, update } from '../database-wrapper';
 import { type MessageInsert, type MessageRow, messages } from '../schema';
 
 export class MessagesRepository {
@@ -65,7 +66,7 @@ export class MessagesRepository {
    */
   async create(message: Message): Promise<Message> {
     const row = this.messageToRow(message);
-    const [inserted] = await this.db.insert(messages).values(row).returning();
+    const inserted = await insert(this.db, messages).values(row).returning().one();
     return this.rowToMessage(inserted);
   }
 
@@ -73,56 +74,55 @@ export class MessagesRepository {
    * Bulk insert messages (optimized for session loading)
    */
   async createMany(messageList: Message[]): Promise<Message[]> {
-    const rows = messageList.map(m => this.messageToRow(m));
-    const inserted = await this.db.insert(messages).values(rows).returning();
-    return inserted.map(r => this.rowToMessage(r));
+    const rows = messageList.map((m) => this.messageToRow(m));
+    const inserted = await insert(this.db, messages).values(rows).returning().all();
+    return inserted.map((r: MessageRow) => this.rowToMessage(r));
   }
 
   /**
    * Get message by ID
    */
   async findById(messageId: MessageID): Promise<Message | null> {
-    const rows = await this.db
-      .select()
+    const row = await select(this.db)
       .from(messages)
       .where(eq(messages.message_id, messageId))
-      .limit(1);
+      .one();
 
-    return rows[0] ? this.rowToMessage(rows[0]) : null;
+    return row ? this.rowToMessage(row) : null;
   }
 
   /**
    * Get all messages (used by FeathersJS service adapter)
    */
   async findAll(): Promise<Message[]> {
-    const rows = await this.db.select().from(messages).orderBy(messages.index);
-    return rows.map(r => this.rowToMessage(r));
+    const rows = await select(this.db).from(messages).orderBy(messages.index).all();
+    return rows.map((r: MessageRow) => this.rowToMessage(r));
   }
 
   /**
    * Get all messages for a session (ordered by index)
    */
   async findBySessionId(sessionId: SessionID): Promise<Message[]> {
-    const rows = await this.db
-      .select()
+    const rows = await select(this.db)
       .from(messages)
       .where(eq(messages.session_id, sessionId))
-      .orderBy(messages.index);
+      .orderBy(messages.index)
+      .all();
 
-    return rows.map(r => this.rowToMessage(r));
+    return rows.map((r: MessageRow) => this.rowToMessage(r));
   }
 
   /**
    * Get all messages for a task (ordered by index)
    */
   async findByTaskId(taskId: TaskID): Promise<Message[]> {
-    const rows = await this.db
-      .select()
+    const rows = await select(this.db)
       .from(messages)
       .where(eq(messages.task_id, taskId))
-      .orderBy(messages.index);
+      .orderBy(messages.index)
+      .all();
 
-    return rows.map(r => this.rowToMessage(r));
+    return rows.map((r: MessageRow) => this.rowToMessage(r));
   }
 
   /**
@@ -134,16 +134,16 @@ export class MessagesRepository {
     startIndex: number,
     endIndex: number
   ): Promise<Message[]> {
-    const rows = await this.db
-      .select()
+    const rows = await select(this.db)
       .from(messages)
       .where(eq(messages.session_id, sessionId))
-      .orderBy(messages.index);
+      .orderBy(messages.index)
+      .all();
 
     // Filter by range in memory (simpler than complex SQL)
     return rows
-      .filter(r => r.index >= startIndex && r.index <= endIndex)
-      .map(r => this.rowToMessage(r));
+      .filter((r: MessageRow) => r.index >= startIndex && r.index <= endIndex)
+      .map((r: MessageRow) => this.rowToMessage(r));
   }
 
   /**
@@ -159,11 +159,11 @@ export class MessagesRepository {
     const updated = { ...existing, ...updates };
     const row = this.messageToRow(updated);
 
-    const [result] = await this.db
-      .update(messages)
+    const result = await update(this.db, messages)
       .set(row)
       .where(eq(messages.message_id, messageId))
-      .returning();
+      .returning()
+      .one();
 
     return this.rowToMessage(result);
   }
@@ -172,11 +172,11 @@ export class MessagesRepository {
    * Update message task assignment
    */
   async assignToTask(messageId: MessageID, taskId: TaskID): Promise<Message> {
-    const [updated] = await this.db
-      .update(messages)
+    const updated = await update(this.db, messages)
       .set({ task_id: taskId })
       .where(eq(messages.message_id, messageId))
-      .returning();
+      .returning()
+      .one();
 
     return this.rowToMessage(updated);
   }
@@ -185,43 +185,58 @@ export class MessagesRepository {
    * Delete all messages for a session (cascades automatically via FK)
    */
   async deleteBySessionId(sessionId: SessionID): Promise<void> {
-    await this.db.delete(messages).where(eq(messages.session_id, sessionId));
+    await deleteFrom(this.db, messages).where(eq(messages.session_id, sessionId)).run();
   }
 
   /**
    * Delete a single message
    */
   async delete(messageId: MessageID): Promise<void> {
-    await this.db.delete(messages).where(eq(messages.message_id, messageId));
+    await deleteFrom(this.db, messages).where(eq(messages.message_id, messageId)).run();
   }
 
   /**
    * Create a queued message
    * NOTE: Queued messages always store prompt as string content
    * This ensures compatibility with prompt execution endpoint
+   *
+   * @param sessionId - Session to queue message for
+   * @param prompt - Message content (string)
+   * @param metadata - Optional metadata (e.g., is_agor_callback, source, child_session_id)
    */
-  async createQueued(sessionId: SessionID, prompt: string): Promise<Message> {
+  async createQueued(
+    sessionId: SessionID,
+    prompt: string,
+    metadata?: Record<string, unknown>
+  ): Promise<Message> {
     if (!prompt || typeof prompt !== 'string') {
       throw new Error('Prompt must be a non-empty string');
     }
 
     const { generateId } = await import('../../lib/ids');
-    const { max, and, asc } = await import('drizzle-orm');
+    const { and } = await import('drizzle-orm');
 
     // Get current max queue position for session
-    const result = await this.db
-      .select({ max: max(messages.queue_position) })
+    const result = await select(this.db)
       .from(messages)
-      .where(and(eq(messages.session_id, sessionId), eq(messages.status, 'queued')));
+      .where(and(eq(messages.session_id, sessionId), eq(messages.status, 'queued')))
+      .all();
 
-    const nextPosition = (result[0]?.max || 0) + 1;
+    const maxPosition = result.reduce(
+      (max: number, row: MessageRow) => Math.max(max, row.queue_position || 0),
+      0
+    );
+    const nextPosition = maxPosition + 1;
+
+    // Determine message type based on metadata
+    const messageType = metadata?.is_agor_callback ? 'system' : 'user';
 
     // Create queued message
     const message: Message = {
       message_id: generateId() as MessageID,
       session_id: sessionId,
-      type: 'user',
-      role: 'user' as Message['role'],
+      type: messageType,
+      role: 'user' as Message['role'], // Always 'user' for right-side positioning
       index: -1, // Not in conversation yet
       timestamp: new Date().toISOString(),
       content_preview: prompt.substring(0, 200),
@@ -229,6 +244,7 @@ export class MessagesRepository {
       status: 'queued',
       queue_position: nextPosition,
       task_id: undefined,
+      metadata, // Include metadata (is_agor_callback, source, child_session_id, etc.)
     };
 
     return this.create(message);
@@ -240,13 +256,13 @@ export class MessagesRepository {
   async findQueued(sessionId: SessionID): Promise<Message[]> {
     const { and, asc } = await import('drizzle-orm');
 
-    const rows = await this.db
-      .select()
+    const rows = await select(this.db)
       .from(messages)
       .where(and(eq(messages.session_id, sessionId), eq(messages.status, 'queued')))
-      .orderBy(asc(messages.queue_position));
+      .orderBy(asc(messages.queue_position))
+      .all();
 
-    return rows.map(r => this.rowToMessage(r));
+    return rows.map((r: MessageRow) => this.rowToMessage(r));
   }
 
   /**

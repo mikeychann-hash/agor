@@ -5,9 +5,13 @@
  * Uses DrizzleService adapter with TaskRepository.
  */
 
-import { type Database, TaskRepository } from '@agor/core/db';
+import {
+  type ChildCompletionContext,
+  renderChildCompletionCallback,
+} from '@agor/core/callbacks/child-completion-template';
+import { type Database, MessagesRepository, TaskRepository } from '@agor/core/db';
 import type { Application } from '@agor/core/feathers';
-import type { Paginated, QueryParams, Task } from '@agor/core/types';
+import type { Paginated, QueryParams, Session, Task } from '@agor/core/types';
 import { TaskStatus } from '@agor/core/types';
 import { DrizzleService } from '../adapters/drizzle';
 
@@ -25,6 +29,7 @@ export type TaskParams = QueryParams<{
 export class TasksService extends DrizzleService<Task, Partial<Task>, TaskParams> {
   private taskRepo: TaskRepository;
   private app: Application;
+  private db: Database;
 
   constructor(db: Database, app: Application) {
     const taskRepo = new TaskRepository(db);
@@ -40,6 +45,7 @@ export class TasksService extends DrizzleService<Task, Partial<Task>, TaskParams
 
     this.taskRepo = taskRepo;
     this.app = app;
+    this.db = db;
   }
 
   /**
@@ -90,37 +96,181 @@ export class TasksService extends DrizzleService<Task, Partial<Task>, TaskParams
   }
 
   /**
-   * Override patch to detect task completion and set ready_for_prompt
+   * Override patch to detect task completion and:
+   * 1. Set ready_for_prompt flag
+   * 2. Queue callback to parent session (if exists)
    */
   async patch(id: string, data: Partial<Task>, params?: TaskParams): Promise<Task | Task[]> {
     const result = await super.patch(id, data, params);
 
-    // If task is being marked as completed, set session's ready_for_prompt flag
-    if (data.status === TaskStatus.COMPLETED) {
+    // If task is being marked as completed or failed (terminal status)
+    if (data.status === TaskStatus.COMPLETED || data.status === TaskStatus.FAILED) {
       // Handle both single task and array of tasks
       const tasks = Array.isArray(result) ? result : [result];
 
       for (const task of tasks) {
-        console.log(
-          `[TasksService] Task ${task.task_id} marked as completed via patch, setting ready_for_prompt for session ${task.session_id}`
-        );
-
         if (task.session_id && this.app) {
           try {
-            await this.app.service('sessions').patch(task.session_id, {
-              ready_for_prompt: true,
-            });
-            console.log(
-              `✅ [TasksService] Set ready_for_prompt=true for session ${task.session_id}`
-            );
+            // Check if session has parent and queue callback
+            // NOTE: Don't patch ready_for_prompt here - it's set atomically with status=IDLE in index.ts
+            // to avoid race condition between partial patches
+            const session = await this.app.service('sessions').get(task.session_id);
+            if (session.genealogy?.parent_session_id) {
+              await this.queueParentCallback(task, session, params);
+            }
           } catch (error) {
-            console.error('❌ [TasksService] Failed to set ready_for_prompt flag:', error);
+            console.error('❌ [TasksService] Failed to process task completion:', error);
           }
         }
       }
     }
 
     return result;
+  }
+
+  /**
+   * Queue callback message to parent session when child completes
+   */
+  private async queueParentCallback(
+    task: Task,
+    childSession: Session,
+    params?: TaskParams
+  ): Promise<void> {
+    const parentSessionId = childSession.genealogy?.parent_session_id;
+    if (!parentSessionId) return;
+
+    try {
+      // Get parent session to check callback config
+      const parentSession = await this.app.service('sessions').get(parentSessionId);
+
+      // Check callback config - child overrides take precedence over parent defaults
+      const callbackEnabled =
+        childSession.callback_config?.enabled ?? parentSession.callback_config?.enabled ?? true;
+
+      if (!callbackEnabled) {
+        console.log(
+          `⏭️  [TasksService] Callbacks disabled for child session ${childSession.session_id.substring(0, 8)}`
+        );
+        return;
+      }
+
+      // Check if we should include original spawn prompt - child overrides take precedence
+      const includeOriginalPrompt =
+        childSession.callback_config?.include_original_prompt ??
+        parentSession.callback_config?.include_original_prompt ??
+        false;
+
+      // Get spawn prompt from task description (only if enabled)
+      const spawnPrompt = includeOriginalPrompt
+        ? task.description || '(no prompt available)'
+        : undefined;
+
+      // Fetch last assistant message from child session (if callback config allows)
+      let lastAssistantMessage: string | undefined;
+
+      // Check if we should include last message - child overrides take precedence
+      const includeLastMessage =
+        childSession.callback_config?.include_last_message ??
+        parentSession.callback_config?.include_last_message ??
+        true;
+
+      if (includeLastMessage) {
+        try {
+          // Query messages service for last assistant message in this task
+          const messagesService = this.app.service('messages');
+          const messages = await messagesService.find({
+            query: {
+              session_id: childSession.session_id,
+              task_id: task.task_id,
+            },
+          });
+
+          // MessagesService.find() ignores role/sort/limit when task_id is present
+          // So we need to filter and sort manually
+          const allMessages = messages.data || messages;
+          const assistantMessages = (Array.isArray(allMessages) ? allMessages : [])
+            // biome-ignore lint/suspicious/noExplicitAny: Message type varies based on service response format
+            .filter((msg: any) => msg.role === 'assistant')
+            // biome-ignore lint/suspicious/noExplicitAny: Message type varies based on service response format
+            .sort((a: any, b: any) => (b.index || 0) - (a.index || 0)); // Descending by index
+
+          if (assistantMessages.length > 0) {
+            const lastMsg = assistantMessages[0];
+            // Extract text content from content blocks or string
+            if (typeof lastMsg.content === 'string') {
+              lastAssistantMessage = lastMsg.content;
+            } else if (Array.isArray(lastMsg.content)) {
+              // Find text blocks and concatenate
+              const textBlocks = lastMsg.content
+                // biome-ignore lint/suspicious/noExplicitAny: Content block types vary by SDK
+                .filter((block: any) => block.type === 'text')
+                // biome-ignore lint/suspicious/noExplicitAny: Content block types vary by SDK
+                .map((block: any) => block.text || '')
+                .join('\n\n');
+              lastAssistantMessage = textBlocks || undefined;
+            }
+          }
+        } catch (error) {
+          console.warn(
+            `⚠️  [TasksService] Could not fetch last assistant message for callback:`,
+            error
+          );
+          // Continue without last message - not critical
+        }
+      }
+
+      // Build callback context
+      const context: ChildCompletionContext = {
+        childSessionId: childSession.session_id.substring(0, 8),
+        childSessionFullId: childSession.session_id,
+        childTaskId: task.task_id.substring(0, 8),
+        childTaskFullId: task.task_id,
+        parentSessionId: parentSessionId.substring(0, 8),
+        spawnPrompt,
+        status: task.status, // COMPLETED, FAILED, etc.
+        completedAt: task.completed_at || new Date().toISOString(),
+        messageCount:
+          task.message_range?.end_index !== undefined &&
+          task.message_range?.start_index !== undefined
+            ? task.message_range.end_index - task.message_range.start_index + 1
+            : 0,
+        toolUseCount: task.tool_use_count || 0,
+        lastAssistantMessage,
+      };
+
+      // Render callback message using template
+      const customTemplate = parentSession.callback_config?.template;
+      const callbackMessage = renderChildCompletionCallback(context, customTemplate);
+
+      // Queue message to parent session with special metadata
+      const messageRepo = new MessagesRepository(this.db);
+
+      // Create queued message with Agor callback metadata
+      await messageRepo.createQueued(parentSessionId, callbackMessage, {
+        is_agor_callback: true,
+        source: 'agor',
+        child_session_id: childSession.session_id,
+        child_task_id: task.task_id,
+      });
+
+      console.log(
+        `🔔 Queued callback to parent ${parentSessionId.substring(0, 8)} from child ${childSession.session_id.substring(0, 8)}`
+      );
+
+      // If parent is idle, trigger queue processing immediately
+      if (parentSession.status === 'idle') {
+        // Trigger queue processing via custom method
+        // biome-ignore lint/suspicious/noExplicitAny: Service type casting required for custom method access
+        const sessionsService = this.app.service('sessions') as any;
+        await sessionsService.triggerQueueProcessing(parentSessionId, params);
+      }
+    } catch (error) {
+      console.error(
+        `❌ [TasksService] Failed to queue parent callback for session ${childSession.session_id}:`,
+        error
+      );
+      // Don't throw - callback failure shouldn't break task completion
+    }
   }
 
   /**
@@ -163,23 +313,17 @@ export class TasksService extends DrizzleService<Task, Partial<Task>, TaskParams
     )) as Task;
 
     // Set the session's ready_for_prompt flag to true when task completes successfully
-    console.log(
-      `[TasksService] Task ${id} completed, setting ready_for_prompt for session ${completedTask.session_id}`
-    );
     if (completedTask.session_id && this.app) {
       try {
         await this.app.service('sessions').patch(completedTask.session_id, {
           ready_for_prompt: true,
         });
-        console.log(
-          `✅ [TasksService] Set ready_for_prompt=true for session ${completedTask.session_id}`
-        );
       } catch (error) {
-        console.error('❌ [TasksService] Failed to set ready_for_prompt flag:', error);
+        console.error('❌ Failed to set ready_for_prompt flag:', error);
       }
     } else {
       console.warn(
-        `⚠️ [TasksService] Cannot set ready_for_prompt: session_id=${completedTask.session_id}, app=${!!this.app}`
+        `⚠️ Cannot set ready_for_prompt: session_id=${completedTask.session_id}, app=${!!this.app}`
       );
     }
 

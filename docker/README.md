@@ -14,6 +14,7 @@ docker/
 ```
 
 Both Dockerfiles use multi-stage builds with a shared base stage:
+
 - **Base stage**: System deps, Node 20, pnpm, AI CLIs, user setup (~500MB)
 - **Dev stage**: Copies monorepo source, installs dev dependencies (~1.5GB)
 - **Prod stage**: Installs `agor-live` from npm globally (~600MB)
@@ -160,17 +161,48 @@ docker compose -f docker-compose.prod.yml build
 
 ## Advanced Usage
 
-### Multiple Instances (Dev)
+### Multiple Worktrees (Dev)
 
-Run multiple dev instances with separate volumes:
+Each git worktree can run its own isolated Docker environment with:
+
+- **Separate images** (tagged per project name)
+- **Separate volumes** (node_modules, database, config)
+- **Separate ports** (using unique_id offset)
+- **Automatic dependency sync** (based on each worktree's pnpm-lock.yaml)
+
+This is configured in `.agor.yml`:
+
+```yaml
+environment:
+  start: DAEMON_PORT={{add 3000 worktree.unique_id}} UI_PORT={{add 5000 worktree.unique_id}} docker compose -p agor-{{worktree.name}} up -d
+  stop: docker compose -p agor-{{worktree.name}} down
+```
+
+Manual example:
 
 ```bash
-# Instance 1
-docker compose -p agor-worktree-1 up
+# Worktree 1 (postgres-support branch)
+cd ~/.agor/worktrees/preset-io/agor/postgres-support
+DAEMON_PORT=3001 UI_PORT=5001 docker compose -p agor-postgres-support up -d
 
-# Instance 2 (different ports)
-DAEMON_PORT=3031 UI_PORT=5174 docker compose -p agor-worktree-2 up
+# Worktree 2 (main branch)
+cd ~/.agor/worktrees/preset-io/agor/main
+DAEMON_PORT=3002 UI_PORT=5002 docker compose -p agor-main up -d
 ```
+
+**How it works:**
+
+1. **Image isolation**: `${COMPOSE_PROJECT_NAME}-agor-dev` means each `-p` project builds its own image
+2. **Volume isolation**: Docker Compose creates separate volumes per project (named volumes + anonymous volumes for node_modules)
+3. **Dependency sync**: Entrypoint runs `pnpm install` on startup, syncing to the mounted worktree's `pnpm-lock.yaml`
+4. **No conflicts**: Worktree A with PostgreSQL deps won't conflict with Worktree B without them
+
+**Benefits:**
+
+- Work on multiple branches simultaneously
+- Each worktree has correct dependencies (even if branches diverge)
+- No manual dependency management needed
+- Clean separation of databases and configs
 
 ### SSH Key Authentication (Dev)
 
@@ -181,7 +213,33 @@ volumes:
   - ~/.ssh:/home/agor/.ssh:ro
 ```
 
-This is already configured in `docker-compose.yml` (commented out by default).
+This is already configured in `docker-compose.yml`.
+
+### Host UID/GID Mapping (Linux)
+
+On Linux, you can run the container as your host user to avoid permission issues entirely:
+
+```bash
+# Create .env file with your UID/GID
+printf "UID=%s\nGID=%s\n" "$(id -u)" "$(id -g)" > .env
+
+# Create docker-compose.override.yml
+cat > docker-compose.override.yml <<'EOF'
+services:
+  agor-dev:
+    user: "${UID:-1000}:${GID:-1000}"
+EOF
+
+# Start normally
+docker compose up
+```
+
+**When to use this:**
+
+- You're on Linux and want to avoid the automatic `chown` on startup
+- You want container-created files to match your host user ownership
+
+**Note:** On macOS/Windows, Docker Desktop handles UID mapping automatically - this override is unnecessary.
 
 ### Custom agor-live Version (Prod)
 
@@ -209,12 +267,19 @@ DAEMON_PORT=3031 docker compose up
 
 ### Volume Permission Issues
 
-If you see permission errors:
+The entrypoint script automatically fixes permissions on bind-mounted directories during startup. This resolves issues where host-mounted files have different ownership than the container user.
+
+**If you still see `EACCES: permission denied` errors:**
 
 ```bash
-# Fix permissions (runs automatically in entrypoint)
-docker compose exec agor-dev sudo chown -R agor:agor /home/agor/.agor
+# Manually fix permissions (already runs automatically in entrypoint)
+docker compose exec agor-dev sudo chown -R agor:agor /app
+
+# Or restart container (permissions are fixed on startup)
+docker compose restart agor-dev
 ```
+
+**Note for Linux users:** On Linux, bind mounts preserve exact host UID/GID. If you prefer to avoid the automatic permission fix and match your host user, use the UID/GID override (see Advanced Usage below).
 
 ### Rebuild from Scratch
 
@@ -270,6 +335,7 @@ Expected image sizes:
 ### Why Shared Base Image?
 
 **Benefits:**
+
 - DRY: System dependencies defined once
 - Faster builds: Base layer cached and reused
 - Consistency: Dev and prod use same base environment
@@ -278,12 +344,14 @@ Expected image sizes:
 ### Why Separate Entrypoints?
 
 **Development** (`docker-entrypoint.sh`):
+
 - Installs dependencies from monorepo
 - Builds `@agor/core`
 - Runs `pnpm dev` for daemon + UI (hot-reload)
 - Seeds test data (optional)
 
 **Production** (`docker-entrypoint-prod.sh`):
+
 - Installs `agor-live` from npm (global)
 - Runs `agor init --skip-if-exists`
 - Creates admin user

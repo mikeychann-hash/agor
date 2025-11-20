@@ -46,15 +46,18 @@ export interface SessionsServiceImpl extends Service<Session, Partial<Session>, 
   ): Promise<Session>;
   spawn(
     id: string,
-    data: {
-      prompt: string;
-      title?: string;
-      agentic_tool?: Session['agentic_tool'];
-      task_id?: string;
-    },
+    data: Partial<import('@agor/core/types').SpawnConfig>,
     params?: FeathersParams
   ): Promise<Session>;
   getGenealogy(id: string, params?: FeathersParams): Promise<unknown>; // GenealogyTree type would go here
+  // Callback queue processing
+  setQueueProcessor(
+    processor: (
+      sessionId: import('@agor/core/types').SessionID,
+      params?: FeathersParams
+    ) => Promise<void>
+  ): void;
+  triggerQueueProcessing(id: string, params?: FeathersParams): Promise<void>;
   // Event emitter methods (FeathersJS EventEmitter interface - any[] for event args flexibility)
   // biome-ignore lint/suspicious/noExplicitAny: FeathersJS event handlers accept variable arguments
   on(event: string, handler: (...args: any[]) => void): this;
@@ -80,8 +83,9 @@ export interface TasksServiceImpl extends Service<Task, Partial<Task>, FeathersP
  * Repos service with custom methods (server-side implementation)
  */
 export interface ReposServiceImpl extends Service<Repo, Partial<Repo>, FeathersParams> {
+  addLocalRepository(data: { path: string; slug?: string }, params?: FeathersParams): Promise<Repo>;
   cloneRepository(
-    data: { url: string; name?: string; destination?: string },
+    data: { url: string; name?: string; slug?: string; destination?: string },
     params?: FeathersParams
   ): Promise<Repo>;
   createWorktree(

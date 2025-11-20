@@ -17,13 +17,13 @@ import {
   PermissionStatus,
   type User,
 } from '@agor/core/types';
-import { CheckCircleFilled, RobotOutlined } from '@ant-design/icons';
+import { CopyOutlined, RobotOutlined } from '@ant-design/icons';
 import { Bubble } from '@ant-design/x';
-import { Space, Spin, Tooltip, Typography, theme } from 'antd';
-
-const { Text } = Typography;
+import { Tooltip, theme } from 'antd';
 
 import type React from 'react';
+import { useState } from 'react';
+import { useCopyToClipboard } from '../../utils/clipboard';
 import { formatTimestampWithRelative } from '../../utils/time';
 import { AgorAvatar } from '../AgorAvatar';
 import { CollapsibleMarkdown } from '../CollapsibleText/CollapsibleMarkdown';
@@ -58,13 +58,11 @@ interface ThinkingContentBlock {
   signature?: string;
 }
 
-type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ThinkingContentBlock;
-
 interface MessageBlockProps {
   message:
     | Message
     | (Message & { isStreaming?: boolean; thinkingContent?: string; isThinking?: boolean });
-  users?: User[];
+  userById?: Map<string, User>;
   currentUserId?: string;
   isTaskRunning?: boolean; // Whether the task is running (for loading state)
   agentic_tool?: string; // Agentic tool name for showing tool icon
@@ -83,6 +81,63 @@ interface MessageBlockProps {
 }
 
 /**
+ * Content wrapper that adds copy-to-clipboard functionality inside the bubble
+ */
+interface BubbleContentWithCopyProps {
+  textContent: string; // The actual text being displayed in the bubble
+  children: React.ReactNode;
+}
+
+const BubbleContentWithCopy: React.FC<BubbleContentWithCopyProps> = ({ textContent, children }) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [copied, copy] = useCopyToClipboard();
+  const { token } = theme.useToken();
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    copy(textContent);
+  };
+
+  return (
+    <div
+      style={{ position: 'relative' }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {children}
+      {isHovered && (
+        <Tooltip title={copied ? 'Copied!' : 'Copy message'}>
+          <CopyOutlined
+            onClick={handleCopy}
+            style={{
+              position: 'absolute',
+              top: -(token.sizeUnit * 2),
+              right: -(token.sizeUnit * 2),
+              cursor: 'pointer',
+              fontSize: token.fontSizeSM,
+              color: copied ? token.colorSuccess : token.colorTextSecondary,
+              padding: token.sizeXXS,
+              transition: 'all 0.2s',
+              zIndex: 1,
+            }}
+            onMouseEnter={(e) => {
+              if (!copied) {
+                e.currentTarget.style.color = token.colorPrimary;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!copied) {
+                e.currentTarget.style.color = token.colorTextSecondary;
+              }
+            }}
+          />
+        </Tooltip>
+      )}
+    </div>
+  );
+};
+
+/**
  * Check if this is a Task tool prompt message (agent-generated, appears as user message)
  *
  * Task tool prompts are user role messages with array content containing text blocks.
@@ -96,9 +151,9 @@ function isTaskToolPrompt(message: Message): boolean {
   if (!Array.isArray(message.content)) return false;
 
   // Must have at least one text block (not tool_result)
-  const hasTextBlock = message.content.some(block => block.type === 'text');
+  const hasTextBlock = message.content.some((block) => block.type === 'text');
   const hasOnlyTextBlocks = message.content.every(
-    block => block.type === 'text' || block.type === 'thinking'
+    (block) => block.type === 'text' || block.type === 'thinking'
   );
 
   // If it has text blocks and NO tool_result blocks, it's likely a Task prompt
@@ -115,7 +170,7 @@ function isTaskToolResult(message: Message): boolean {
   // Check if contains tool_result block
   // Note: We can't easily determine if it's specifically a Task result here,
   // but groupMessagesIntoBlocks ensures only Task results reach this as non-chain messages
-  const hasToolResult = message.content.some(block => block.type === 'tool_result');
+  const hasToolResult = message.content.some((block) => block.type === 'tool_result');
 
   // User messages with tool_results that aren't in agent chains are likely Task results
   return hasToolResult;
@@ -123,7 +178,7 @@ function isTaskToolResult(message: Message): boolean {
 
 export const MessageBlock: React.FC<MessageBlockProps> = ({
   message,
-  users = [],
+  userById = new Map(),
   currentUserId,
   isTaskRunning = false,
   agentic_tool,
@@ -159,7 +214,7 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
           }
           onDeny={
             canInteract && onPermissionDecision && sessionId && taskId
-              ? messageId => {
+              ? (_messageId) => {
                   onPermissionDecision(
                     sessionId,
                     content.request_id,
@@ -180,6 +235,7 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
   const isTaskPrompt = isTaskToolPrompt(message);
   const isTaskResult = isTaskToolResult(message);
   const isSystem = message.role === 'system';
+  const isCallback = message.metadata?.is_agor_callback === true;
 
   // Determine if this should be displayed as user or agent message
   const isUser = message.role === 'user' && !isTaskPrompt && !isTaskResult;
@@ -199,7 +255,7 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
   const shouldUseTyping = isStreaming && hasContent;
 
   // Get current user's emoji
-  const currentUser = users.find(u => u.user_id === currentUserId);
+  const currentUser = currentUserId ? userById.get(currentUserId) : undefined;
   const userEmoji = currentUser?.emoji || '👤';
 
   // Skip rendering if message has no content
@@ -293,8 +349,8 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
               resultText = toolResult.content;
             } else if (Array.isArray(toolResult.content)) {
               resultText = toolResult.content
-                .filter(b => b.type === 'text')
-                .map(b => (b as unknown as { text: string }).text)
+                .filter((b) => b.type === 'text')
+                .map((b) => (b as unknown as { text: string }).text)
                 .join('\n');
             }
 
@@ -337,8 +393,8 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
   // Skip rendering if message has no meaningful content
   const hasThinking =
     thinkingBlocks.length > 0 || (streamingThinking && streamingThinking.length > 0);
-  const hasTextBefore = textBeforeTools.some(text => text.trim().length > 0);
-  const hasTextAfter = textAfterTools.some(text => text.trim().length > 0);
+  const hasTextBefore = textBeforeTools.some((text) => text.trim().length > 0);
+  const hasTextAfter = textAfterTools.some((text) => text.trim().length > 0);
   const hasTools = toolBlocks.length > 0;
 
   if (!hasThinking && !hasTextBefore && !hasTextAfter && !hasTools) {
@@ -367,6 +423,12 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
         (() => {
           const avatar = isUser ? (
             <AgorAvatar>{userEmoji}</AgorAvatar>
+          ) : isCallback ? (
+            <img
+              src={`${import.meta.env.BASE_URL}favicon.png`}
+              alt="Agor"
+              style={{ width: 32, height: 32, borderRadius: '50%' }}
+            />
           ) : agentic_tool ? (
             <ToolIcon tool={agentic_tool} size={32} />
           ) : (
@@ -383,7 +445,7 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
                 avatar={
                   message.timestamp ? (
                     <Tooltip
-                      title={() => formatTimestampWithRelative(message.timestamp)}
+                      title={() => formatTimestampWithRelative(message.timestamp, message.index)}
                       mouseEnterDelay={0.5}
                       fresh
                     >
@@ -396,40 +458,46 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
                 loading={isLoading}
                 typing={shouldUseTyping ? { step: 5, interval: 20 } : false}
                 content={
-                  <div
-                    style={{
-                      wordWrap: 'break-word',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: token.sizeUnit,
-                    }}
-                  >
-                    {textBeforeTools.map((text, idx) => {
-                      // Use CollapsibleMarkdown for long text blocks (15+ lines)
-                      const shouldTruncate = text.split('\n').length > 15;
+                  <BubbleContentWithCopy textContent={textBeforeTools.join('\n\n')}>
+                    <div
+                      style={{
+                        wordWrap: 'break-word',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: token.sizeUnit,
+                      }}
+                    >
+                      {textBeforeTools.map((text, idx) => {
+                        // Use CollapsibleMarkdown for long text blocks (15+ lines)
+                        const shouldTruncate = text.split('\n').length > 15;
 
-                      return (
-                        <div key={`text-${idx}-${text.substring(0, 20)}`}>
-                          {shouldTruncate ? (
-                            <CollapsibleMarkdown
-                              maxLines={10}
-                              defaultExpanded={isLatestMessage}
-                              isStreaming={isStreaming}
-                            >
-                              {text}
-                            </CollapsibleMarkdown>
-                          ) : (
-                            <MarkdownRenderer content={text} inline isStreaming={isStreaming} />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                        return (
+                          <div key={`text-${idx}-${text.substring(0, 20)}`}>
+                            {shouldTruncate ? (
+                              <CollapsibleMarkdown
+                                maxLines={10}
+                                defaultExpanded={isLatestMessage}
+                                isStreaming={isStreaming}
+                              >
+                                {text}
+                              </CollapsibleMarkdown>
+                            ) : (
+                              <MarkdownRenderer content={text} inline isStreaming={isStreaming} />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </BubbleContentWithCopy>
                 }
-                variant={isUser ? 'filled' : 'outlined'}
+                variant={isUser || isCallback ? 'filled' : 'outlined'}
                 styles={{
                   content: {
-                    backgroundColor: isUser ? token.colorPrimaryBg : undefined,
+                    backgroundColor: isCallback
+                      ? token.colorWarningBg
+                      : isUser
+                        ? token.colorPrimaryBg
+                        : undefined,
                     color: isUser ? '#fff' : undefined,
                   },
                 }}
@@ -450,7 +518,13 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
       {/* Response text after tools */}
       {hasTextAfter &&
         (() => {
-          const avatar = agentic_tool ? (
+          const avatar = isCallback ? (
+            <img
+              src={`${import.meta.env.BASE_URL}favicon.png`}
+              alt="Agor"
+              style={{ width: 32, height: 32, borderRadius: '50%' }}
+            />
+          ) : agentic_tool ? (
             <ToolIcon tool={agentic_tool} size={32} />
           ) : (
             <AgorAvatar
@@ -466,7 +540,7 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
                 avatar={
                   message.timestamp ? (
                     <Tooltip
-                      title={() => formatTimestampWithRelative(message.timestamp)}
+                      title={() => formatTimestampWithRelative(message.timestamp, message.index)}
                       mouseEnterDelay={0.5}
                       fresh
                     >
@@ -479,26 +553,41 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
                 loading={isLoading}
                 typing={shouldUseTyping ? { step: 5, interval: 20 } : false}
                 content={
-                  <div style={{ wordWrap: 'break-word' }}>
-                    {(() => {
-                      const combinedText = textAfterTools.join('\n\n');
-                      const shouldTruncate = combinedText.split('\n').length > 15;
+                  <BubbleContentWithCopy textContent={textAfterTools.join('\n\n')}>
+                    <div style={{ wordWrap: 'break-word' }}>
+                      {(() => {
+                        const combinedText = textAfterTools.join('\n\n');
+                        const shouldTruncate = combinedText.split('\n').length > 15;
 
-                      return shouldTruncate ? (
-                        <CollapsibleMarkdown
-                          maxLines={10}
-                          defaultExpanded={isLatestMessage}
-                          isStreaming={isStreaming}
-                        >
-                          {combinedText}
-                        </CollapsibleMarkdown>
-                      ) : (
-                        <MarkdownRenderer content={combinedText} inline isStreaming={isStreaming} />
-                      );
-                    })()}
-                  </div>
+                        return shouldTruncate ? (
+                          <CollapsibleMarkdown
+                            maxLines={10}
+                            defaultExpanded={isLatestMessage}
+                            isStreaming={isStreaming}
+                          >
+                            {combinedText}
+                          </CollapsibleMarkdown>
+                        ) : (
+                          <MarkdownRenderer
+                            content={combinedText}
+                            inline
+                            isStreaming={isStreaming}
+                          />
+                        );
+                      })()}
+                    </div>
+                  </BubbleContentWithCopy>
                 }
-                variant="outlined"
+                variant={isCallback ? 'filled' : 'outlined'}
+                styles={
+                  isCallback
+                    ? {
+                        content: {
+                          backgroundColor: token.colorWarningBg,
+                        },
+                      }
+                    : undefined
+                }
               />
             </div>
           );

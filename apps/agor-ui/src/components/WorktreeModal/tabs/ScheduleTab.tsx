@@ -27,13 +27,13 @@ const { Text, Paragraph } = Typography;
 
 interface ScheduleTabProps {
   worktree: Worktree;
-  mcpServers?: MCPServer[];
+  mcpServerById?: Map<string, MCPServer>;
   onUpdate?: (worktreeId: string, updates: Partial<Worktree>) => void;
 }
 
 export const ScheduleTab: React.FC<ScheduleTabProps> = ({
   worktree,
-  mcpServers = [],
+  mcpServerById = new Map(),
   onUpdate,
 }) => {
   const [form] = Form.useForm();
@@ -91,7 +91,7 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({
     try {
       const description = cronstrue.toString(cronExpression, { verbose: true });
       setHumanReadable(description);
-    } catch (error) {
+    } catch (_error) {
       setHumanReadable('Invalid cron expression');
     }
   }, [cronExpression]);
@@ -210,7 +210,7 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({
             <Form.Item label="Cron Expression" style={{ marginBottom: 0 }}>
               <Input
                 value={cronExpression}
-                onChange={e => setCronExpression(e.target.value)}
+                onChange={(e) => setCronExpression(e.target.value)}
                 placeholder="0 0 * * *"
                 prefix={<ClockCircleOutlined />}
               />
@@ -245,7 +245,7 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({
                 <Form form={form} layout="vertical">
                   <AgenticToolConfigForm
                     agenticTool={agenticTool as AgenticToolName}
-                    mcpServers={mcpServers}
+                    mcpServerById={mcpServerById}
                     showHelpText={true}
                   />
                 </Form>
@@ -262,7 +262,7 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({
             </Text>
             <TextArea
               value={promptTemplate}
-              onChange={e => setPromptTemplate(e.target.value)}
+              onChange={(e) => setPromptTemplate(e.target.value)}
               placeholder="Enter prompt template..."
               rows={6}
               style={{ fontFamily: 'monospace', fontSize: '13px' }}
@@ -283,7 +283,7 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({
             <Space.Compact>
               <InputNumber
                 value={retention}
-                onChange={value => setRetention(value || 0)}
+                onChange={(value) => setRetention(value || 0)}
                 min={0}
                 max={100}
                 style={{ width: '150px' }}

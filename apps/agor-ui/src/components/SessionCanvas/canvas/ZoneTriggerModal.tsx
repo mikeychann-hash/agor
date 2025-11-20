@@ -30,14 +30,14 @@ interface ZoneTriggerModalProps {
   onCancel: () => void;
   worktreeId: WorktreeID;
   worktree: Worktree | undefined;
-  sessions: Session[];
+  sessionsByWorktree: Map<string, Session[]>; // O(1) worktree filtering
   zoneName: string;
   trigger: ZoneTrigger;
   boardName?: string;
   boardDescription?: string;
   boardCustomContext?: Record<string, unknown>;
   availableAgents: AgenticToolOption[];
-  mcpServers: MCPServer[];
+  mcpServerById: Map<string, MCPServer>;
   currentUser?: User | null; // Optional - current user for default settings
   onExecute: (params: {
     sessionId: string | 'new';
@@ -56,14 +56,14 @@ export const ZoneTriggerModal = ({
   onCancel,
   worktreeId,
   worktree,
-  sessions,
+  sessionsByWorktree,
   zoneName,
   trigger,
   boardName,
   boardDescription,
   boardCustomContext,
   availableAgents,
-  mcpServers,
+  mcpServerById,
   currentUser,
   onExecute,
 }: ZoneTriggerModalProps) => {
@@ -91,17 +91,17 @@ export const ZoneTriggerModal = ({
     mcpServerIds?: string[];
   }>({});
 
-  // Filter sessions for this worktree
+  // Filter sessions for this worktree using O(1) Map lookup
   const worktreeSessions = useMemo(() => {
-    return sessions.filter(s => s.worktree_id === worktreeId);
-  }, [sessions, worktreeId]);
+    return sessionsByWorktree.get(worktreeId) || [];
+  }, [sessionsByWorktree, worktreeId]);
 
   // Smart default: Most recent active/completed session
   const smartDefaultSession = useMemo(() => {
     if (worktreeSessions.length === 0) return '';
 
     // Prioritize running sessions
-    const runningSessions = worktreeSessions.filter(s => s.status === 'running');
+    const runningSessions = worktreeSessions.filter((s) => s.status === 'running');
     if (runningSessions.length > 0) {
       // Most recently updated running session
       return runningSessions.sort(
@@ -121,7 +121,7 @@ export const ZoneTriggerModal = ({
 
   // Get the currently selected session (for pre-populating form on reuse)
   const selectedSession = useMemo(() => {
-    return worktreeSessions.find(s => s.session_id === selectedSessionId);
+    return worktreeSessions.find((s) => s.session_id === selectedSessionId);
   }, [selectedSessionId, worktreeSessions]);
 
   // Reset to defaults when modal opens
@@ -213,10 +213,11 @@ export const ZoneTriggerModal = ({
           mode === 'reuse_existing' && selectedSessionId
             ? {
                 description:
-                  worktreeSessions.find(s => s.session_id === selectedSessionId)?.description || '',
+                  worktreeSessions.find((s) => s.session_id === selectedSessionId)?.description ||
+                  '',
                 context:
-                  worktreeSessions.find(s => s.session_id === selectedSessionId)?.custom_context ||
-                  {},
+                  worktreeSessions.find((s) => s.session_id === selectedSessionId)
+                    ?.custom_context || {},
               }
             : {
                 description: '',
@@ -298,7 +299,7 @@ export const ZoneTriggerModal = ({
         <div>
           <Radio.Group
             value={mode}
-            onChange={e => setMode(e.target.value)}
+            onChange={(e) => setMode(e.target.value)}
             style={{ width: '100%' }}
           >
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -330,7 +331,7 @@ export const ZoneTriggerModal = ({
                 onChange={setSelectedSessionId}
                 style={{ width: '100%' }}
                 size="large"
-                options={worktreeSessions.map(session => ({
+                options={worktreeSessions.map((session) => ({
                   value: session.session_id,
                   label: (
                     <span>
@@ -348,7 +349,7 @@ export const ZoneTriggerModal = ({
               </Typography.Text>
               <Radio.Group
                 value={selectedAction}
-                onChange={e => setSelectedAction(e.target.value)}
+                onChange={(e) => setSelectedAction(e.target.value)}
                 style={{ width: '100%' }}
               >
                 <Space direction="vertical" style={{ width: '100%' }}>
@@ -365,10 +366,10 @@ export const ZoneTriggerModal = ({
         <Form
           form={form}
           layout="vertical"
-          onValuesChange={changedValues => {
+          onValuesChange={(changedValues) => {
             // Sync form changes to component state (only in create_new mode)
             if (mode === 'create_new') {
-              setSessionConfig(prev => ({ ...prev, ...changedValues }));
+              setSessionConfig((prev) => ({ ...prev, ...changedValues }));
             }
           }}
         >
@@ -417,7 +418,7 @@ export const ZoneTriggerModal = ({
                           ? (selectedAgent as AgenticToolName)
                           : (selectedSession?.agentic_tool as AgenticToolName)) || 'claude-code'
                       }
-                      mcpServers={mcpServers}
+                      mcpServerById={mcpServerById}
                       showHelpText={true}
                     />
                   </Space>
@@ -435,7 +436,7 @@ export const ZoneTriggerModal = ({
           </Typography.Text>
           <Input.TextArea
             value={editableTemplate}
-            onChange={e => setEditableTemplate(e.target.value)}
+            onChange={(e) => setEditableTemplate(e.target.value)}
             rows={8}
             style={{
               fontFamily: 'monospace',

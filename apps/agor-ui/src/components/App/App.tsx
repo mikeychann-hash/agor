@@ -1,6 +1,7 @@
 import type { AgorClient } from '@agor/core/api';
 import type {
   Board,
+  BoardComment,
   BoardEntityObject,
   BoardID,
   CreateUserInput,
@@ -8,20 +9,24 @@ import type {
   PermissionMode,
   Repo,
   Session,
-  Task,
+  SpawnConfig,
   UpdateUserInput,
   User,
   Worktree,
 } from '@agor/core/types';
 import { PermissionScope } from '@agor/core/types';
-import { Layout, message } from 'antd';
+import { Layout } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
+import { mapToArray } from '@/utils/mapHelpers';
+import { useEventStream } from '../../hooks/useEventStream';
+import { useFaviconStatus } from '../../hooks/useFaviconStatus';
 import { usePresence } from '../../hooks/usePresence';
 import type { AgenticToolOption } from '../../types';
+import { useThemedMessage } from '../../utils/message';
 import { AppHeader } from '../AppHeader';
 import { CommentsPanel } from '../CommentsPanel';
 import { EnvironmentLogsModal } from '../EnvironmentLogsModal';
-import type { ModelConfig } from '../ModelSelector';
+import { EventStreamPanel } from '../EventStreamPanel';
 import { NewSessionButton } from '../NewSessionButton';
 import { type NewSessionConfig, NewSessionModal } from '../NewSessionModal';
 import { type NewWorktreeConfig, NewWorktreeModal } from '../NewWorktreeModal';
@@ -42,17 +47,17 @@ export interface AppProps {
   user?: User | null;
   connected?: boolean;
   connecting?: boolean;
-  sessions: Session[];
-  tasks: Record<string, Task[]>;
+  sessionById: Map<string, Session>; // O(1) lookups by session_id - efficient, stable references
+  sessionsByWorktree: Map<string, Session[]>; // O(1) worktree-scoped filtering
   availableAgents: AgenticToolOption[];
-  boards: Board[];
-  boardObjects: BoardEntityObject[]; // Positioned worktrees on boards
-  comments: import('@agor/core/types').BoardComment[]; // Board comments for collaboration
-  repos: Repo[];
-  worktrees: Worktree[];
-  users: User[]; // All users for multiplayer metadata
-  mcpServers: MCPServer[];
-  sessionMcpServerIds: Record<string, string[]>; // Map: sessionId -> mcpServerIds[]
+  boardById: Map<string, Board>; // Map-based board storage
+  boardObjectById: Map<string, BoardEntityObject>; // Map-based board object storage
+  commentById: Map<string, BoardComment>; // Map-based comment storage
+  repoById: Map<string, Repo>; // Map-based repo storage
+  worktreeById: Map<string, Worktree>; // Efficient worktree lookups
+  userById: Map<string, User>; // Map-based user storage
+  mcpServerById: Map<string, MCPServer>; // Map-based MCP server storage
+  sessionMcpServerIds: Map<string, string[]>; // Map-based session-MCP relationships
   initialBoardId?: string;
   openSettingsTab?: string | null; // Open settings modal to a specific tab
   onSettingsClose?: () => void; // Called when settings modal closes
@@ -60,7 +65,7 @@ export interface AppProps {
   onNewWorktreeModalClose?: () => void; // Called when new worktree modal closes
   onCreateSession?: (config: NewSessionConfig, boardId: string) => Promise<string | null>;
   onForkSession?: (sessionId: string, prompt: string) => Promise<void>;
-  onSpawnSession?: (sessionId: string, prompt: string) => Promise<void>;
+  onSpawnSession?: (sessionId: string, config: string | Partial<SpawnConfig>) => Promise<void>;
   onSendPrompt?: (sessionId: string, prompt: string, permissionMode?: PermissionMode) => void;
   onUpdateSession?: (sessionId: string, updates: Partial<Session>) => void;
   onDeleteSession?: (sessionId: string) => void;
@@ -68,6 +73,7 @@ export interface AppProps {
   onUpdateBoard?: (boardId: string, updates: Partial<Board>) => void;
   onDeleteBoard?: (boardId: string) => void;
   onCreateRepo?: (data: { url: string; slug: string; default_branch: string }) => void;
+  onCreateLocalRepo?: (data: { path: string; slug?: string }) => void;
   onUpdateRepo?: (repoId: string, updates: Partial<Repo>) => void;
   onDeleteRepo?: (repoId: string) => void;
   onArchiveOrDeleteWorktree?: (
@@ -114,16 +120,16 @@ export const App: React.FC<AppProps> = ({
   user,
   connected = false,
   connecting = false,
-  sessions,
-  tasks,
+  sessionById,
+  sessionsByWorktree,
   availableAgents,
-  boards,
-  boardObjects,
-  comments,
-  repos,
-  worktrees,
-  users,
-  mcpServers,
+  boardById,
+  boardObjectById,
+  commentById,
+  repoById,
+  worktreeById,
+  userById,
+  mcpServerById,
   sessionMcpServerIds,
   initialBoardId,
   openSettingsTab,
@@ -140,6 +146,7 @@ export const App: React.FC<AppProps> = ({
   onUpdateBoard,
   onDeleteBoard,
   onCreateRepo,
+  onCreateLocalRepo,
   onUpdateRepo,
   onDeleteRepo,
   onArchiveOrDeleteWorktree,
@@ -163,6 +170,7 @@ export const App: React.FC<AppProps> = ({
   onLogout,
   onRetryConnection,
 }) => {
+  const { showWarning } = useThemedMessage();
   const [newSessionWorktreeId, setNewSessionWorktreeId] = useState<string | null>(null);
   const [newWorktreeModalOpen, setNewWorktreeModalOpen] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -196,13 +204,20 @@ export const App: React.FC<AppProps> = ({
   const [logsModalWorktreeId, setLogsModalWorktreeId] = useState<string | null>(null);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
 
+  // Initialize event stream panel state from localStorage (collapsed by default)
+  const [eventStreamPanelCollapsed, setEventStreamPanelCollapsed] = useState(() => {
+    const stored = localStorage.getItem('agor:eventStreamPanelCollapsed');
+    return stored ? stored === 'true' : true; // Default to collapsed (hidden)
+  });
+
   // Initialize current board from localStorage or fallback to first board or initialBoardId
   const [currentBoardId, setCurrentBoardId] = useState(() => {
     const stored = localStorage.getItem('agor:currentBoardId');
-    if (stored && boards.some(b => b.board_id === stored)) {
+    if (stored && boardById.has(stored)) {
       return stored;
     }
-    return initialBoardId || boards[0]?.board_id || '';
+    const firstBoard = mapToArray(boardById)[0];
+    return initialBoardId || firstBoard?.board_id || '';
   });
 
   // Persist current board to localStorage when it changes
@@ -217,13 +232,30 @@ export const App: React.FC<AppProps> = ({
     localStorage.setItem('agor:commentsPanelCollapsed', String(commentsPanelCollapsed));
   }, [commentsPanelCollapsed]);
 
+  // Persist event stream panel collapsed state to localStorage
+  useEffect(() => {
+    localStorage.setItem('agor:eventStreamPanelCollapsed', String(eventStreamPanelCollapsed));
+  }, [eventStreamPanelCollapsed]);
+
   // If the stored board no longer exists (e.g., deleted), fallback to first board
   useEffect(() => {
-    if (currentBoardId && !boards.some(b => b.board_id === currentBoardId)) {
-      const fallback = boards[0]?.board_id || '';
+    if (currentBoardId && !boardById.has(currentBoardId)) {
+      const fallback = mapToArray(boardById)[0]?.board_id || '';
       setCurrentBoardId(fallback);
     }
-  }, [boards, currentBoardId]);
+  }, [boardById, currentBoardId]);
+
+  // Update favicon based on session activity on current board
+  useFaviconStatus(currentBoardId, sessionsByWorktree, mapToArray(boardObjectById));
+
+  // Check if event stream is enabled in user preferences
+  const eventStreamEnabled = user?.preferences?.eventStream?.enabled ?? false;
+
+  // Event stream hook - only captures events when panel is open
+  const { events, clearEvents } = useEventStream({
+    client,
+    enabled: !eventStreamPanelCollapsed,
+  });
 
   const handleOpenTerminal = (commands: string[] = [], worktreeId?: string) => {
     setTerminalCommands(commands);
@@ -262,7 +294,7 @@ export const App: React.FC<AppProps> = ({
     // If board_id is provided and worktree was created, assign it to the board
     if (worktree && config.board_id) {
       await onUpdateWorktree?.(worktree.worktree_id, {
-        board_id: config.board_id as import('@agor/core/types').BoardID,
+        board_id: config.board_id as BoardID,
       });
     }
 
@@ -273,13 +305,13 @@ export const App: React.FC<AppProps> = ({
     setSelectedSessionId(sessionId);
 
     // Clear the ready_for_prompt flag when opening the conversation
-    const session = sessions.find(s => s.session_id === sessionId);
+    const session = sessionById.get(sessionId);
     if (session?.ready_for_prompt) {
       onUpdateSession?.(sessionId, { ready_for_prompt: false });
     }
 
     // Clear the worktree's needs_attention flag when user interacts with it
-    const worktree = worktrees.find(w => w.worktree_id === session?.worktree_id);
+    const worktree = session?.worktree_id ? worktreeById.get(session.worktree_id) : undefined;
     if (worktree?.needs_attention) {
       onUpdateWorktree?.(worktree.worktree_id, { needs_attention: false });
     }
@@ -287,7 +319,7 @@ export const App: React.FC<AppProps> = ({
 
   const handleSendPrompt = async (prompt: string, permissionMode?: PermissionMode) => {
     if (selectedSessionId) {
-      const session = sessions.find(s => s.session_id === selectedSessionId);
+      const session = sessionById.get(selectedSessionId);
       const agentName = session?.agentic_tool || 'agentic_tool';
 
       // Show loading state
@@ -309,9 +341,11 @@ export const App: React.FC<AppProps> = ({
     }
   };
 
-  const handleSubsession = (prompt: string) => {
+  const handleSubsession = (config: string | Partial<SpawnConfig>) => {
     if (selectedSessionId) {
-      onSpawnSession?.(selectedSessionId, prompt);
+      // Handle both legacy string prompt and new SpawnConfig
+      const spawnConfig = typeof config === 'string' ? { prompt: config } : config;
+      onSpawnSession?.(selectedSessionId, spawnConfig);
     }
   };
 
@@ -349,47 +383,37 @@ export const App: React.FC<AppProps> = ({
     [client, user?.user_id]
   );
 
-  const selectedSession = sessions.find(s => s.session_id === selectedSessionId) || null;
+  const selectedSession = selectedSessionId ? sessionById.get(selectedSessionId) || null : null;
   const selectedSessionWorktree = selectedSession
-    ? worktrees.find(w => w.worktree_id === selectedSession.worktree_id)
+    ? worktreeById.get(selectedSession.worktree_id)
     : null;
-  const sessionSettingsSession = sessionSettingsId
-    ? sessions.find(s => s.session_id === sessionSettingsId)
-    : null;
-  const _selectedSessionTasks = selectedSessionId ? tasks[selectedSessionId] || [] : [];
-  const currentBoard = boards.find(b => b.board_id === currentBoardId);
+  const sessionSettingsSession = sessionSettingsId ? sessionById.get(sessionSettingsId) : null;
+  const currentBoard = boardById.get(currentBoardId);
 
   // Find worktree and repo for WorktreeModal
   const selectedWorktree = worktreeModalWorktreeId
-    ? worktrees.find(w => w.worktree_id === worktreeModalWorktreeId)
+    ? worktreeById.get(worktreeModalWorktreeId)
     : null;
-  const selectedWorktreeRepo = selectedWorktree
-    ? repos.find(r => r.repo_id === selectedWorktree.repo_id)
-    : null;
+  const selectedWorktreeRepo = selectedWorktree ? repoById.get(selectedWorktree.repo_id) : null;
   const worktreeSessions = selectedWorktree
-    ? sessions.filter(s => s.worktree_id === selectedWorktree.worktree_id)
+    ? sessionsByWorktree.get(selectedWorktree.worktree_id) || []
     : [];
 
   // Find worktree for NewSessionModal
-  const newSessionWorktree = newSessionWorktreeId
-    ? worktrees.find(w => w.worktree_id === newSessionWorktreeId)
-    : null;
+  const newSessionWorktree = newSessionWorktreeId ? worktreeById.get(newSessionWorktreeId) : null;
 
   // Filter worktrees by current board (via board_objects)
-  const boardWorktreeIds = boardObjects
-    .filter(bo => bo.board_id === currentBoard?.board_id)
-    .map(bo => bo.worktree_id);
-
-  const boardWorktrees = worktrees.filter(wt => boardWorktreeIds.includes(wt.worktree_id));
-
-  // Filter sessions by current board's worktrees
-  const boardSessions = sessions.filter(session => boardWorktreeIds.includes(session.worktree_id));
+  // Optimized: use Map lookups instead of array.filter
+  const boardWorktrees = mapToArray(boardObjectById)
+    .filter((bo: BoardEntityObject) => bo.board_id === currentBoard?.board_id)
+    .map((bo: BoardEntityObject) => worktreeById.get(bo.worktree_id))
+    .filter((wt): wt is Worktree => wt !== undefined);
 
   // Track active users via cursor presence
   const { activeUsers } = usePresence({
     client,
     boardId: currentBoard?.board_id as BoardID | null,
-    users,
+    users: mapToArray(userById),
     enabled: !!currentBoard && !!client,
   });
 
@@ -402,7 +426,7 @@ export const App: React.FC<AppProps> = ({
           lastSeen: Date.now(),
           cursor: undefined, // Current user doesn't have a remote cursor
         },
-        ...activeUsers.filter(activeUser => activeUser.user.user_id !== user.user_id),
+        ...activeUsers.filter((activeUser) => activeUser.user.user_id !== user.user_id),
       ]
     : activeUsers;
 
@@ -416,6 +440,7 @@ export const App: React.FC<AppProps> = ({
         connecting={connecting}
         onMenuClick={() => setListDrawerOpen(true)}
         onCommentsClick={() => setCommentsPanelCollapsed(!commentsPanelCollapsed)}
+        onEventStreamClick={() => setEventStreamPanelCollapsed(!eventStreamPanelCollapsed)}
         onSettingsClick={() => setSettingsOpen(true)}
         onUserSettingsClick={() => {
           setSettingsActiveTab('users');
@@ -428,22 +453,27 @@ export const App: React.FC<AppProps> = ({
         currentBoardName={currentBoard?.name}
         currentBoardIcon={currentBoard?.icon}
         unreadCommentsCount={
-          comments.filter(c => c.board_id === currentBoardId && !c.resolved && !c.parent_comment_id)
-            .length
+          mapToArray(commentById).filter(
+            (c: BoardComment) =>
+              c.board_id === currentBoardId && !c.resolved && !c.parent_comment_id
+          ).length
         }
+        eventStreamEnabled={eventStreamEnabled}
       />
       <Content style={{ position: 'relative', overflow: 'hidden', display: 'flex' }}>
         <CommentsPanel
           client={client}
           boardId={currentBoardId || ''}
-          comments={comments.filter(c => c.board_id === currentBoardId)}
-          users={users}
+          comments={mapToArray(commentById).filter(
+            (c: BoardComment) => c.board_id === currentBoardId
+          )}
+          userById={userById}
           currentUserId={user?.user_id || 'anonymous'}
           boardObjects={currentBoard?.objects}
-          worktrees={boardWorktrees}
+          worktreeById={worktreeById}
           collapsed={commentsPanelCollapsed}
           onToggleCollapse={() => setCommentsPanelCollapsed(!commentsPanelCollapsed)}
-          onSendComment={content => onSendComment?.(currentBoardId || '', content)}
+          onSendComment={(content) => onSendComment?.(currentBoardId || '', content)}
           onReplyComment={onReplyComment}
           onResolveComment={onResolveComment}
           onToggleReaction={onToggleReaction}
@@ -455,17 +485,18 @@ export const App: React.FC<AppProps> = ({
           <SessionCanvas
             board={currentBoard || null}
             client={client}
-            sessions={boardSessions}
-            tasks={tasks}
-            users={users}
-            repos={repos}
+            sessionById={sessionById}
+            sessionsByWorktree={sessionsByWorktree}
+            userById={userById}
+            repoById={repoById}
             worktrees={boardWorktrees}
-            boardObjects={boardObjects}
-            comments={comments}
+            worktreeById={worktreeById}
+            boardObjectById={boardObjectById}
+            commentById={commentById}
             currentUserId={user?.user_id}
             selectedSessionId={selectedSessionId}
             availableAgents={availableAgents}
-            mcpServers={mcpServers}
+            mcpServerById={mcpServerById}
             sessionMcpServerIds={sessionMcpServerIds}
             onSessionClick={handleSessionClick}
             onSessionUpdate={onUpdateSession}
@@ -473,13 +504,13 @@ export const App: React.FC<AppProps> = ({
             onForkSession={onForkSession}
             onSpawnSession={onSpawnSession}
             onUpdateSessionMcpServers={onUpdateSessionMcpServers}
-            onOpenSettings={sessionId => {
+            onOpenSettings={(sessionId) => {
               setSessionSettingsId(sessionId);
             }}
-            onCreateSessionForWorktree={worktreeId => {
+            onCreateSessionForWorktree={(worktreeId) => {
               setNewSessionWorktreeId(worktreeId);
             }}
-            onOpenWorktree={worktreeId => {
+            onOpenWorktree={(worktreeId) => {
               setWorktreeModalWorktreeId(worktreeId);
             }}
             onArchiveOrDeleteWorktree={onArchiveOrDeleteWorktree}
@@ -489,22 +520,47 @@ export const App: React.FC<AppProps> = ({
             onViewLogs={setLogsModalWorktreeId}
             onOpenCommentsPanel={() => setCommentsPanelCollapsed(false)}
             onCommentHover={setHoveredCommentId}
-            onCommentSelect={commentId => {
+            onCommentSelect={(commentId) => {
               // Toggle selection: if clicking same comment, deselect
-              setSelectedCommentId(prev => (prev === commentId ? null : commentId));
+              setSelectedCommentId((prev) => (prev === commentId ? null : commentId));
             }}
           />
           <NewSessionButton
             onClick={() => {
-              if (repos.length === 0) {
-                message.warning('Please create a repository first in Settings');
+              if (repoById.size === 0) {
+                showWarning('Please create a repository first in Settings');
               } else {
                 setNewWorktreeModalOpen(true);
               }
             }}
-            hasRepos={repos.length > 0}
+            hasRepos={repoById.size > 0}
           />
         </div>
+        {/* Event Stream Panel with rich pills */}
+        <EventStreamPanel
+          collapsed={eventStreamPanelCollapsed}
+          onToggleCollapse={() => setEventStreamPanelCollapsed(!eventStreamPanelCollapsed)}
+          events={events}
+          onClear={clearEvents}
+          worktreeById={worktreeById}
+          sessionById={sessionById}
+          sessionsByWorktree={sessionsByWorktree}
+          repos={mapToArray(repoById)}
+          userById={userById}
+          currentUserId={user?.user_id}
+          selectedSessionId={selectedSessionId}
+          worktreeActions={{
+            onSessionClick: setSelectedSessionId,
+            onCreateSession: (worktreeId) => setNewSessionWorktreeId(worktreeId),
+            onForkSession,
+            onSpawnSession,
+            onOpenTerminal: handleOpenTerminal,
+            onStartEnvironment,
+            onStopEnvironment,
+            onOpenSettings: (worktreeId) => setWorktreeModalWorktreeId(worktreeId),
+            onViewLogs: (worktreeId) => setLogsModalWorktreeId(worktreeId),
+          }}
+        />
       </Content>
       {newSessionWorktreeId && (
         <NewSessionModal
@@ -514,7 +570,7 @@ export const App: React.FC<AppProps> = ({
           availableAgents={availableAgents}
           worktreeId={newSessionWorktreeId}
           worktree={newSessionWorktree || undefined}
-          mcpServers={mcpServers}
+          mcpServerById={mcpServerById}
           currentUser={user}
         />
       )}
@@ -522,12 +578,13 @@ export const App: React.FC<AppProps> = ({
         client={client}
         session={selectedSession}
         worktree={selectedSessionWorktree}
-        users={users}
+        userById={userById}
         currentUserId={user?.user_id}
-        repos={repos}
-        worktrees={worktrees}
-        mcpServers={mcpServers}
-        sessionMcpServerIds={selectedSessionId ? sessionMcpServerIds[selectedSessionId] || [] : []}
+        repoById={repoById}
+        mcpServerById={mcpServerById}
+        sessionMcpServerIds={
+          selectedSessionId ? sessionMcpServerIds.get(selectedSessionId) || [] : []
+        }
         open={!!selectedSessionId}
         onClose={() => {
           setSelectedSessionId(null);
@@ -537,10 +594,10 @@ export const App: React.FC<AppProps> = ({
         onFork={handleFork}
         onSubsession={handleSubsession}
         onPermissionDecision={handlePermissionDecision}
-        onOpenSettings={sessionId => {
+        onOpenSettings={(sessionId) => {
           setSessionSettingsId(sessionId);
         }}
-        onOpenWorktree={worktreeId => {
+        onOpenWorktree={(worktreeId) => {
           setWorktreeModalWorktreeId(worktreeId);
         }}
         onOpenTerminal={handleOpenTerminal}
@@ -559,16 +616,18 @@ export const App: React.FC<AppProps> = ({
         }}
         client={client}
         currentUser={user}
-        boards={boards}
-        boardObjects={boardObjects}
-        repos={repos}
-        worktrees={worktrees}
-        sessions={sessions}
-        users={users}
-        mcpServers={mcpServers}
+        boardById={boardById}
+        boardObjects={mapToArray(boardObjectById)}
+        repoById={repoById}
+        worktreeById={worktreeById}
+        sessionById={sessionById}
+        sessionsByWorktree={sessionsByWorktree}
+        userById={userById}
+        mcpServerById={mcpServerById}
         activeTab={effectiveSettingsTab}
         editUserId={settingsEditUserId}
-        onTabChange={newTab => {
+        onClearEditUserId={() => setSettingsEditUserId(undefined)}
+        onTabChange={(newTab) => {
           setSettingsActiveTab(newTab);
           setSettingsEditUserId(undefined); // Clear editUserId when switching tabs
           // Clear openSettingsTab when user manually changes tabs
@@ -581,6 +640,7 @@ export const App: React.FC<AppProps> = ({
         onUpdateBoard={onUpdateBoard}
         onDeleteBoard={onDeleteBoard}
         onCreateRepo={onCreateRepo}
+        onCreateLocalRepo={onCreateLocalRepo}
         onUpdateRepo={onUpdateRepo}
         onDeleteRepo={onDeleteRepo}
         onArchiveOrDeleteWorktree={onArchiveOrDeleteWorktree}
@@ -600,9 +660,9 @@ export const App: React.FC<AppProps> = ({
           open={!!sessionSettingsId}
           onClose={() => setSessionSettingsId(null)}
           session={sessionSettingsSession}
-          mcpServers={mcpServers}
+          mcpServerById={mcpServerById}
           sessionMcpServerIds={
-            sessionSettingsId ? sessionMcpServerIds[sessionSettingsId] || [] : []
+            sessionSettingsId ? sessionMcpServerIds.get(sessionSettingsId) || [] : []
           }
           onUpdate={onUpdateSession}
           onUpdateSessionMcpServers={onUpdateSessionMcpServers}
@@ -614,6 +674,8 @@ export const App: React.FC<AppProps> = ({
         worktree={selectedWorktree || null}
         repo={selectedWorktreeRepo || null}
         sessions={worktreeSessions}
+        boardById={boardById}
+        mcpServerById={mcpServerById}
         client={client}
         onUpdateWorktree={onUpdateWorktree}
         onUpdateRepo={onUpdateRepo}
@@ -626,11 +688,11 @@ export const App: React.FC<AppProps> = ({
       <WorktreeListDrawer
         open={listDrawerOpen}
         onClose={() => setListDrawerOpen(false)}
-        boards={boards}
+        boards={mapToArray(boardById)}
         currentBoardId={currentBoardId}
         onBoardChange={setCurrentBoardId}
-        sessions={sessions}
-        worktrees={worktrees}
+        sessionsByWorktree={sessionsByWorktree}
+        worktreeById={worktreeById}
         onSessionClick={setSelectedSessionId}
       />
       <TerminalModal
@@ -648,14 +710,14 @@ export const App: React.FC<AppProps> = ({
           onNewWorktreeModalClose?.();
         }}
         onCreate={handleCreateWorktree}
-        repos={repos}
+        repoById={repoById}
         currentBoardId={currentBoardId}
       />
       {logsModalWorktreeId && (
         <EnvironmentLogsModal
           open={!!logsModalWorktreeId}
           onClose={() => setLogsModalWorktreeId(null)}
-          worktree={worktrees.find(w => w.worktree_id === logsModalWorktreeId)!}
+          worktree={worktreeById.get(logsModalWorktreeId)!}
           client={client}
         />
       )}

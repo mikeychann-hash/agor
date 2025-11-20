@@ -1,26 +1,25 @@
-import type { Board, BoardComment, Session, Task, Worktree } from '@agor/core/types';
+import type { Board, BoardComment, Session, Worktree } from '@agor/core/types';
 import { CommentOutlined, DownOutlined } from '@ant-design/icons';
 import { Badge, Button, Collapse, List, Space, Typography, theme } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { mapToArray } from '@/utils/mapHelpers';
 import { BoardCollapse } from '../BoardCollapse';
 
 const { Text } = Typography;
 
 interface MobileNavTreeProps {
-  boards: Board[];
-  worktrees: Worktree[];
-  sessions: Session[];
-  tasks: Record<string, Task[]>;
-  comments: BoardComment[];
+  boardById: Map<string, Board>;
+  worktreeById: Map<string, Worktree>;
+  sessionsByWorktree: Map<string, Session[]>; // O(1) worktree filtering
+  commentById: Map<string, BoardComment>;
   onNavigate?: () => void;
 }
 
 export const MobileNavTree: React.FC<MobileNavTreeProps> = ({
-  boards,
-  worktrees,
-  sessions,
-  tasks,
-  comments,
+  boardById,
+  worktreeById,
+  sessionsByWorktree,
+  commentById,
   onNavigate,
 }) => {
   const navigate = useNavigate();
@@ -39,44 +38,40 @@ export const MobileNavTree: React.FC<MobileNavTreeProps> = ({
 
   // Count active comments per board (unresolved)
   const getActiveCommentCount = (boardId: string): number => {
-    return comments.filter(c => c.board_id === boardId && !c.resolved && !c.parent_comment_id)
-      .length;
+    return mapToArray(commentById).filter(
+      (c: BoardComment) => c.board_id === boardId && !c.resolved && !c.parent_comment_id
+    ).length;
   };
 
   // Group worktrees by board
-  const worktreesByBoard = worktrees.reduce(
-    (acc, worktree) => {
-      const boardId = worktree.board_id || 'unassigned';
-      if (!acc[boardId]) {
-        acc[boardId] = [];
-      }
-      acc[boardId].push(worktree);
-      return acc;
-    },
-    {} as Record<string, Worktree[]>
-  );
-
-  // Group sessions by worktree
-  const sessionsByWorktree = sessions.reduce(
-    (acc, session) => {
-      const worktreeId = session.worktree_id;
-      if (!acc[worktreeId]) {
-        acc[worktreeId] = [];
-      }
-      acc[worktreeId].push(session);
-      return acc;
-    },
-    {} as Record<string, Session[]>
-  );
-
-  // Get the first task prompt for a session as its title
-  const getSessionTitle = (sessionId: string): string => {
-    const sessionTasks = tasks[sessionId] || [];
-    if (sessionTasks.length > 0 && sessionTasks[0]?.full_prompt) {
-      const firstPrompt = sessionTasks[0].full_prompt;
-      return firstPrompt.length > 50 ? `${firstPrompt.slice(0, 50)}...` : firstPrompt;
+  const worktreesByBoard = {} as Record<string, Worktree[]>;
+  for (const worktree of worktreeById.values()) {
+    const boardId = worktree.board_id || 'unassigned';
+    if (!worktreesByBoard[boardId]) {
+      worktreesByBoard[boardId] = [];
     }
-    return `Session ${sessionId.slice(0, 8)}`;
+    worktreesByBoard[boardId].push(worktree);
+  }
+
+  // Sort sessions within each worktree by last_updated (most recent first)
+  // Convert Map to sorted Map for consistent rendering
+  const sortedSessionsByWorktree = new Map(
+    Array.from(sessionsByWorktree.entries()).map(([worktreeId, worktreeSessions]) => [
+      worktreeId,
+      [...worktreeSessions].sort((a, b) => {
+        const aTime = new Date(a.last_updated).getTime();
+        const bTime = new Date(b.last_updated).getTime();
+        return bTime - aTime; // DESC (most recent first)
+      }),
+    ])
+  );
+
+  // Get session title - uses session.title if available, falls back to session ID
+  const getSessionTitle = (session: Session): string => {
+    if (session.title) {
+      return session.title.length > 50 ? `${session.title.slice(0, 50)}...` : session.title;
+    }
+    return `Session ${session.session_id.slice(0, 8)}`;
   };
 
   // Get session status icon
@@ -87,6 +82,8 @@ export const MobileNavTree: React.FC<MobileNavTreeProps> = ({
     return '⏸️';
   };
 
+  const boards = mapToArray(boardById);
+
   return (
     <div
       style={{
@@ -95,7 +92,7 @@ export const MobileNavTree: React.FC<MobileNavTreeProps> = ({
       }}
     >
       <BoardCollapse
-        items={boards.map(board => {
+        items={boards.map((board: Board) => {
           const boardWorktrees = worktreesByBoard[board.board_id] || [];
           const activeComments = getActiveCommentCount(board.board_id);
 
@@ -122,7 +119,7 @@ export const MobileNavTree: React.FC<MobileNavTreeProps> = ({
                   <Button
                     type="text"
                     icon={<CommentOutlined style={{ fontSize: 18 }} />}
-                    onClick={e => handleCommentsClick(board.board_id, e)}
+                    onClick={(e) => handleCommentsClick(board.board_id, e)}
                     style={{
                       padding: '6px 10px',
                       height: 'auto',
@@ -140,80 +137,102 @@ export const MobileNavTree: React.FC<MobileNavTreeProps> = ({
                   defaultActiveKey={[]}
                   ghost
                   expandIcon={({ isActive }) => <DownOutlined rotate={isActive ? 180 : 0} />}
-                  items={boardWorktrees.map(worktree => {
-                    const worktreeSessions = sessionsByWorktree[worktree.worktree_id] || [];
+                  items={boardWorktrees
+                    .sort((a, b) => {
+                      // Sort worktrees by most recent session activity
+                      const aMaxActivity = Math.max(
+                        ...(sortedSessionsByWorktree.get(a.worktree_id) || []).map((s) =>
+                          new Date(s.last_updated).getTime()
+                        ),
+                        0
+                      );
+                      const bMaxActivity = Math.max(
+                        ...(sortedSessionsByWorktree.get(b.worktree_id) || []).map((s) =>
+                          new Date(s.last_updated).getTime()
+                        ),
+                        0
+                      );
+                      return bMaxActivity - aMaxActivity; // DESC (most recent first)
+                    })
+                    .map((worktree) => {
+                      const worktreeSessions =
+                        sortedSessionsByWorktree.get(worktree.worktree_id) || [];
 
-                    return {
-                      key: worktree.worktree_id,
-                      label: (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 2,
-                            padding: '2px 0',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span>🌳</span>
-                            <Text strong>{worktree.name}</Text>
-                          </div>
-                          <Text type="secondary" style={{ fontSize: 12, paddingLeft: 28 }}>
-                            {worktreeSessions.length} sessions
-                          </Text>
-                        </div>
-                      ),
-                      children:
-                        worktreeSessions.length === 0 ? (
-                          <Text
-                            type="secondary"
-                            style={{ padding: '8px 0 8px 28px', display: 'block' }}
+                      return {
+                        key: worktree.worktree_id,
+                        label: (
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 2,
+                              padding: '2px 0',
+                            }}
                           >
-                            No sessions yet
-                          </Text>
-                        ) : (
-                          <List
-                            dataSource={worktreeSessions}
-                            renderItem={session => (
-                              <List.Item
-                                onClick={() => handleSessionClick(session.session_id)}
-                                style={{
-                                  cursor: 'pointer',
-                                  padding: '6px 8px 6px 28px',
-                                  borderRadius: 4,
-                                }}
-                                onMouseEnter={e => {
-                                  (e.currentTarget as HTMLElement).style.background =
-                                    'rgba(255, 255, 255, 0.04)';
-                                }}
-                                onMouseLeave={e => {
-                                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-                                }}
-                              >
-                                <div
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span>🌳</span>
+                              <Text strong>{worktree.name}</Text>
+                            </div>
+                            <Text type="secondary" style={{ fontSize: 12, paddingLeft: 28 }}>
+                              {worktreeSessions.length} sessions
+                            </Text>
+                          </div>
+                        ),
+                        children:
+                          worktreeSessions.length === 0 ? (
+                            <Text
+                              type="secondary"
+                              style={{ padding: '8px 0 8px 28px', display: 'block' }}
+                            >
+                              No sessions yet
+                            </Text>
+                          ) : (
+                            <List
+                              dataSource={worktreeSessions}
+                              renderItem={(session) => (
+                                <List.Item
+                                  onClick={() => handleSessionClick(session.session_id)}
                                   style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 2,
-                                    width: '100%',
+                                    cursor: 'pointer',
+                                    padding: '6px 8px 6px 28px',
+                                    borderRadius: 4,
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    (e.currentTarget as HTMLElement).style.background =
+                                      'rgba(255, 255, 255, 0.04)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    (e.currentTarget as HTMLElement).style.background =
+                                      'transparent';
                                   }}
                                 >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span>{getSessionStatusIcon(session)}</span>
-                                    <Text>{getSessionTitle(session.session_id)}</Text>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: 2,
+                                      width: '100%',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <span>{getSessionStatusIcon(session)}</span>
+                                      <Text>{getSessionTitle(session)}</Text>
+                                    </div>
+                                    <Text
+                                      type="secondary"
+                                      style={{ fontSize: 11, paddingLeft: 28 }}
+                                    >
+                                      {session.agentic_tool}
+                                      {session.model_config?.model &&
+                                        ` • ${session.model_config.model}`}
+                                    </Text>
                                   </div>
-                                  <Text type="secondary" style={{ fontSize: 11, paddingLeft: 28 }}>
-                                    {session.agentic_tool}
-                                    {session.model_config?.model &&
-                                      ` • ${session.model_config.model}`}
-                                  </Text>
-                                </div>
-                              </List.Item>
-                            )}
-                          />
-                        ),
-                    };
-                  })}
+                                </List.Item>
+                              )}
+                            />
+                          ),
+                      };
+                    })}
                 />
               ),
           };

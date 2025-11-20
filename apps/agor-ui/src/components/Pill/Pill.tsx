@@ -1,4 +1,5 @@
-import type { SessionStatus, TaskStatus } from '@agor/core/types';
+import type { AgenticToolName, SessionStatus, TaskStatus } from '@agor/core/types';
+import { normalizeRawSdkResponse } from '@agor/core/utils/sdk-normalizer';
 import {
   ApartmentOutlined,
   BranchesOutlined,
@@ -172,8 +173,10 @@ interface ContextWindowPillProps extends BasePillProps {
   taskMetadata?: {
     model?: string;
     duration_ms?: number;
+    // Agentic tool name (needed to normalize SDK response)
+    agentic_tool?: string;
     // Raw SDK response - single source of truth for token accounting
-    raw_sdk_response?: import('@agor/core/types').RawSdkResponse;
+    raw_sdk_response?: unknown;
   };
 }
 
@@ -192,29 +195,43 @@ const ContextWindowPopoverContent: React.FC<{
   // Build collapsible items for advanced sections
   const advancedItems = [];
 
-  // Extract token usage from raw SDK response
+  // Extract and normalize SDK response
   const sdkResponse = taskMetadata?.raw_sdk_response;
-  const tokenUsage = sdkResponse?.tokenUsage;
+  const agenticTool = taskMetadata?.agentic_tool as AgenticToolName | undefined;
+
+  // Normalize SDK response to get standardized token breakdown
+  const normalized =
+    sdkResponse && agenticTool ? normalizeRawSdkResponse(sdkResponse, agenticTool) : null;
 
   // Add per-model usage if available (Claude Code multi-model)
-  if (sdkResponse?.tool === 'claude-code' && sdkResponse.modelUsage && Object.keys(sdkResponse.modelUsage).length > 0) {
+  // Check for modelUsage field (only Claude SDK has this)
+  if (
+    sdkResponse &&
+    typeof sdkResponse === 'object' &&
+    sdkResponse !== null &&
+    'modelUsage' in sdkResponse &&
+    sdkResponse.modelUsage
+  ) {
     advancedItems.push({
       key: 'per-model',
       label: 'Per-Model Usage',
       children: (
         <div style={{ fontSize: '0.9em' }}>
           {Object.entries(sdkResponse.modelUsage).map(([modelId, usage]) => {
-            const modelContextUsage = (usage.inputTokens || 0) + (usage.outputTokens || 0);
+            const _modelContextUsage = (usage.inputTokens || 0) + (usage.outputTokens || 0);
 
             return (
               <div key={modelId} style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>{modelId}</div>
-                <div style={{ marginLeft: 12, fontSize: '0.95em', color: token.colorTextSecondary }}>
+                <div
+                  style={{ marginLeft: 12, fontSize: '0.95em', color: token.colorTextSecondary }}
+                >
                   <div>Input: {usage.inputTokens?.toLocaleString() || 0}</div>
                   <div>Output: {usage.outputTokens?.toLocaleString() || 0}</div>
-                  {usage.cacheCreationInputTokens !== undefined && usage.cacheCreationInputTokens > 0 && (
-                    <div>Cache creation: {usage.cacheCreationInputTokens.toLocaleString()}</div>
-                  )}
+                  {usage.cacheCreationInputTokens !== undefined &&
+                    usage.cacheCreationInputTokens > 0 && (
+                      <div>Cache creation: {usage.cacheCreationInputTokens.toLocaleString()}</div>
+                    )}
                   {usage.cacheReadInputTokens !== undefined && usage.cacheReadInputTokens > 0 && (
                     <div>Cache read: {usage.cacheReadInputTokens.toLocaleString()}</div>
                   )}
@@ -263,31 +280,34 @@ const ContextWindowPopoverContent: React.FC<{
           Context Window Usage
         </div>
         <div style={{ fontSize: '1.1em', fontFamily: token.fontFamilyCode }}>
-          {used.toLocaleString()} / {limit.toLocaleString()}{' '}
-          <span style={{ color: token.colorTextSecondary }}>({percentage}%)</span>
+          {used.toLocaleString()}
+          {limit > 0 ? ` / ${limit.toLocaleString()}` : ''}{' '}
+          {limit > 0 && <span style={{ color: token.colorTextSecondary }}>({percentage}%)</span>}
         </div>
         <div style={{ fontSize: '0.85em', color: token.colorTextTertiary, marginTop: 6 }}>
-          Cumulative conversation tokens (directly from SDK)
+          {limit > 0
+            ? 'Cumulative conversation tokens'
+            : 'Cumulative conversation tokens (limit unknown)'}
         </div>
       </div>
 
-      {/* Token breakdown - from raw SDK response */}
-      {tokenUsage && (
+      {/* Token breakdown - normalized from SDK response */}
+      {normalized && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 500, marginBottom: 6 }}>Token Breakdown</div>
           <div style={{ fontSize: '0.9em', marginLeft: 12, color: token.colorTextSecondary }}>
-            <div>Input: {tokenUsage.input_tokens?.toLocaleString() || 0}</div>
-            <div>Output: {tokenUsage.output_tokens?.toLocaleString() || 0}</div>
-            {tokenUsage.cache_creation_tokens !== undefined &&
-              tokenUsage.cache_creation_tokens > 0 && (
-                <div>Cache creation: {tokenUsage.cache_creation_tokens.toLocaleString()}</div>
-              )}
-            {tokenUsage.cache_read_tokens !== undefined &&
-              tokenUsage.cache_read_tokens > 0 && (
-                <div>Cache read: {tokenUsage.cache_read_tokens.toLocaleString()}</div>
-              )}
+            <div>Input: {normalized.tokenUsage.inputTokens.toLocaleString()}</div>
+            <div>Output: {normalized.tokenUsage.outputTokens.toLocaleString()}</div>
+            {normalized.tokenUsage.cacheCreationTokens > 0 && (
+              <div>
+                Cache creation: {normalized.tokenUsage.cacheCreationTokens.toLocaleString()}
+              </div>
+            )}
+            {normalized.tokenUsage.cacheReadTokens > 0 && (
+              <div>Cache read: {normalized.tokenUsage.cacheReadTokens.toLocaleString()}</div>
+            )}
             <div style={{ marginTop: 4, fontWeight: 500, color: token.colorText }}>
-              Total: {tokenUsage.total_tokens?.toLocaleString() || 0}
+              Total: {normalized.tokenUsage.totalTokens.toLocaleString()}
             </div>
           </div>
         </div>
@@ -336,10 +356,13 @@ export const ContextWindowPill: React.FC<ContextWindowPillProps> = ({
   taskMetadata,
   style,
 }) => {
-  const percentage = Math.round((used / limit) * 100);
+  // Handle division by zero - if no limit, show as unknown percentage
+  const percentage = limit > 0 ? Math.round((used / limit) * 100) : 0;
+  const hasLimit = limit > 0;
 
   // Color-code based on usage: green (<50%), yellow (50-80%), red (>80%)
   const getColor = () => {
+    if (!hasLimit) return 'blue'; // Blue for unknown limit
     if (percentage < 50) return 'green';
     if (percentage < 80) return 'orange';
     return 'red';
@@ -347,7 +370,7 @@ export const ContextWindowPill: React.FC<ContextWindowPillProps> = ({
 
   const pill = (
     <Tag icon={<PercentageOutlined />} color={getColor()} style={style}>
-      {percentage}
+      {hasLimit ? `${percentage}%` : '?'}
     </Tag>
   );
 
@@ -432,12 +455,14 @@ export const GitShaPill: React.FC<GitShaPillProps> = ({
 interface GitStatePillProps extends BasePillProps {
   branch?: string; // Branch name (renamed from 'ref' to avoid React reserved word)
   sha: string;
+  worktreeName?: string; // Hide branch name if it matches worktree name
   showDirtyIndicator?: boolean;
 }
 
 export const GitStatePill: React.FC<GitStatePillProps> = ({
   branch,
   sha,
+  worktreeName,
   showDirtyIndicator = true,
   style,
 }) => {
@@ -446,16 +471,30 @@ export const GitStatePill: React.FC<GitStatePillProps> = ({
   const cleanSha = sha.replace('-dirty', '');
   const displaySha = cleanSha.substring(0, 7);
 
+  // Only show branch if it differs from worktree name
+  const shouldShowBranch = branch && branch !== worktreeName;
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    copyToClipboard(cleanSha, {
+      showSuccess: true,
+      successMessage: 'Git SHA copied to clipboard',
+    });
+  };
+
   return (
-    <Tag
-      icon={<ForkOutlined />}
-      color={isDirty && showDirtyIndicator ? 'cyan' : PILL_COLORS.git}
-      style={style}
-    >
-      {branch && <span>{branch} : </span>}
-      <span style={{ fontFamily: token.fontFamilyCode }}>{displaySha}</span>
-      {isDirty && showDirtyIndicator && ' (dirty)'}
-    </Tag>
+    <Tooltip title="Click to copy full SHA">
+      <Tag
+        icon={<ForkOutlined />}
+        color={isDirty && showDirtyIndicator ? 'cyan' : PILL_COLORS.git}
+        style={{ ...style, cursor: 'pointer' }}
+        onClick={handleClick}
+      >
+        {shouldShowBranch && <span>{branch} : </span>}
+        <span style={{ fontFamily: token.fontFamilyCode }}>{displaySha}</span>
+        {isDirty && showDirtyIndicator && ' (dirty)'}
+      </Tag>
+    </Tooltip>
   );
 };
 
@@ -668,26 +707,86 @@ export const StatusPill: React.FC<StatusPillProps> = ({ status, style }) => {
 interface ForkPillProps extends BasePillProps {
   fromSessionId: string;
   taskId?: string;
+  messageIndex?: number;
 }
 
-export const ForkPill: React.FC<ForkPillProps> = ({ fromSessionId, taskId, style }) => (
-  <Tag icon={<ForkOutlined />} color={PILL_COLORS.fork} style={style}>
-    FORKED from {fromSessionId.substring(0, 7)}
-    {taskId && ` at ${taskId.substring(0, 7)}`}
-  </Tag>
-);
+export const ForkPill: React.FC<ForkPillProps> = ({
+  fromSessionId,
+  taskId,
+  messageIndex,
+  style,
+}) => {
+  const handleCopySessionId = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    copyToClipboard(fromSessionId);
+  };
+
+  return (
+    <Tooltip
+      title={
+        <div>
+          <div>Forked from session {fromSessionId.substring(0, 8)}</div>
+          {messageIndex !== undefined && <div>Message index: {messageIndex}</div>}
+          <div style={{ marginTop: 4, fontSize: '0.9em', opacity: 0.8 }}>
+            Click to copy session ID
+          </div>
+        </div>
+      }
+    >
+      <Tag
+        icon={<ForkOutlined />}
+        color={PILL_COLORS.fork}
+        style={{ ...style, cursor: 'pointer' }}
+        onClick={handleCopySessionId}
+      >
+        FORKED from {fromSessionId.substring(0, 8)}
+        {messageIndex !== undefined && ` as of message ${messageIndex}`}
+      </Tag>
+    </Tooltip>
+  );
+};
 
 interface SpawnPillProps extends BasePillProps {
   fromSessionId: string;
   taskId?: string;
+  messageIndex?: number;
 }
 
-export const SpawnPill: React.FC<SpawnPillProps> = ({ fromSessionId, taskId, style }) => (
-  <Tag icon={<BranchesOutlined />} color={PILL_COLORS.spawn} style={style}>
-    SPAWNED from {fromSessionId.substring(0, 7)}
-    {taskId && ` at ${taskId.substring(0, 7)}`}
-  </Tag>
-);
+export const SpawnPill: React.FC<SpawnPillProps> = ({
+  fromSessionId,
+  taskId,
+  messageIndex,
+  style,
+}) => {
+  const handleCopySessionId = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    copyToClipboard(fromSessionId);
+  };
+
+  return (
+    <Tooltip
+      title={
+        <div>
+          <div>Spawned from session {fromSessionId.substring(0, 8)}</div>
+          {messageIndex !== undefined && <div>Message index: {messageIndex}</div>}
+          <div style={{ marginTop: 4, fontSize: '0.9em', opacity: 0.8 }}>
+            Click to copy session ID
+          </div>
+        </div>
+      }
+    >
+      <Tag
+        icon={<BranchesOutlined />}
+        color={PILL_COLORS.spawn}
+        style={{ ...style, cursor: 'pointer' }}
+        onClick={handleCopySessionId}
+      >
+        SPAWNED from {fromSessionId.substring(0, 8)}
+        {messageIndex !== undefined && ` as of message ${messageIndex}`}
+      </Tag>
+    </Tooltip>
+  );
+};
 
 interface ReportPillProps extends BasePillProps {
   reportId?: string;

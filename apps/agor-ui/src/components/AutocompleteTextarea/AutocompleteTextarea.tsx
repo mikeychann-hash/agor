@@ -9,13 +9,14 @@ import type { AgorClient } from '@agor/core/api';
 import type { SessionID, User } from '@agor/core/types';
 import { Input, Popover, Spin, Typography, theme } from 'antd';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { mapToArray } from '@/utils/mapHelpers';
 import './AutocompleteTextarea.css';
 
 const { TextArea } = Input;
 const { Text } = Typography;
 
 // Constants
-const MAX_FILE_RESULTS = 10;
+const _MAX_FILE_RESULTS = 10;
 const MAX_USER_RESULTS = 5;
 const DEBOUNCE_MS = 300;
 
@@ -39,7 +40,7 @@ interface AutocompleteTextareaProps {
   placeholder?: string;
   client: AgorClient | null;
   sessionId: SessionID | null;
-  users: User[];
+  userById: Map<string, User>;
   autoSize?: {
     minRows?: number;
     maxRows?: number;
@@ -94,7 +95,7 @@ export const AutocompleteTextarea = React.forwardRef<
       placeholder = 'Send a prompt, fork, or create a subsession... (type @ for autocomplete)',
       client,
       sessionId,
-      users,
+      userById,
       autoSize,
     },
     ref
@@ -175,20 +176,20 @@ export const AutocompleteTextarea = React.forwardRef<
         }
 
         const lowercaseQuery = searchQuery.toLowerCase();
-        return users
+        return mapToArray(userById)
           .filter(
-            u =>
-              (u.name && u.name.toLowerCase().includes(lowercaseQuery)) ||
+            (u: User) =>
+              u.name?.toLowerCase().includes(lowercaseQuery) ||
               u.email.toLowerCase().includes(lowercaseQuery)
           )
           .slice(0, MAX_USER_RESULTS)
-          .map(u => ({
+          .map((u: User) => ({
             name: u.name || u.email,
             email: u.email,
             type: 'user' as const,
           }));
       },
-      [users]
+      [userById]
     );
 
     /**
@@ -295,7 +296,7 @@ export const AutocompleteTextarea = React.forwardRef<
             if (isPopoverOpen) {
               e.preventDefault();
               e.stopPropagation();
-              setHighlightedIndex(prev =>
+              setHighlightedIndex((prev) =>
                 prev < autocompleteOptions.length - 1 ? prev + 1 : prev
               );
             }
@@ -305,7 +306,7 @@ export const AutocompleteTextarea = React.forwardRef<
             if (isPopoverOpen) {
               e.preventDefault();
               e.stopPropagation();
-              setHighlightedIndex(prev => (prev > 0 ? prev - 1 : -1));
+              setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1));
             }
             break;
 
@@ -321,7 +322,7 @@ export const AutocompleteTextarea = React.forwardRef<
                 }
               } else if (autocompleteOptions.length > 0) {
                 // If nothing highlighted, highlight first non-heading item
-                const firstItem = autocompleteOptions.find(item => !('heading' in item));
+                const firstItem = autocompleteOptions.find((item) => !('heading' in item));
                 if (firstItem) {
                   const idx = autocompleteOptions.indexOf(firstItem);
                   setHighlightedIndex(idx);
@@ -440,11 +441,11 @@ export const AutocompleteTextarea = React.forwardRef<
                   backgroundColor: isHighlighted ? token.colorPrimaryBg : 'transparent',
                   color: isHighlighted ? token.colorPrimary : token.colorText,
                 }}
-                onMouseEnter={e => {
+                onMouseEnter={(e) => {
                   setHighlightedIndex(idx);
                   e.currentTarget.style.backgroundColor = token.colorBgTextHover;
                 }}
-                onMouseLeave={e => {
+                onMouseLeave={(e) => {
                   setHighlightedIndex(-1);
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
@@ -465,7 +466,7 @@ export const AutocompleteTextarea = React.forwardRef<
         overlayStyle={{ paddingTop: 4 }}
       >
         <TextArea
-          ref={node => {
+          ref={(node) => {
             let textarea: HTMLTextAreaElement | null = null;
             if (
               node &&

@@ -14,8 +14,8 @@ import {
   Table,
   Typography,
 } from 'antd';
-import type { Color } from 'antd/es/color-picker';
 import { useMemo, useState } from 'react';
+import { mapToArray } from '@/utils/mapHelpers';
 import { FormEmojiPickerInput } from '../EmojiPickerInput';
 import { JSONEditor, validateJSON } from '../JSONEditor';
 
@@ -93,18 +93,18 @@ const BACKGROUND_PRESETS = [
 ];
 
 interface BoardsTableProps {
-  boards: Board[];
-  sessions: Session[];
-  worktrees: Worktree[];
+  boardById: Map<string, Board>;
+  sessionsByWorktree: Map<string, Session[]>; // O(1) worktree filtering
+  worktreeById: Map<string, Worktree>;
   onCreate?: (board: Partial<Board>) => void;
   onUpdate?: (boardId: string, updates: Partial<Board>) => void;
   onDelete?: (boardId: string) => void;
 }
 
 export const BoardsTable: React.FC<BoardsTableProps> = ({
-  boards,
-  sessions,
-  worktrees,
+  boardById,
+  sessionsByWorktree,
+  worktreeById,
   onCreate,
   onUpdate,
   onDelete,
@@ -128,24 +128,28 @@ export const BoardsTable: React.FC<BoardsTableProps> = ({
   const boardSessionCounts = useMemo(() => {
     const counts = new Map<string, number>();
 
-    boards.forEach(board => {
-      // Get worktrees for this board
-      const boardWorktrees = worktrees.filter(wt => wt.board_id === board.board_id);
-      const boardWorktreeIds = new Set(boardWorktrees.map(wt => wt.worktree_id));
+    for (const board of boardById.values()) {
+      // Get worktree IDs for this board by iterating the Map
+      const boardWorktreeIds: string[] = [];
+      for (const worktree of worktreeById.values()) {
+        if (worktree.board_id === board.board_id) {
+          boardWorktreeIds.push(worktree.worktree_id);
+        }
+      }
 
-      // Count sessions for these worktrees
-      const sessionCount = sessions.filter(
-        session => session.worktree_id && boardWorktreeIds.has(session.worktree_id)
+      // Count sessions for these worktrees using O(1) Map lookups
+      const sessionCount = boardWorktreeIds.flatMap(
+        (worktreeId) => sessionsByWorktree.get(worktreeId) || []
       ).length;
 
       counts.set(board.board_id, sessionCount);
-    });
+    }
 
     return counts;
-  }, [boards, sessions, worktrees]);
+  }, [boardById, sessionsByWorktree, worktreeById]);
 
   const handleCreate = () => {
-    form.validateFields().then(values => {
+    form.validateFields().then((values) => {
       onCreate?.({
         name: values.name,
         icon: values.icon || '📋',
@@ -180,7 +184,7 @@ export const BoardsTable: React.FC<BoardsTableProps> = ({
   const handleUpdate = () => {
     if (!editingBoard) return;
 
-    form.validateFields().then(values => {
+    form.validateFields().then((values) => {
       onUpdate?.(editingBoard.board_id, {
         name: values.name,
         icon: values.icon,
@@ -274,7 +278,7 @@ export const BoardsTable: React.FC<BoardsTableProps> = ({
       </div>
 
       <Table
-        dataSource={boards}
+        dataSource={mapToArray(boardById)}
         columns={columns}
         rowKey="board_id"
         pagination={false}
@@ -317,7 +321,7 @@ export const BoardsTable: React.FC<BoardsTableProps> = ({
             <Space direction="vertical" style={{ width: '100%' }}>
               <Checkbox
                 checked={useCustomCSSCreate}
-                onChange={e => {
+                onChange={(e) => {
                   setUseCustomCSSCreate(e.target.checked);
                   if (e.target.checked) {
                     // Clear the color picker value when switching to custom CSS
@@ -340,7 +344,7 @@ export const BoardsTable: React.FC<BoardsTableProps> = ({
                     allowClear
                     showSearch
                     options={BACKGROUND_PRESETS}
-                    onChange={value => {
+                    onChange={(value) => {
                       if (value) {
                         form.setFieldsValue({ background_color: value });
                       }
@@ -415,7 +419,7 @@ export const BoardsTable: React.FC<BoardsTableProps> = ({
             <Space direction="vertical" style={{ width: '100%' }}>
               <Checkbox
                 checked={useCustomCSSEdit}
-                onChange={e => {
+                onChange={(e) => {
                   setUseCustomCSSEdit(e.target.checked);
                   if (e.target.checked) {
                     // Clear the color picker value when switching to custom CSS
@@ -438,7 +442,7 @@ export const BoardsTable: React.FC<BoardsTableProps> = ({
                     allowClear
                     showSearch
                     options={BACKGROUND_PRESETS}
-                    onChange={value => {
+                    onChange={(value) => {
                       if (value) {
                         form.setFieldsValue({ background_color: value });
                       }

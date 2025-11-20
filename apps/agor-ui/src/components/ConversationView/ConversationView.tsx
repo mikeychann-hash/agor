@@ -13,13 +13,32 @@
  */
 
 import type { AgorClient } from '@agor/core/api';
-import type { Message, PermissionScope, SessionID, User } from '@agor/core/types';
+import type { MessageID, PermissionScope, SessionID, User } from '@agor/core/types';
+import { BranchesOutlined, CopyOutlined, ForkOutlined } from '@ant-design/icons';
 import { Alert, Spin, Typography, theme } from 'antd';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStreamingMessages, useTasks } from '../../hooks';
+import type { StreamingMessage } from '../../hooks/useStreamingMessages';
+import { useCopyToClipboard } from '../../utils/clipboard';
 import { TaskBlock } from '../TaskBlock';
 
 const { Text } = Typography;
+
+/**
+ * Check if two Maps are equal (same keys and same content)
+ * Used to maintain stable Map references for React memoization
+ */
+function mapsAreEqual<K, V>(map1: Map<K, V>, map2: Map<K, V>): boolean {
+  if (map1.size !== map2.size) return false;
+
+  for (const [key, value1] of map1.entries()) {
+    const value2 = map2.get(key);
+    // For StreamingMessage objects, compare by reference (they're immutable updates)
+    if (value1 !== value2) return false;
+  }
+
+  return true;
+}
 
 export interface ConversationViewProps {
   /**
@@ -43,9 +62,9 @@ export interface ConversationViewProps {
   sessionModel?: string;
 
   /**
-   * All users for emoji avatars
+   * All users for emoji avatars (Map-based)
    */
-  users?: User[];
+  userById?: Map<string, User>;
 
   /**
    * Current user ID for showing emoji
@@ -69,6 +88,11 @@ export interface ConversationViewProps {
   ) => void;
 
   /**
+   * Worktree name for hiding redundant branch names
+   */
+  worktreeName?: string;
+
+  /**
    * Whether this session was created by the scheduler
    */
   scheduledFromWorktree?: boolean;
@@ -82,6 +106,23 @@ export interface ConversationViewProps {
    * Custom empty state message (for mobile vs desktop contexts)
    */
   emptyStateMessage?: string;
+
+  /**
+   * Whether the view is currently visible/active (pauses sockets when false)
+   */
+  isActive?: boolean;
+
+  /**
+   * Session genealogy for showing fork/spawn origin
+   */
+  genealogy?: {
+    forked_from_session_id?: string;
+    fork_point_task_id?: string;
+    fork_point_message_index?: number;
+    parent_session_id?: string;
+    spawn_point_task_id?: string;
+    spawn_point_message_index?: number;
+  };
 }
 
 export const ConversationView = React.memo<ConversationViewProps>(
@@ -90,16 +131,20 @@ export const ConversationView = React.memo<ConversationViewProps>(
     sessionId,
     agentic_tool,
     sessionModel,
-    users = [],
+    userById = new Map(),
     currentUserId,
     onScrollRef,
     onPermissionDecision,
+    worktreeName,
     scheduledFromWorktree,
     scheduledRunAt,
     emptyStateMessage = 'No messages yet. Send a prompt to start the conversation.',
+    isActive = true,
+    genealogy,
   }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const { token } = theme.useToken();
+    const [copied, copy] = useCopyToClipboard();
 
     // Check if user is scrolled near the bottom (within 100px)
     const isNearBottom = useCallback(() => {
@@ -123,15 +168,55 @@ export const ConversationView = React.memo<ConversationViewProps>(
     }, [onScrollRef, scrollToBottom]);
 
     // Fetch tasks for this session
-    const currentUser = users.find(u => u.user_id === currentUserId) || null;
+    const currentUser = currentUserId ? userById.get(currentUserId) || null : null;
     const {
       tasks,
       loading: tasksLoading,
       error: tasksError,
-    } = useTasks(client, sessionId, currentUser);
+    } = useTasks(client, sessionId, currentUser, isActive);
 
-    // Track real-time streaming messages (passed to TaskBlock for filtering)
-    const streamingMessages = useStreamingMessages(client, sessionId || undefined);
+    // Track real-time streaming messages for the session
+    const allStreamingMessages = useStreamingMessages(client, sessionId || undefined, isActive);
+
+    // Store previous task maps to maintain stable references
+    const prevTaskMapsRef = useRef<Map<string, Map<MessageID, StreamingMessage>>>(new Map());
+
+    // Create stable Map references per task to avoid unnecessary re-renders
+    // Only return new Map objects when the actual messages for that task change
+    const streamingMessagesByTask = useMemo(() => {
+      const result = new Map<string, Map<MessageID, StreamingMessage>>();
+      const prevMaps = prevTaskMapsRef.current;
+
+      // Group messages by task_id
+      const tempByTask = new Map<string, Map<MessageID, StreamingMessage>>();
+      for (const [msgId, streamingMsg] of allStreamingMessages.entries()) {
+        if (streamingMsg.task_id) {
+          if (!tempByTask.has(streamingMsg.task_id)) {
+            tempByTask.set(streamingMsg.task_id, new Map());
+          }
+          tempByTask.get(streamingMsg.task_id)!.set(msgId, streamingMsg);
+        }
+      }
+
+      // For each task, reuse previous Map if content is identical
+      for (const [taskId, newTaskMap] of tempByTask.entries()) {
+        const prevTaskMap = prevMaps.get(taskId);
+
+        // Check if maps are equal (same keys and values)
+        if (prevTaskMap && mapsAreEqual(prevTaskMap, newTaskMap)) {
+          // Reuse the previous Map reference (stable reference = no re-render)
+          result.set(taskId, prevTaskMap);
+        } else {
+          // Content changed, use new Map
+          result.set(taskId, newTaskMap);
+        }
+      }
+
+      // Update ref for next render
+      prevTaskMapsRef.current = result;
+
+      return result;
+    }, [allStreamingMessages]);
 
     const loading = tasksLoading;
     const error = tasksError;
@@ -148,7 +233,7 @@ export const ConversationView = React.memo<ConversationViewProps>(
     useEffect(() => {
       if (tasks.length > 0) {
         const lastTaskId = tasks[tasks.length - 1].task_id;
-        setExpandedTaskIds(prev => {
+        setExpandedTaskIds((prev) => {
           // If no tasks expanded or last task changed, expand the last task
           if (prev.size === 0 || !prev.has(lastTaskId)) {
             // Scroll to bottom after expansion is rendered
@@ -164,7 +249,7 @@ export const ConversationView = React.memo<ConversationViewProps>(
 
     // Handle task expand/collapse
     const handleTaskExpandChange = useCallback((taskId: string, expanded: boolean) => {
-      setExpandedTaskIds(prev => {
+      setExpandedTaskIds((prev) => {
         const next = new Set(prev);
         if (expanded) {
           next.add(taskId);
@@ -175,13 +260,24 @@ export const ConversationView = React.memo<ConversationViewProps>(
       });
     }, []);
 
+    // Memoize expand handlers per task to keep stable references
+    const expandHandlers = useMemo(() => {
+      const handlerMap = new Map<string, (expanded: boolean) => void>();
+      for (const task of tasks) {
+        handlerMap.set(task.task_id, (expanded: boolean) =>
+          handleTaskExpandChange(task.task_id, expanded)
+        );
+      }
+      return handlerMap;
+    }, [tasks, handleTaskExpandChange]);
+
     // Auto-scroll to bottom when streaming messages arrive (only if user is already at bottom)
     // biome-ignore lint/correctness/useExhaustiveDependencies: We want to scroll on streaming change
     useEffect(() => {
       if (isNearBottom()) {
         scrollToBottom();
       }
-    }, [streamingMessages, tasks]);
+    }, [allStreamingMessages, tasks]);
 
     if (error) {
       return (
@@ -225,6 +321,65 @@ export const ConversationView = React.memo<ConversationViewProps>(
       );
     }
 
+    // Genealogy banner component
+    const isForked = !!genealogy?.forked_from_session_id;
+    const isSpawned = !!genealogy?.parent_session_id;
+
+    const GenealogyBanner = () => {
+      if (!isForked && !isSpawned) return null;
+
+      const sessionId = isForked ? genealogy?.forked_from_session_id : genealogy?.parent_session_id;
+      const messageIndex = isForked
+        ? genealogy?.fork_point_message_index
+        : genealogy?.spawn_point_message_index;
+      const icon = isForked ? <ForkOutlined /> : <BranchesOutlined />;
+      const actionText = isForked ? 'Forked' : 'Spawned';
+      const shortId = sessionId?.substring(0, 8);
+
+      return (
+        <div
+          style={{
+            margin: '12px 0',
+            padding: `${token.sizeUnit * 3}px ${token.sizeUnit * 4}px`,
+            background: isForked ? token.colorInfoBg : token.colorPrimaryBg,
+            border: `1px solid ${isForked ? token.colorInfoBorder : token.colorPrimaryBorder}`,
+            borderRadius: token.borderRadiusLG,
+            display: 'flex',
+            alignItems: 'center',
+            gap: token.sizeUnit * 3,
+          }}
+        >
+          <span style={{ fontSize: 20, color: token.colorTextSecondary }}>{icon}</span>
+          <div style={{ flex: 1 }}>
+            <Text style={{ fontSize: token.fontSizeLG }}>
+              {actionText} from session{' '}
+              <Text code strong style={{ fontSize: token.fontSizeLG }}>
+                {shortId}
+              </Text>
+              {messageIndex !== undefined && (
+                <>
+                  {' '}
+                  as of message{' '}
+                  <Text code strong style={{ fontSize: token.fontSizeLG }}>
+                    {messageIndex}
+                  </Text>
+                </>
+              )}
+            </Text>
+          </div>
+          <CopyOutlined
+            onClick={() => sessionId && copy(sessionId)}
+            style={{
+              cursor: 'pointer',
+              fontSize: 16,
+              color: copied ? token.colorSuccess : token.colorTextSecondary,
+            }}
+            title={copied ? 'Copied!' : 'Copy session ID'}
+          />
+        </div>
+      );
+    };
+
     return (
       <div
         ref={containerRef}
@@ -235,22 +390,27 @@ export const ConversationView = React.memo<ConversationViewProps>(
           minHeight: 0,
         }}
       >
+        {/* Genealogy Banner */}
+        <GenealogyBanner />
+
         {/* Task-organized conversation */}
-        {tasks.map(task => (
+        {tasks.map((task) => (
           <TaskBlock
             key={task.task_id}
             task={task}
             client={client}
             agentic_tool={agentic_tool}
             sessionModel={sessionModel}
-            users={users}
+            userById={userById}
             currentUserId={currentUserId}
             isExpanded={expandedTaskIds.has(task.task_id)}
-            onExpandChange={expanded => handleTaskExpandChange(task.task_id, expanded)}
+            onExpandChange={expandHandlers.get(task.task_id)!}
             sessionId={sessionId}
             onPermissionDecision={onPermissionDecision}
+            worktreeName={worktreeName}
             scheduledFromWorktree={scheduledFromWorktree}
             scheduledRunAt={scheduledRunAt}
+            streamingMessages={streamingMessagesByTask.get(task.task_id)}
           />
         ))}
       </div>

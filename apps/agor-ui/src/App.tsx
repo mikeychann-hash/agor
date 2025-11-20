@@ -1,5 +1,19 @@
 import { getRepoReferenceOptions } from '@agor/core/config/browser';
-import type { Worktree } from '@agor/core/types';
+import type {
+  Board,
+  CreateMCPServerInput,
+  CreateUserInput,
+  PermissionMode,
+  Repo,
+  Session,
+  SessionID,
+  SpawnConfig,
+  UpdateMCPServerInput,
+  UpdateUserInput,
+  User,
+  UUID,
+  Worktree,
+} from '@agor/core/types';
 import { Alert, App as AntApp, ConfigProvider, Spin, theme } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
@@ -22,6 +36,7 @@ import {
 } from './hooks';
 import { StreamdownDemoPage } from './pages/StreamdownDemoPage';
 import { isMobileDevice } from './utils/deviceDetection';
+import { useThemedMessage } from './utils/message';
 
 /**
  * DeviceRouter - Redirects users to mobile or desktop site based on device detection
@@ -69,9 +84,9 @@ function DeviceRouter() {
 }
 
 function AppContent() {
-  const { message } = AntApp.useApp();
   const { token } = theme.useToken();
   const { getCurrentThemeConfig } = useTheme();
+  const { showSuccess, showError, showLoading, destroy } = useThemedMessage();
 
   // Fetch daemon auth configuration
   const {
@@ -107,15 +122,15 @@ function AppContent() {
 
   // Fetch data (only when connected and authenticated)
   const {
-    sessions,
-    tasks,
-    boards,
-    boardObjects,
-    comments,
-    repos,
-    worktrees,
-    users,
-    mcpServers,
+    sessionById,
+    sessionsByWorktree,
+    boardById,
+    boardObjectById,
+    commentById,
+    repoById,
+    worktreeById,
+    userById,
+    mcpServerById,
     sessionMcpServerIds,
     loading,
     error: dataError,
@@ -143,24 +158,24 @@ function AppContent() {
 
   // Mark as loaded once we have data
   useEffect(() => {
-    if (!loading && (sessions.length > 0 || boards.length > 0 || repos.length > 0)) {
+    if (!loading && (sessionById.size > 0 || boardById.size > 0 || repoById.size > 0)) {
       setHasLoadedOnce(true);
     }
-  }, [loading, sessions.length, boards.length, repos.length]);
+  }, [loading, sessionById.size, boardById.size, repoById.size]);
 
-  // Get current user from users array (real-time updates via WebSocket)
+  // Get current user from users Map (real-time updates via WebSocket)
   // This ensures we get the latest onboarding_completed status
-  // Fall back to user from auth if users array hasn't loaded yet
-  const currentUser = user ? users.find(u => u.user_id === user.user_id) || user : null;
+  // Fall back to user from auth if users Map hasn't loaded yet
+  const currentUser = user ? userById.get(user.user_id) || user : null;
 
   // Memoize welcome modal stats to prevent unnecessary re-renders
   const welcomeStats = useMemo(
     () => ({
-      repoCount: repos.length,
-      worktreeCount: worktrees.length,
-      sessionCount: sessions.length,
+      repoCount: repoById.size,
+      worktreeCount: worktreeById.size,
+      sessionCount: sessionById.size,
     }),
-    [repos.length, worktrees.length, sessions.length]
+    [repoById.size, worktreeById.size, sessionById.size]
   );
 
   // Show welcome modal if user hasn't completed onboarding
@@ -415,7 +430,7 @@ function AppContent() {
           }
         }
 
-        message.success('Session created!');
+        showSuccess('Session created!');
 
         // If there's an initial prompt, send it to the agent
         if (config.initialPrompt?.trim()) {
@@ -425,11 +440,11 @@ function AppContent() {
         // Return the session ID so AgorApp can open the drawer
         return session.session_id;
       } else {
-        message.error('Failed to create session');
+        showError('Failed to create session');
         return null;
       }
     } catch (error) {
-      message.error(
+      showError(
         `Failed to create session: ${error instanceof Error ? error.message : String(error)}`
       );
       return null;
@@ -438,7 +453,7 @@ function AppContent() {
 
   // Update draft for a specific session
   const handleUpdateDraft = (sessionId: string, draft: string) => {
-    setPromptDrafts(prev => {
+    setPromptDrafts((prev) => {
       const next = new Map(prev);
       if (draft.trim()) {
         next.set(sessionId, draft);
@@ -451,7 +466,7 @@ function AppContent() {
 
   // Clear draft for a specific session
   const handleClearDraft = (sessionId: string) => {
-    setPromptDrafts(prev => {
+    setPromptDrafts((prev) => {
       const next = new Map(prev);
       next.delete(sessionId);
       return next;
@@ -460,25 +475,27 @@ function AppContent() {
 
   // Handle fork session
   const handleForkSession = async (sessionId: string, prompt: string) => {
-    const session = await forkSession(sessionId as import('@agor/core/types').SessionID, prompt);
+    const session = await forkSession(sessionId as SessionID, prompt);
     if (session) {
-      message.success('Session forked successfully!');
+      showSuccess('Session forked successfully!');
       // Clear the draft after forking
       handleClearDraft(sessionId);
     } else {
-      message.error('Failed to fork session');
+      showError('Failed to fork session');
     }
   };
 
   // Handle spawn session
-  const handleSpawnSession = async (sessionId: string, prompt: string) => {
-    const session = await spawnSession(sessionId as import('@agor/core/types').SessionID, prompt);
+  const handleSpawnSession = async (sessionId: string, config: string | Partial<SpawnConfig>) => {
+    // Handle both string prompt and full SpawnConfig
+    const spawnConfig = typeof config === 'string' ? { prompt: config } : config;
+    const session = await spawnSession(sessionId as SessionID, spawnConfig);
     if (session) {
-      message.success('Subsession session spawned successfully!');
+      showSuccess('Subsession session spawned successfully!');
       // Clear the draft after spawning subsession
       handleClearDraft(sessionId);
     } else {
-      message.error('Failed to spawn session');
+      showError('Failed to spawn session');
     }
   };
 
@@ -486,83 +503,71 @@ function AppContent() {
   const handleSendPrompt = async (
     sessionId: string,
     prompt: string,
-    permissionMode?: import('@agor/core/types').PermissionMode
+    permissionMode?: PermissionMode
   ) => {
     if (!client) return;
 
     try {
-      message.loading({ content: 'Sending prompt...', key: 'prompt', duration: 0 });
+      showLoading('Sending prompt...', { key: 'prompt' });
 
       await client.service(`sessions/${sessionId}/prompt`).create({
         prompt,
         permissionMode,
       });
 
-      message.success({ content: 'Response received!', key: 'prompt' });
+      showSuccess('Response received!', { key: 'prompt' });
 
       // Clear the draft after sending
       handleClearDraft(sessionId);
     } catch (error) {
-      message.error({
-        content: `Failed to send prompt: ${error instanceof Error ? error.message : String(error)}`,
-        key: 'prompt',
-      });
+      showError(
+        `Failed to send prompt: ${error instanceof Error ? error.message : String(error)}`,
+        { key: 'prompt' }
+      );
       console.error('Prompt error:', error);
     }
   };
 
   // Handle update session
-  const handleUpdateSession = async (
-    sessionId: string,
-    updates: Partial<import('@agor/core/types').Session>
-  ) => {
-    const session = await updateSession(sessionId as import('@agor/core/types').SessionID, updates);
+  const handleUpdateSession = async (sessionId: string, updates: Partial<Session>) => {
+    const session = await updateSession(sessionId as SessionID, updates);
     if (session) {
-      message.success('Session updated successfully!');
+      showSuccess('Session updated successfully!');
     } else {
-      message.error('Failed to update session');
+      showError('Failed to update session');
     }
   };
 
   // Handle delete session
   const handleDeleteSession = async (sessionId: string) => {
-    const success = await deleteSession(sessionId as import('@agor/core/types').SessionID);
+    const success = await deleteSession(sessionId as SessionID);
     if (success) {
-      message.success('Session deleted successfully!');
+      showSuccess('Session deleted successfully!');
     } else {
-      message.error('Failed to delete session');
+      showError('Failed to delete session');
     }
   };
 
   // Handle create user
-  const handleCreateUser = async (data: import('@agor/core/types').CreateUserInput) => {
+  const handleCreateUser = async (data: CreateUserInput) => {
     if (!client) return;
     try {
       await client.service('users').create(data);
-      message.success('User created successfully!');
+      showSuccess('User created successfully!');
     } catch (error) {
-      message.error(
-        `Failed to create user: ${error instanceof Error ? error.message : String(error)}`
-      );
+      showError(`Failed to create user: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
   // Handle update user
-  const handleUpdateUser = async (
-    userId: string,
-    updates: import('@agor/core/types').UpdateUserInput
-  ) => {
+  const handleUpdateUser = async (userId: string, updates: UpdateUserInput) => {
     if (!client) return;
     try {
       // Cast UpdateUserInput to Partial<User> - backend handles encryption/conversion
-      await client
-        .service('users')
-        .patch(userId, updates as Partial<import('@agor/core/types').User>);
-      message.success('User updated successfully!');
+      await client.service('users').patch(userId, updates as Partial<User>);
+      showSuccess('User updated successfully!');
     } catch (error) {
-      message.error(
-        `Failed to update user: ${error instanceof Error ? error.message : String(error)}`
-      );
+      showError(`Failed to update user: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -571,36 +576,31 @@ function AppContent() {
     if (!client) return;
     try {
       await client.service('users').remove(userId);
-      message.success('User deleted successfully!');
+      showSuccess('User deleted successfully!');
     } catch (error) {
-      message.error(
-        `Failed to delete user: ${error instanceof Error ? error.message : String(error)}`
-      );
+      showError(`Failed to delete user: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
   // Handle board CRUD
-  const handleCreateBoard = async (board: Partial<import('@agor/core/types').Board>) => {
+  const handleCreateBoard = async (board: Partial<Board>) => {
     const created = await createBoard(board);
     if (created) {
-      message.success('Board created successfully!');
+      showSuccess('Board created successfully!');
     }
   };
 
-  const handleUpdateBoard = async (
-    boardId: string,
-    updates: Partial<import('@agor/core/types').Board>
-  ) => {
-    const updated = await updateBoard(boardId as import('@agor/core/types').UUID, updates);
+  const handleUpdateBoard = async (boardId: string, updates: Partial<Board>) => {
+    const updated = await updateBoard(boardId as UUID, updates);
     if (updated) {
-      message.success('Board updated successfully!');
+      showSuccess('Board updated successfully!');
     }
   };
 
   const handleDeleteBoard = async (boardId: string) => {
-    const success = await deleteBoard(boardId as import('@agor/core/types').UUID);
+    const success = await deleteBoard(boardId as UUID);
     if (success) {
-      message.success('Board deleted successfully!');
+      showSuccess('Board deleted successfully!');
     }
   };
 
@@ -608,7 +608,7 @@ function AppContent() {
   const handleCreateRepo = async (data: { url: string; slug: string; default_branch: string }) => {
     if (!client) return;
     try {
-      message.loading({ content: 'Cloning repository...', key: 'clone-repo', duration: 0 });
+      showLoading('Cloning repository...', { key: 'clone-repo' });
 
       // Use the custom clone endpoint: POST /repos/clone
       await client.service('repos/clone').create({
@@ -617,25 +617,41 @@ function AppContent() {
         default_branch: data.default_branch,
       });
 
-      message.success({ content: 'Repository cloned successfully!', key: 'clone-repo' });
+      showSuccess('Repository cloned successfully!', { key: 'clone-repo' });
     } catch (error) {
-      message.error({
-        content: `Failed to clone repository: ${error instanceof Error ? error.message : String(error)}`,
-        key: 'clone-repo',
-      });
+      showError(
+        `Failed to clone repository: ${error instanceof Error ? error.message : String(error)}`,
+        { key: 'clone-repo' }
+      );
     }
   };
 
-  const handleUpdateRepo = async (
-    repoId: string,
-    updates: Partial<import('@agor/core/types').Repo>
-  ) => {
+  const handleCreateLocalRepo = async (data: { path: string; slug?: string }) => {
+    if (!client) return;
+    try {
+      showLoading('Adding local repository...', { key: 'add-local-repo' });
+
+      await client.service('repos/local').create({
+        path: data.path,
+        slug: data.slug,
+      });
+
+      showSuccess('Local repository added successfully!', { key: 'add-local-repo' });
+    } catch (error) {
+      showError(
+        `Failed to add local repository: ${error instanceof Error ? error.message : String(error)}`,
+        { key: 'add-local-repo' }
+      );
+    }
+  };
+
+  const handleUpdateRepo = async (repoId: string, updates: Partial<Repo>) => {
     if (!client) return;
     try {
       await client.service('repos').patch(repoId, updates);
-      message.success('Repository updated successfully!');
+      showSuccess('Repository updated successfully!');
     } catch (error) {
-      message.error(
+      showError(
         `Failed to update repository: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -645,9 +661,9 @@ function AppContent() {
     if (!client) return;
     try {
       await client.service('repos').remove(repoId);
-      message.success('Repository deleted successfully!');
+      showSuccess('Repository deleted successfully!');
     } catch (error) {
-      message.error(
+      showError(
         `Failed to delete repository: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -663,32 +679,31 @@ function AppContent() {
     if (!client) return;
     try {
       const action = options.metadataAction === 'archive' ? 'archived' : 'deleted';
-      message.loading({
-        content: `${options.metadataAction === 'archive' ? 'Archiving' : 'Deleting'} worktree...`,
-        key: 'archive-delete',
-        duration: 0,
-      });
+      showLoading(
+        `${options.metadataAction === 'archive' ? 'Archiving' : 'Deleting'} worktree...`,
+        { key: 'archive-delete' }
+      );
       await client.service(`worktrees/${worktreeId}/archive-or-delete`).create(options);
-      message.success({ content: `Worktree ${action} successfully!`, key: 'archive-delete' });
+      showSuccess(`Worktree ${action} successfully!`, { key: 'archive-delete' });
     } catch (error) {
-      message.error({
-        content: `Failed to ${options.metadataAction} worktree: ${error instanceof Error ? error.message : String(error)}`,
-        key: 'archive-delete',
-      });
+      showError(
+        `Failed to ${options.metadataAction} worktree: ${error instanceof Error ? error.message : String(error)}`,
+        { key: 'archive-delete' }
+      );
     }
   };
 
   const handleUnarchiveWorktree = async (worktreeId: string, options?: { boardId?: string }) => {
     if (!client) return;
     try {
-      message.loading({ content: 'Unarchiving worktree...', key: 'unarchive', duration: 0 });
+      showLoading('Unarchiving worktree...', { key: 'unarchive' });
       await client.service(`worktrees/${worktreeId}/unarchive`).create(options || {});
-      message.success({ content: 'Worktree unarchived successfully!', key: 'unarchive' });
+      showSuccess('Worktree unarchived successfully!', { key: 'unarchive' });
     } catch (error) {
-      message.error({
-        content: `Failed to unarchive worktree: ${error instanceof Error ? error.message : String(error)}`,
-        key: 'unarchive',
-      });
+      showError(
+        `Failed to unarchive worktree: ${error instanceof Error ? error.message : String(error)}`,
+        { key: 'unarchive' }
+      );
     }
   };
 
@@ -698,9 +713,9 @@ function AppContent() {
       // Cast to Partial<Worktree> to satisfy Feathers type checking
       // The backend MCP handler properly handles null values for clearing fields
       await client.service('worktrees').patch(worktreeId, updates as Partial<Worktree>);
-      message.success('Worktree updated successfully!');
+      showSuccess('Worktree updated successfully!');
     } catch (error) {
-      message.error(
+      showError(
         `Failed to update worktree: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -718,10 +733,10 @@ function AppContent() {
       pull_request_url?: string;
       boardId?: string;
     }
-  ): Promise<import('@agor/core/types').Worktree | null> => {
+  ): Promise<Worktree | null> => {
     if (!client) return null;
     try {
-      message.loading({ content: 'Creating worktree...', key: 'create-worktree', duration: 0 });
+      showLoading('Creating worktree...', { key: 'create-worktree' });
 
       const worktree = (await client.service(`repos/${repoId}/worktrees`).create({
         name: data.name,
@@ -732,16 +747,16 @@ function AppContent() {
         issue_url: data.issue_url,
         pull_request_url: data.pull_request_url,
         boardId: data.boardId, // Optional: add to board
-      })) as import('@agor/core/types').Worktree;
+      })) as Worktree;
 
       // Dismiss loading message - worktree will appear on board via WebSocket broadcast
-      message.destroy('create-worktree');
+      destroy('create-worktree');
       return worktree;
     } catch (error) {
-      message.error({
-        content: `Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`,
-        key: 'create-worktree',
-      });
+      showError(
+        `Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`,
+        { key: 'create-worktree' }
+      );
       return null;
     }
   };
@@ -750,54 +765,51 @@ function AppContent() {
   const handleStartEnvironment = async (worktreeId: string) => {
     if (!client) return;
     try {
-      message.loading({ content: 'Starting environment...', key: 'start-env', duration: 0 });
+      showLoading('Starting environment...', { key: 'start-env' });
       await client.service(`worktrees/${worktreeId}/start`).create({});
-      message.success({ content: 'Environment started successfully!', key: 'start-env' });
+      showSuccess('Environment started successfully!', { key: 'start-env' });
     } catch (error) {
-      message.error({
-        content: `Failed to start environment: ${error instanceof Error ? error.message : String(error)}`,
-        key: 'start-env',
-      });
+      showError(
+        `Failed to start environment: ${error instanceof Error ? error.message : String(error)}`,
+        { key: 'start-env' }
+      );
     }
   };
 
   const handleStopEnvironment = async (worktreeId: string) => {
     if (!client) return;
     try {
-      message.loading({ content: 'Stopping environment...', key: 'stop-env', duration: 0 });
+      showLoading('Stopping environment...', { key: 'stop-env' });
       await client.service(`worktrees/${worktreeId}/stop`).create({});
-      message.success({ content: 'Environment stopped successfully!', key: 'stop-env' });
+      showSuccess('Environment stopped successfully!', { key: 'stop-env' });
     } catch (error) {
-      message.error({
-        content: `Failed to stop environment: ${error instanceof Error ? error.message : String(error)}`,
-        key: 'stop-env',
-      });
+      showError(
+        `Failed to stop environment: ${error instanceof Error ? error.message : String(error)}`,
+        { key: 'stop-env' }
+      );
     }
   };
 
   // Handle MCP server CRUD
-  const handleCreateMCPServer = async (data: import('@agor/core/types').CreateMCPServerInput) => {
+  const handleCreateMCPServer = async (data: CreateMCPServerInput) => {
     if (!client) return;
     try {
       await client.service('mcp-servers').create(data);
-      message.success('MCP server added successfully!');
+      showSuccess('MCP server added successfully!');
     } catch (error) {
-      message.error(
+      showError(
         `Failed to add MCP server: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   };
 
-  const handleUpdateMCPServer = async (
-    serverId: string,
-    updates: import('@agor/core/types').UpdateMCPServerInput
-  ) => {
+  const handleUpdateMCPServer = async (serverId: string, updates: UpdateMCPServerInput) => {
     if (!client) return;
     try {
       await client.service('mcp-servers').patch(serverId, updates);
-      message.success('MCP server updated successfully!');
+      showSuccess('MCP server updated successfully!');
     } catch (error) {
-      message.error(
+      showError(
         `Failed to update MCP server: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -807,9 +819,9 @@ function AppContent() {
     if (!client) return;
     try {
       await client.service('mcp-servers').remove(serverId);
-      message.success('MCP server deleted successfully!');
+      showSuccess('MCP server deleted successfully!');
     } catch (error) {
-      message.error(
+      showError(
         `Failed to delete MCP server: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -821,13 +833,13 @@ function AppContent() {
 
     try {
       // Get current session-MCP relationships for this session
-      const currentIds = sessionMcpServerIds[sessionId] || [];
+      const currentIds = sessionMcpServerIds.get(sessionId) || [];
 
       // Find servers to add (in new list but not in current)
-      const toAdd = mcpServerIds.filter(id => !currentIds.includes(id));
+      const toAdd = mcpServerIds.filter((id) => !currentIds.includes(id));
 
       // Find servers to remove (in current list but not in new)
-      const toRemove = currentIds.filter(id => !mcpServerIds.includes(id));
+      const toRemove = currentIds.filter((id) => !mcpServerIds.includes(id));
 
       // Add new relationships
       for (const serverId of toAdd) {
@@ -844,7 +856,7 @@ function AppContent() {
       // Note: Don't show success message here - it's part of the session settings save
       // The main "Session updated" message will appear from handleUpdateSession
     } catch (error) {
-      message.error(
+      showError(
         `Failed to update MCP servers: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -861,7 +873,7 @@ function AppContent() {
         content_preview: content.slice(0, 200),
       });
     } catch (error) {
-      message.error(
+      showError(
         `Failed to send comment: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -870,12 +882,12 @@ function AppContent() {
   const handleResolveComment = async (commentId: string) => {
     if (!client) return;
     try {
-      const comment = comments.find(c => c.comment_id === commentId);
+      const comment = commentById.get(commentId);
       await client.service('board-comments').patch(commentId, {
         resolved: !comment?.resolved,
       });
     } catch (error) {
-      message.error(
+      showError(
         `Failed to resolve comment: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -885,9 +897,9 @@ function AppContent() {
     if (!client) return;
     try {
       await client.service('board-comments').remove(commentId);
-      message.success('Comment deleted');
+      showSuccess('Comment deleted');
     } catch (error) {
-      message.error(
+      showError(
         `Failed to delete comment: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -902,9 +914,7 @@ function AppContent() {
         created_by: user?.user_id || 'anonymous',
       });
     } catch (error) {
-      message.error(
-        `Failed to send reply: ${error instanceof Error ? error.message : String(error)}`
-      );
+      showError(`Failed to send reply: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -917,16 +927,19 @@ function AppContent() {
         emoji,
       });
     } catch (error) {
-      message.error(
+      showError(
         `Failed to toggle reaction: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   };
 
   // Generate repo reference options for dropdowns
-  const allOptions = getRepoReferenceOptions(repos, worktrees);
-  const _worktreeOptions = allOptions.filter(opt => opt.type === 'managed-worktree');
-  const _repoOptions = allOptions.filter(opt => opt.type === 'managed');
+  const allOptions = getRepoReferenceOptions(
+    Array.from(repoById.values()),
+    Array.from(worktreeById.values())
+  );
+  const _worktreeOptions = allOptions.filter((opt) => opt.type === 'managed-worktree');
+  const _repoOptions = allOptions.filter((opt) => opt.type === 'managed');
 
   // Handle onboarding dismissal
   const handleDismissOnboarding = async () => {
@@ -937,7 +950,7 @@ function AppContent() {
         onboarding_completed: true,
       });
     } catch (error) {
-      message.error(
+      showError(
         `Failed to update onboarding status: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -1000,13 +1013,13 @@ function AppContent() {
             <MobileApp
               client={client}
               user={user}
-              sessions={sessions}
-              tasks={tasks}
-              boards={boards}
-              comments={comments}
-              repos={repos}
-              worktrees={worktrees}
-              users={users}
+              sessionById={sessionById}
+              sessionsByWorktree={sessionsByWorktree}
+              boardById={boardById}
+              commentById={commentById}
+              repoById={repoById}
+              worktreeById={worktreeById}
+              userById={userById}
               onSendPrompt={handleSendPrompt}
               onSendComment={handleSendComment}
               onReplyComment={handleReplyComment}
@@ -1043,18 +1056,18 @@ function AppContent() {
                 user={currentUser}
                 connected={connected}
                 connecting={connecting}
-                sessions={sessions}
-                tasks={tasks}
+                sessionById={sessionById}
+                sessionsByWorktree={sessionsByWorktree}
                 availableAgents={AVAILABLE_AGENTS}
-                boards={boards}
-                boardObjects={boardObjects}
-                comments={comments}
-                repos={repos}
-                worktrees={worktrees}
-                users={users}
-                mcpServers={mcpServers}
+                boardById={boardById}
+                boardObjectById={boardObjectById}
+                commentById={commentById}
+                repoById={repoById}
+                worktreeById={worktreeById}
+                userById={userById}
+                mcpServerById={mcpServerById}
                 sessionMcpServerIds={sessionMcpServerIds}
-                initialBoardId={boards[0]?.board_id}
+                initialBoardId={Array.from(boardById.values())[0]?.board_id}
                 openSettingsTab={settingsTabToOpen}
                 onSettingsClose={handleSettingsClose}
                 openNewWorktreeModal={openNewWorktree}
@@ -1069,6 +1082,7 @@ function AppContent() {
                 onUpdateBoard={handleUpdateBoard}
                 onDeleteBoard={handleDeleteBoard}
                 onCreateRepo={handleCreateRepo}
+                onCreateLocalRepo={handleCreateLocalRepo}
                 onUpdateRepo={handleUpdateRepo}
                 onDeleteRepo={handleDeleteRepo}
                 onArchiveOrDeleteWorktree={handleArchiveOrDeleteWorktree}

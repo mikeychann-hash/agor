@@ -38,11 +38,9 @@ import {
 import type { ThoughtChainProps } from '@ant-design/x';
 import { ThoughtChain } from '@ant-design/x';
 import { Popover, Space, Spin, Tag, Tooltip, Typography, theme } from 'antd';
-import type React from 'react';
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { copyToClipboard } from '../../utils/clipboard';
 import { CollapsibleText } from '../CollapsibleText';
-import { MarkdownRenderer } from '../MarkdownRenderer';
 import { ToolUseRenderer } from '../ToolUseRenderer';
 
 interface ToolUseBlock {
@@ -63,8 +61,6 @@ interface TextBlock {
   type: 'text';
   text: string;
 }
-
-type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
 
 interface AgentChainProps {
   /**
@@ -121,17 +117,17 @@ function getToolIcon(toolName: string): React.ReactElement {
   }
 }
 
-export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
+export const AgentChain = React.memo<AgentChainProps>(({ messages }) => {
   const { token } = theme.useToken();
   const [expanded, setExpanded] = useState(false);
 
-  // Early return if no messages
-  if (!messages || messages.length === 0) {
-    return null;
-  }
-
   // Extract chain items (thoughts and tools) from messages
   const chainItems = useMemo(() => {
+    // Return early if no messages
+    if (!messages || messages.length === 0) {
+      return [];
+    }
+
     const items: ChainItem[] = [];
 
     // First pass: collect ALL tool results from ALL messages (including user messages)
@@ -166,7 +162,7 @@ export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
       // Special handling: Tool result messages (user role with tool_result blocks)
       // Extract text content and show as thoughts
       if (message.role === 'user') {
-        const toolResults = message.content.filter(b => b.type === 'tool_result');
+        const toolResults = message.content.filter((b) => b.type === 'tool_result');
         if (toolResults.length > 0) {
           for (const block of toolResults) {
             const toolResult = block as unknown as ToolResultBlock;
@@ -176,8 +172,8 @@ export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
               resultText = toolResult.content;
             } else if (Array.isArray(toolResult.content)) {
               resultText = toolResult.content
-                .filter(b => b.type === 'text')
-                .map(b => (b as unknown as { text: string }).text)
+                .filter((b) => b.type === 'text')
+                .map((b) => (b as unknown as { text: string }).text)
                 .join('\n');
             }
 
@@ -251,11 +247,6 @@ export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
 
     return items;
   }, [messages]);
-
-  // Early return if no items (prevents empty bordered boxes)
-  if (chainItems.length === 0) {
-    return null;
-  }
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -497,7 +488,7 @@ export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
                   gap: 4,
                 }}
               >
-                {stats.filesAffected.map(file => (
+                {stats.filesAffected.map((file) => (
                   <div
                     key={file}
                     style={{
@@ -545,6 +536,11 @@ export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
   const _totalCount = stats.thoughtCount + stats.toolCount;
   const hasErrors = stats.errorCount > 0;
 
+  // Early return if no items (prevents empty bordered boxes)
+  if (chainItems.length === 0) {
+    return null;
+  }
+
   return (
     <div style={{ margin: `${token.sizeUnit * 1.5}px 0` }}>
       {/* Collapsed summary - clickable */}
@@ -558,10 +554,10 @@ export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
           cursor: 'pointer',
           transition: 'all 0.2s',
         }}
-        onMouseEnter={e => {
+        onMouseEnter={(e) => {
           e.currentTarget.style.borderColor = token.colorPrimaryBorder;
         }}
-        onMouseLeave={e => {
+        onMouseLeave={(e) => {
           e.currentTarget.style.borderColor = token.colorBorder;
         }}
       >
@@ -602,4 +598,6 @@ export const AgentChain: React.FC<AgentChainProps> = ({ messages }) => {
       )}
     </div>
   );
-};
+});
+
+AgentChain.displayName = 'AgentChain';

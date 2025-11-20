@@ -1,4 +1,4 @@
-import type { Repo, Session, Task, User, Worktree } from '@agor/core/types';
+import type { Repo, Session, SpawnConfig, User, Worktree } from '@agor/core/types';
 import {
   BranchesOutlined,
   ClockCircleOutlined,
@@ -12,10 +12,11 @@ import {
   SubnodeOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
-import { Badge, Button, Card, Collapse, Space, Spin, Tag, Tree, Typography, theme } from 'antd';
+import { Badge, Button, Card, Collapse, Space, Spin, Tree, Typography, theme } from 'antd';
 import { AggregationColor } from 'antd/es/color-picker/color';
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useConnectionDisabled } from '../../contexts/ConnectionContext';
+import { isDarkTheme } from '../../utils/theme';
 import { ArchiveDeleteWorktreeModal } from '../ArchiveDeleteWorktreeModal';
 import { EnvironmentPill } from '../EnvironmentPill';
 import { type ForkSpawnAction, ForkSpawnModal } from '../ForkSpawnModal';
@@ -51,16 +52,15 @@ if (typeof document !== 'undefined' && !document.getElementById('worktree-card-a
 interface WorktreeCardProps {
   worktree: Worktree;
   repo: Repo;
-  sessions: Session[];
-  tasks: Record<string, Task[]>;
-  users: User[];
+  sessions: Session[]; // Sessions for this specific worktree
+  userById: Map<string, User>;
   currentUserId?: string;
   selectedSessionId?: string | null; // Currently open session in drawer
   onTaskClick?: (taskId: string) => void;
   onSessionClick?: (sessionId: string) => void;
   onCreateSession?: (worktreeId: string) => void;
   onForkSession?: (sessionId: string, prompt: string) => Promise<void>;
-  onSpawnSession?: (sessionId: string, prompt: string) => Promise<void>;
+  onSpawnSession?: (sessionId: string, config: string | Partial<SpawnConfig>) => Promise<void>;
   onArchiveOrDelete?: (
     worktreeId: string,
     options: {
@@ -78,14 +78,14 @@ interface WorktreeCardProps {
   zoneName?: string;
   zoneColor?: string;
   defaultExpanded?: boolean;
+  inPopover?: boolean; // NEW: Enable popover-optimized mode (hides board-specific controls)
 }
 
-const WorktreeCard = ({
+const WorktreeCardComponent = ({
   worktree,
   repo,
   sessions,
-  tasks,
-  users,
+  userById,
   currentUserId,
   selectedSessionId,
   onTaskClick,
@@ -104,6 +104,7 @@ const WorktreeCard = ({
   zoneName,
   zoneColor,
   defaultExpanded = true,
+  inPopover = false,
 }: WorktreeCardProps) => {
   const { token } = theme.useToken();
   const connectionDisabled = useConnectionDisabled();
@@ -126,25 +127,28 @@ const WorktreeCard = ({
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
 
   // Handle fork/spawn modal confirm
-  const handleForkSpawnConfirm = async (prompt: string) => {
+  const handleForkSpawnConfirm = async (config: string | Partial<SpawnConfig>) => {
     if (!forkSpawnModal.session) return;
 
     if (forkSpawnModal.action === 'fork') {
+      // Fork only takes a string prompt
+      const prompt = typeof config === 'string' ? config : config.prompt || '';
       await onForkSession?.(forkSpawnModal.session.session_id, prompt);
     } else {
-      await onSpawnSession?.(forkSpawnModal.session.session_id, prompt);
+      // Spawn accepts full SpawnConfig
+      await onSpawnSession?.(forkSpawnModal.session.session_id, config);
     }
   };
 
   // Separate manual sessions from scheduled runs
   const manualSessions = useMemo(
-    () => sessions.filter(s => !s.scheduled_from_worktree),
+    () => sessions.filter((s) => !s.scheduled_from_worktree),
     [sessions]
   );
   const scheduledSessions = useMemo(
     () =>
       sessions
-        .filter(s => s.scheduled_from_worktree)
+        .filter((s) => s.scheduled_from_worktree)
         .sort((a, b) => (b.scheduled_run_at || 0) - (a.scheduled_run_at || 0)), // Most recent first
     [sessions]
   );
@@ -153,13 +157,13 @@ const WorktreeCard = ({
   const sessionTreeData = useMemo(() => buildSessionTree(manualSessions), [manualSessions]);
 
   // Check if any session is running
-  const hasRunningSession = useMemo(() => sessions.some(s => s.status === 'running'), [sessions]);
+  const hasRunningSession = useMemo(() => sessions.some((s) => s.status === 'running'), [sessions]);
 
   // Check if worktree needs attention (newly created OR has ready sessions)
   // Don't highlight if a session from this worktree is currently open in the drawer
   const needsAttention = useMemo(() => {
-    const hasReadySession = sessions.some(s => s.ready_for_prompt === true);
-    const hasOpenSession = sessions.some(s => s.session_id === selectedSessionId);
+    const hasReadySession = sessions.some((s) => s.ready_for_prompt === true);
+    const hasOpenSession = sessions.some((s) => s.session_id === selectedSessionId);
     const shouldHighlight = (worktree.needs_attention || hasReadySession) && !hasOpenSession;
 
     return shouldHighlight;
@@ -244,7 +248,7 @@ const WorktreeCard = ({
           boxShadow: session.ready_for_prompt ? `0 0 12px ${token.colorPrimary}30` : undefined,
         }}
         onClick={() => onSessionClick?.(session.session_id)}
-        onContextMenu={e => {
+        onContextMenu={(e) => {
           // Show fork/spawn menu on right-click if handlers exist
           if (onForkSession || onSpawnSession) {
             e.preventDefault();
@@ -302,7 +306,7 @@ const WorktreeCard = ({
     <Tree
       treeData={sessionTreeData}
       expandedKeys={expandedKeys}
-      onExpand={keys => setExpandedKeys(keys as React.Key[])}
+      onExpand={(keys) => setExpandedKeys(keys as React.Key[])}
       showLine
       showIcon={false}
       selectable={false}
@@ -338,7 +342,7 @@ const WorktreeCard = ({
             size="small"
             icon={<PlusOutlined />}
             disabled={connectionDisabled}
-            onClick={e => {
+            onClick={(e) => {
               e.stopPropagation();
               onCreateSession(worktree.worktree_id);
             }}
@@ -375,7 +379,7 @@ const WorktreeCard = ({
   // Scheduled runs content (flat list, no genealogy tree needed)
   const scheduledRunsContent = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {scheduledSessions.map(session => (
+      {scheduledSessions.map((session) => (
         <div
           key={session.session_id}
           style={{
@@ -426,8 +430,7 @@ const WorktreeCard = ({
 
   // Use colorTextBase for glow - hex color that adapts to light/dark mode
   // Fallback to detecting dark mode if colorTextBase is not available
-  const isDarkMode =
-    token.colorBgLayout?.startsWith?.('#0') || token.colorBgLayout?.startsWith?.('rgb(0');
+  const isDarkMode = isDarkTheme(token);
   const rawGlowColor = token.colorTextBase || (isDarkMode ? '#ffffff' : '#000000');
 
   // Use Ant Design's Color class to normalize and convert to full hex format
@@ -456,7 +459,7 @@ const WorktreeCard = ({
         cursor: 'default', // Override React Flow's drag cursor - only drag handles should show grab cursor
         transition: 'box-shadow 1s ease-in-out, border 1s ease-in-out',
         ...(isPinned && zoneColor ? { borderColor: zoneColor, borderWidth: 1 } : {}),
-        ...(needsAttention
+        ...(needsAttention && !inPopover
           ? {
               // Intense multi-layer glow for dark mode visibility
               animation: 'worktree-card-pulse 2s ease-in-out infinite',
@@ -479,23 +482,25 @@ const WorktreeCard = ({
         }}
       >
         <Space size={8} align="center">
-          <div
-            className="drag-handle"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              cursor: 'grab',
-              width: 32,
-              height: 32,
-              justifyContent: 'center',
-            }}
-          >
-            {hasRunningSession ? (
-              <Spin size="large" />
-            ) : (
-              <BranchesOutlined style={{ fontSize: 32, color: token.colorPrimary }} />
-            )}
-          </div>
+          {!inPopover && (
+            <div
+              className="drag-handle"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                cursor: 'grab',
+                width: 32,
+                height: 32,
+                justifyContent: 'center',
+              }}
+            >
+              {hasRunningSession ? (
+                <Spin size="large" />
+              ) : (
+                <BranchesOutlined style={{ fontSize: 32, color: token.colorPrimary }} />
+              )}
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <Typography.Text strong className="nodrag">
               {worktree.name}
@@ -507,38 +512,38 @@ const WorktreeCard = ({
         </Space>
 
         <Space size={4}>
-          <div className="nodrag">
-            {isPinned && zoneName && (
-              <Tag
-                icon={<PushpinFilled style={{ color: zoneColor }} />}
-                onClick={e => {
-                  e.stopPropagation();
-                  onUnpin?.(worktree.worktree_id);
-                }}
-                style={{
-                  cursor: 'pointer',
-                  backgroundColor: zoneColor ? `${zoneColor}1a` : undefined, // 10% alpha (1a in hex = 26/255 ≈ 10%)
-                  borderColor: zoneColor,
-                }}
-                title={`Pinned to ${zoneName} (click to unpin)`}
-              />
-            )}
-          </div>
-          <Button
-            type="text"
-            size="small"
-            icon={<DragOutlined />}
-            className="drag-handle"
-            title="Drag to reposition"
-            style={{ cursor: 'grab' }}
-          />
+          {!inPopover && isPinned && (
+            <Button
+              type="text"
+              size="small"
+              icon={<PushpinFilled style={{ color: zoneColor }} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUnpin?.(worktree.worktree_id);
+              }}
+              className="nodrag"
+              title={
+                zoneName ? `Pinned to ${zoneName} (click to unpin)` : 'Pinned (click to unpin)'
+              }
+            />
+          )}
+          {!inPopover && (
+            <Button
+              type="text"
+              size="small"
+              icon={<DragOutlined />}
+              className="drag-handle"
+              title="Drag to reposition"
+              style={{ cursor: 'grab' }}
+            />
+          )}
           <div className="nodrag">
             {onOpenTerminal && (
               <Button
                 type="text"
                 size="small"
                 icon={<CodeOutlined />}
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   onOpenTerminal([`cd ${worktree.path}`], worktree.worktree_id);
                 }}
@@ -550,20 +555,20 @@ const WorktreeCard = ({
                 type="text"
                 size="small"
                 icon={<EditOutlined />}
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   onOpenSettings(worktree.worktree_id);
                 }}
                 title="Edit worktree"
               />
             )}
-            {onArchiveOrDelete && (
+            {!inPopover && onArchiveOrDelete && (
               <Button
                 type="text"
                 size="small"
                 icon={<DeleteOutlined />}
                 disabled={connectionDisabled}
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   setArchiveDeleteModalOpen(true);
                 }}
@@ -582,7 +587,7 @@ const WorktreeCard = ({
             <CreatedByTag
               createdBy={worktree.created_by}
               currentUserId={currentUserId}
-              users={users}
+              userById={userById}
               prefix="Created by"
             />
           )}
@@ -628,7 +633,7 @@ const WorktreeCard = ({
                 type="primary"
                 icon={<PlusOutlined />}
                 disabled={connectionDisabled}
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   onCreateSession(worktree.worktree_id);
                 }}
@@ -681,6 +686,7 @@ const WorktreeCard = ({
         open={forkSpawnModal.open}
         action={forkSpawnModal.action}
         session={forkSpawnModal.session}
+        currentUser={currentUserId ? userById.get(currentUserId) : undefined}
         onConfirm={handleForkSpawnConfirm}
         onCancel={() =>
           setForkSpawnModal({
@@ -697,7 +703,7 @@ const WorktreeCard = ({
         worktree={worktree}
         sessionCount={sessions.length}
         environmentRunning={worktree.environment_instance?.status === 'running'}
-        onConfirm={options => {
+        onConfirm={(options) => {
           onArchiveOrDelete?.(worktree.worktree_id, options);
           setArchiveDeleteModalOpen(false);
         }}
@@ -706,5 +712,9 @@ const WorktreeCard = ({
     </Card>
   );
 };
+
+// Memoize WorktreeCard to prevent unnecessary re-renders when parent updates
+// Only re-render when worktree, repo, sessions, or callback props actually change
+const WorktreeCard = React.memo(WorktreeCardComponent);
 
 export default WorktreeCard;

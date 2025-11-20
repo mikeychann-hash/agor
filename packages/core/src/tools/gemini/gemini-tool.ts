@@ -23,20 +23,14 @@ import {
   type MessageID,
   MessageRole,
   type PermissionMode,
-  type Session,
   type SessionID,
   type TaskID,
 } from '../../types';
+import type { NormalizedSdkResponse, RawSdkResponse } from '../../types/sdk-response';
+import type { TokenUsage } from '../../types/token-usage';
 import type { ITool, StreamingCallbacks, ToolCapabilities } from '../base';
 import type { MessagesService, TasksService } from '../claude/claude-tool';
-import type { TokenUsage } from '../../utils/pricing';
-import { calculateTokenCost } from '../../utils/pricing';
-import type {
-  GeminiSdkResponse,
-  NormalizedSdkResponse,
-  RawSdkResponse,
-} from '../../types/sdk-response';
-import { DEFAULT_GEMINI_MODEL, getGeminiContextWindowLimit } from './models';
+import { DEFAULT_GEMINI_MODEL } from './models';
 import { GeminiPromptService } from './prompt-service';
 
 interface GeminiExecutionResult {
@@ -46,6 +40,7 @@ interface GeminiExecutionResult {
   contextWindow?: number;
   contextWindowLimit?: number;
   model?: string;
+  rawSdkResponse?: unknown; // Raw SDK event from Gemini
 }
 
 export class GeminiTool implements ITool {
@@ -64,7 +59,7 @@ export class GeminiTool implements ITool {
     mcpServerRepo?: MCPServerRepository,
     sessionMCPRepo?: SessionMCPServerRepository,
     mcpEnabled?: boolean,
-    private db?: Database
+    db?: Database
   ) {
     if (messagesRepo && sessionsRepo) {
       this.promptService = new GeminiPromptService(
@@ -144,6 +139,7 @@ export class GeminiTool implements ITool {
     let tokenUsage: TokenUsage | undefined;
     let streamStartTime = Date.now();
     let firstTokenTime: number | null = null;
+    let rawSdkResponse: unknown;
 
     for await (const event of this.promptService.promptSessionStreaming(
       sessionId,
@@ -163,6 +159,11 @@ export class GeminiTool implements ITool {
       // Capture token usage from complete event
       if (event.type === 'complete' && event.usage) {
         tokenUsage = event.usage;
+      }
+
+      // Capture raw SDK response for token accounting
+      if (event.type === 'complete' && event.rawSdkResponse) {
+        rawSdkResponse = event.rawSdkResponse;
       }
 
       // Handle partial streaming events (token-level chunks)
@@ -233,6 +234,7 @@ export class GeminiTool implements ITool {
       contextWindow: undefined,
       contextWindowLimit: undefined,
       model: resolvedModel,
+      rawSdkResponse,
     };
   }
 
@@ -353,8 +355,9 @@ export class GeminiTool implements ITool {
     const assistantMessageIds: MessageID[] = [];
     let resolvedModel: string | undefined;
     let tokenUsage: TokenUsage | undefined;
-    let contextWindow: number | undefined;
-    let contextWindowLimit: number | undefined;
+    let _contextWindow: number | undefined;
+    let _contextWindowLimit: number | undefined;
+    let rawSdkResponse: unknown;
 
     for await (const event of this.promptService.promptSessionStreaming(
       sessionId,
@@ -410,6 +413,7 @@ export class GeminiTool implements ITool {
       contextWindow: undefined,
       contextWindowLimit: undefined,
       model: resolvedModel,
+      rawSdkResponse,
     };
   }
 
@@ -459,37 +463,55 @@ export class GeminiTool implements ITool {
   /**
    * Normalize Gemini SDK response to common format
    *
-   * Gemini may support caching in the future, for now cache tokens are 0.
+   * @deprecated This method is deprecated - use normalizeRawSdkResponse() from utils/sdk-normalizer instead
+   * This stub remains for API compatibility but should not be used.
    */
-  normalizedSdkResponse(rawResponse: RawSdkResponse): NormalizedSdkResponse {
-    if (rawResponse.tool !== 'gemini') {
-      throw new Error(`Expected gemini response, got ${rawResponse.tool}`);
-    }
-
-    const geminiResponse = rawResponse as GeminiSdkResponse;
-
-    // Extract token usage with defaults
-    const tokenUsage = geminiResponse.tokenUsage || {
-      input_tokens: 0,
-      output_tokens: 0,
-      total_tokens: 0,
-      cache_read_tokens: 0, // Gemini may support caching in future
-    };
-
-    return {
-      userMessageId: geminiResponse.userMessageId,
-      assistantMessageIds: geminiResponse.assistantMessageIds,
-      tokenUsage: {
-        inputTokens: tokenUsage.input_tokens || 0,
-        outputTokens: tokenUsage.output_tokens || 0,
-        totalTokens: tokenUsage.total_tokens || tokenUsage.input_tokens! + tokenUsage.output_tokens! || 0,
-        cacheReadTokens: tokenUsage.cache_read_tokens || 0,
-        cacheCreationTokens: 0, // Not exposed in Gemini response yet
-      },
-      contextWindow: geminiResponse.contextWindow,
-      contextWindowLimit: geminiResponse.contextWindowLimit,
-      model: geminiResponse.model,
-    };
+  normalizedSdkResponse(_rawResponse: RawSdkResponse): NormalizedSdkResponse {
+    throw new Error(
+      'normalizedSdkResponse() is deprecated - use normalizeRawSdkResponse() from utils/sdk-normalizer instead'
+    );
   }
 
+  /**
+   * Compute cumulative context window usage for a Gemini session
+   *
+   * For Gemini, the SDK already provides cumulative token counts in each task's response.
+   * The promptTokenCount field includes the full conversation history up to that point.
+   * We just need to extract and return the contextWindow from the current task's SDK response.
+   *
+   * @param sessionId - Session ID to compute context for
+   * @param currentTaskId - Optional current task ID (not used for Gemini, kept for interface consistency)
+   * @param currentRawSdkResponse - Optional raw SDK response from current task (if available in memory)
+   * @returns Promise resolving to computed context window usage in tokens
+   */
+  async computeContextWindow(
+    sessionId: string,
+    _currentTaskId?: string,
+    currentRawSdkResponse?: unknown
+  ): Promise<number> {
+    // Gemini SDK provides cumulative tokens in usageMetadata
+    // Simply extract promptTokenCount + candidatesTokenCount from the raw response
+    if (currentRawSdkResponse) {
+      const response =
+        currentRawSdkResponse as import('../../types/sdk-response').GeminiSdkResponse;
+      const inputTokens = response.value?.usageMetadata?.promptTokenCount || 0;
+      const outputTokens = response.value?.usageMetadata?.candidatesTokenCount || 0;
+      const cumulativeTokens = inputTokens + outputTokens;
+      console.log(
+        `✅ Computed context window for Gemini session ${sessionId}: ${cumulativeTokens} tokens (from current task)`
+      );
+      return cumulativeTokens;
+    }
+
+    // IMPORTANT: Do NOT query database when currentRawSdkResponse is not provided
+    // This method is called during task UPDATE operations, and querying the database
+    // during a pending UPDATE causes deadlocks in PostgreSQL due to read-while-write
+    // in the same transaction. The caller should ALWAYS provide currentRawSdkResponse
+    // during task completion.
+    console.warn(
+      `⚠️  computeContextWindow called without currentRawSdkResponse for session ${sessionId}. ` +
+        'This should not happen during task completion. Returning 0 to avoid database deadlock.'
+    );
+    return 0;
+  }
 }

@@ -16,12 +16,14 @@ import {
   Popconfirm,
   Select,
   Space,
+  Switch,
   Table,
   Tabs,
   Tag,
   Typography,
 } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
+import { mapToArray } from '@/utils/mapHelpers';
 import { AgenticToolConfigForm } from '../AgenticToolConfigForm';
 import { ApiKeyFields, type ApiKeyStatus } from '../ApiKeyFields';
 import { FormEmojiPickerInput } from '../EmojiPickerInput';
@@ -31,22 +33,25 @@ import { AudioSettingsTab } from './AudioSettingsTab';
 // Using Typography.Text directly to avoid DOM Text interface collision
 
 interface UsersTableProps {
-  users: User[];
-  mcpServers: MCPServer[];
+  userById: Map<string, User>;
+  mcpServerById: Map<string, MCPServer>;
   onCreate?: (data: CreateUserInput) => void;
   onUpdate?: (userId: string, updates: UpdateUserInput) => void;
   onDelete?: (userId: string) => void;
   editUserId?: string; // Auto-open edit modal for this user
+  onClearEditUserId?: () => void; // Callback to clear editUserId in parent
 }
 
 export const UsersTable: React.FC<UsersTableProps> = ({
-  users,
-  mcpServers,
+  userById,
+  mcpServerById,
   onCreate,
   onUpdate,
   onDelete,
   editUserId,
+  onClearEditUserId,
 }) => {
+  const users = mapToArray(userById);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -92,6 +97,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
         name: user.name,
         emoji: user.emoji,
         role: user.role,
+        eventStreamEnabled: user.preferences?.eventStream?.enabled ?? false,
       });
 
       // Initialize agentic tool forms with user's defaults
@@ -127,7 +133,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
   // Auto-open edit modal if editUserId is provided
   useEffect(() => {
     if (editUserId) {
-      const userToEdit = users.find(u => u.user_id === editUserId);
+      const userToEdit = users.find((u: User) => u.user_id === editUserId);
       if (userToEdit) {
         handleEdit(userToEdit);
         setEditModalOpen(true);
@@ -163,17 +169,23 @@ export const UsersTable: React.FC<UsersTableProps> = ({
   };
 
   const handleCreate = () => {
-    form.validateFields().then(values => {
-      onCreate?.({
-        email: values.email,
-        password: values.password,
-        name: values.name,
-        emoji: values.emoji || '👤',
-        role: values.role || 'member',
+    form
+      .validateFields()
+      .then((values) => {
+        onCreate?.({
+          email: values.email,
+          password: values.password,
+          name: values.name,
+          emoji: values.emoji || '👤',
+          role: values.role || 'member',
+        });
+        form.resetFields();
+        setCreateModalOpen(false);
+      })
+      .catch((error) => {
+        // Form validation failed - Ant Design will show field errors automatically
+        console.log('Form validation failed:', error);
       });
-      form.resetFields();
-      setCreateModalOpen(false);
-    });
   };
 
   const handleUpdate = () => {
@@ -189,6 +201,12 @@ export const UsersTable: React.FC<UsersTableProps> = ({
           name: values.name,
           emoji: values.emoji,
           role: values.role,
+          preferences: {
+            ...editingUser.preferences,
+            eventStream: {
+              enabled: values.eventStreamEnabled ?? false,
+            },
+          },
         };
         // Only include password if it was provided
         if (values.password?.trim()) {
@@ -198,8 +216,9 @@ export const UsersTable: React.FC<UsersTableProps> = ({
         form.resetFields();
         setEditModalOpen(false);
         setEditingUser(null);
+        onClearEditUserId?.(); // Clear editUserId in parent to prevent reopening
       })
-      .catch(err => {
+      .catch((err) => {
         console.error('Validation failed:', err);
       });
   };
@@ -209,7 +228,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
     if (!editingUser) return;
 
     try {
-      setSavingApiKeys(prev => ({ ...prev, [field]: true }));
+      setSavingApiKeys((prev) => ({ ...prev, [field]: true }));
 
       // Update user via onUpdate callback
       await onUpdate?.(editingUser.user_id, {
@@ -219,12 +238,12 @@ export const UsersTable: React.FC<UsersTableProps> = ({
       });
 
       // Update local state
-      setUserApiKeyStatus(prev => ({ ...prev, [field]: true }));
+      setUserApiKeyStatus((prev) => ({ ...prev, [field]: true }));
     } catch (err) {
       console.error(`Failed to save ${field}:`, err);
       throw err;
     } finally {
-      setSavingApiKeys(prev => ({ ...prev, [field]: false }));
+      setSavingApiKeys((prev) => ({ ...prev, [field]: false }));
     }
   };
 
@@ -233,7 +252,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
     if (!editingUser) return;
 
     try {
-      setSavingApiKeys(prev => ({ ...prev, [field]: true }));
+      setSavingApiKeys((prev) => ({ ...prev, [field]: true }));
 
       // Update user via onUpdate callback
       await onUpdate?.(editingUser.user_id, {
@@ -243,12 +262,12 @@ export const UsersTable: React.FC<UsersTableProps> = ({
       });
 
       // Update local state
-      setUserApiKeyStatus(prev => ({ ...prev, [field]: false }));
+      setUserApiKeyStatus((prev) => ({ ...prev, [field]: false }));
     } catch (err) {
       console.error(`Failed to clear ${field}:`, err);
       throw err;
     } finally {
-      setSavingApiKeys(prev => ({ ...prev, [field]: false }));
+      setSavingApiKeys((prev) => ({ ...prev, [field]: false }));
     }
   };
 
@@ -257,16 +276,16 @@ export const UsersTable: React.FC<UsersTableProps> = ({
     if (!editingUser) return;
 
     try {
-      setSavingEnvVars(prev => ({ ...prev, [key]: true }));
+      setSavingEnvVars((prev) => ({ ...prev, [key]: true }));
       await onUpdate?.(editingUser.user_id, {
         env_vars: { [key]: value },
       });
-      setUserEnvVars(prev => ({ ...prev, [key]: true }));
+      setUserEnvVars((prev) => ({ ...prev, [key]: true }));
     } catch (err) {
       console.error(`Failed to save ${key}:`, err);
       throw err;
     } finally {
-      setSavingEnvVars(prev => ({ ...prev, [key]: false }));
+      setSavingEnvVars((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -275,11 +294,11 @@ export const UsersTable: React.FC<UsersTableProps> = ({
     if (!editingUser) return;
 
     try {
-      setSavingEnvVars(prev => ({ ...prev, [key]: true }));
+      setSavingEnvVars((prev) => ({ ...prev, [key]: true }));
       await onUpdate?.(editingUser.user_id, {
         env_vars: { [key]: null },
       });
-      setUserEnvVars(prev => {
+      setUserEnvVars((prev) => {
         const updated = { ...prev };
         delete updated[key];
         return updated;
@@ -288,7 +307,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
       console.error(`Failed to delete ${key}:`, err);
       throw err;
     } finally {
-      setSavingEnvVars(prev => ({ ...prev, [key]: false }));
+      setSavingEnvVars((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -306,7 +325,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
     const currentForm = formMap[tool];
 
     try {
-      setSavingAgenticConfig(prev => ({ ...prev, [tool]: true }));
+      setSavingAgenticConfig((prev) => ({ ...prev, [tool]: true }));
 
       const values = currentForm.getFieldsValue();
 
@@ -332,11 +351,12 @@ export const UsersTable: React.FC<UsersTableProps> = ({
       // Close modal after successful save
       setEditModalOpen(false);
       setEditingUser(null);
+      onClearEditUserId?.(); // Clear editUserId in parent to prevent reopening
     } catch (err) {
       console.error(`Failed to save ${tool} config:`, err);
       throw err;
     } finally {
-      setSavingAgenticConfig(prev => ({ ...prev, [tool]: false }));
+      setSavingAgenticConfig((prev) => ({ ...prev, [tool]: false }));
     }
   };
 
@@ -375,11 +395,13 @@ export const UsersTable: React.FC<UsersTableProps> = ({
         // API Keys tab - nothing to save (keys save individually)
         setEditModalOpen(false);
         setEditingUser(null);
+        onClearEditUserId?.(); // Clear editUserId in parent to prevent reopening
         break;
       case 'env-vars':
         // Env Vars tab - nothing to save (vars save individually)
         setEditModalOpen(false);
         setEditingUser(null);
+        onClearEditUserId?.(); // Clear editUserId in parent to prevent reopening
         break;
       case 'audio':
         await handleAudioSave();
@@ -413,6 +435,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
 
       setEditModalOpen(false);
       setEditingUser(null);
+      onClearEditUserId?.(); // Clear editUserId in parent to prevent reopening
     } catch (error) {
       console.error('Failed to save audio settings:', error);
     }
@@ -509,7 +532,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
       </div>
 
       <Table
-        dataSource={users}
+        dataSource={mapToArray(userById)}
         columns={columns}
         rowKey="user_id"
         pagination={false}
@@ -588,6 +611,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
           setEditModalOpen(false);
           setEditingUser(null);
           setActiveTab('general');
+          onClearEditUserId?.(); // Clear editUserId in parent to prevent reopening
         }}
         okText="Save"
         cancelText="Close"
@@ -646,6 +670,22 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                     help="Leave blank to keep current password"
                   >
                     <Input.Password placeholder="••••••••" />
+                  </Form.Item>
+
+                  <Form.Item
+                    label={
+                      <Space size={4}>
+                        Enable Live Event Stream
+                        <Tag color="blue" style={{ fontSize: 10, marginLeft: 4 }}>
+                          BETA
+                        </Tag>
+                      </Space>
+                    }
+                    name="eventStreamEnabled"
+                    valuePropName="checked"
+                    tooltip="Show/hide the event stream icon in the navbar. When enabled, you can view live WebSocket events for debugging."
+                  >
+                    <Switch />
                   </Form.Item>
 
                   <Form.Item
@@ -720,7 +760,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                   <Form form={claudeForm} layout="vertical">
                     <AgenticToolConfigForm
                       agenticTool="claude-code"
-                      mcpServers={mcpServers}
+                      mcpServerById={mcpServerById}
                       showHelpText={false}
                     />
                   </Form>
@@ -744,7 +784,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                   <Form form={codexForm} layout="vertical">
                     <AgenticToolConfigForm
                       agenticTool="codex"
-                      mcpServers={mcpServers}
+                      mcpServerById={mcpServerById}
                       showHelpText={false}
                     />
                   </Form>
@@ -768,7 +808,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                   <Form form={geminiForm} layout="vertical">
                     <AgenticToolConfigForm
                       agenticTool="gemini"
-                      mcpServers={mcpServers}
+                      mcpServerById={mcpServerById}
                       showHelpText={false}
                     />
                   </Form>

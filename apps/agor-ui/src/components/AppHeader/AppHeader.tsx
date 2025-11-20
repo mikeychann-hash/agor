@@ -1,5 +1,6 @@
 import type { ActiveUser, User } from '@agor/core/types';
 import {
+  ApiOutlined,
   CommentOutlined,
   LogoutOutlined,
   MenuOutlined,
@@ -9,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { Badge, Button, Divider, Dropdown, Layout, Space, Tooltip, Typography, theme } from 'antd';
+import { useState } from 'react';
 import { ConnectionStatus } from '../ConnectionStatus';
 import { Facepile } from '../Facepile';
 import { ThemeSwitcher } from '../ThemeSwitcher';
@@ -24,6 +26,7 @@ export interface AppHeaderProps {
   connecting?: boolean;
   onMenuClick?: () => void;
   onCommentsClick?: () => void;
+  onEventStreamClick?: () => void;
   onSettingsClick?: () => void;
   onUserSettingsClick?: () => void;
   onThemeEditorClick?: () => void;
@@ -32,6 +35,7 @@ export interface AppHeaderProps {
   currentBoardName?: string;
   currentBoardIcon?: string;
   unreadCommentsCount?: number;
+  eventStreamEnabled?: boolean;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -42,6 +46,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   connecting = false,
   onMenuClick,
   onCommentsClick,
+  onEventStreamClick,
   onSettingsClick,
   onUserSettingsClick,
   onThemeEditorClick,
@@ -50,9 +55,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   currentBoardName,
   currentBoardIcon,
   unreadCommentsCount = 0,
+  eventStreamEnabled = false,
 }) => {
   const { token } = theme.useToken();
   const userEmoji = user?.emoji || '👤';
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
   const userMenuItems: MenuProps['items'] = [
     {
@@ -75,13 +82,19 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       key: 'user-settings',
       label: 'User Settings',
       icon: <UserOutlined />,
-      onClick: onUserSettingsClick,
+      onClick: () => {
+        setUserDropdownOpen(false);
+        onUserSettingsClick?.();
+      },
     },
     {
       key: 'logout',
       label: 'Logout',
       icon: <LogoutOutlined />,
-      onClick: onLogout,
+      onClick: () => {
+        setUserDropdownOpen(false);
+        onLogout?.();
+      },
     },
   ];
 
@@ -122,10 +135,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 borderRadius: token.borderRadius,
                 transition: 'background 0.2s',
               }}
-              onMouseEnter={e => {
+              onMouseEnter={(e) => {
                 e.currentTarget.style.background = token.colorBgTextHover;
               }}
-              onMouseLeave={e => {
+              onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent';
               }}
               onClick={onMenuClick}
@@ -156,7 +169,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       </Space>
 
       <Space>
-        <ConnectionStatus connected={connected} connecting={connecting} onRetry={onRetryConnection} />
+        <ConnectionStatus
+          connected={connected}
+          connecting={connecting}
+          onRetry={onRetryConnection}
+        />
         {activeUsers.length > 0 && (
           <>
             <Facepile
@@ -169,6 +186,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             />
             <Divider type="vertical" style={{ height: 32, margin: '0 8px' }} />
           </>
+        )}
+        {eventStreamEnabled && (
+          <Tooltip title="Live Event Stream" placement="bottom">
+            <Button
+              type="text"
+              icon={<ApiOutlined style={{ fontSize: token.fontSizeLG }} />}
+              onClick={onEventStreamClick}
+            />
+          </Tooltip>
         )}
         <Tooltip title="Documentation" placement="bottom">
           <Button
@@ -187,7 +213,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             onClick={onSettingsClick}
           />
         </Tooltip>
-        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
+        <Dropdown
+          menu={{ items: userMenuItems }}
+          placement="bottomRight"
+          trigger={['click']}
+          open={userDropdownOpen}
+          onOpenChange={setUserDropdownOpen}
+        >
           <Tooltip title={user?.name || 'User menu'} placement="bottom">
             <Button type="text" icon={<UserOutlined style={{ fontSize: token.fontSizeLG }} />} />
           </Tooltip>

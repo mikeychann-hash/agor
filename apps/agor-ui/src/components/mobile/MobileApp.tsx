@@ -1,6 +1,6 @@
 import type { AgorClient } from '@agor/core/api';
-import type { Board, BoardComment, Repo, Session, Task, User, Worktree } from '@agor/core/types';
-import { Drawer, Layout, Typography, theme } from 'antd';
+import type { Board, BoardComment, Repo, Session, User, Worktree } from '@agor/core/types';
+import { Drawer, Layout, Typography } from 'antd';
 import { useState } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { MobileCommentsPage } from './MobileCommentsPage';
@@ -14,13 +14,13 @@ const { Text } = Typography;
 interface MobileAppProps {
   client: AgorClient | null;
   user?: User | null;
-  sessions: Session[];
-  tasks: Record<string, Task[]>;
-  boards: Board[];
-  comments: BoardComment[];
-  repos: Repo[];
-  worktrees: Worktree[];
-  users: User[];
+  sessionById: Map<string, Session>; // O(1) ID lookups
+  sessionsByWorktree: Map<string, Session[]>; // O(1) worktree filtering
+  boardById: Map<string, Board>;
+  commentById: Map<string, BoardComment>;
+  repoById: Map<string, Repo>;
+  worktreeById: Map<string, Worktree>;
+  userById: Map<string, User>;
   onSendPrompt?: (sessionId: string, prompt: string) => void;
   onSendComment: (boardId: string, content: string) => void;
   onReplyComment?: (parentId: string, content: string) => void;
@@ -35,13 +35,13 @@ interface MobileAppProps {
 export const MobileApp: React.FC<MobileAppProps> = ({
   client,
   user,
-  sessions,
-  tasks,
-  boards,
-  comments,
-  repos,
-  worktrees,
-  users,
+  sessionById,
+  sessionsByWorktree,
+  boardById,
+  commentById,
+  repoById,
+  worktreeById,
+  userById,
   onSendPrompt,
   onSendComment,
   onReplyComment,
@@ -53,7 +53,6 @@ export const MobileApp: React.FC<MobileAppProps> = ({
   onUpdateDraft,
 }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { token } = theme.useToken();
 
   return (
     <Layout style={{ height: '100vh' }}>
@@ -69,11 +68,10 @@ export const MobileApp: React.FC<MobileAppProps> = ({
         }}
       >
         <MobileNavTree
-          boards={boards}
-          worktrees={worktrees}
-          sessions={sessions}
-          tasks={tasks}
-          comments={comments}
+          boardById={boardById}
+          worktreeById={worktreeById}
+          sessionsByWorktree={sessionsByWorktree}
+          commentById={commentById}
           onNavigate={() => setDrawerOpen(false)}
         />
       </Drawer>
@@ -124,10 +122,10 @@ export const MobileApp: React.FC<MobileAppProps> = ({
           element={
             <SessionPage
               client={client}
-              sessions={sessions}
-              worktrees={worktrees}
-              repos={repos}
-              users={users}
+              sessionById={sessionById}
+              worktreeById={worktreeById}
+              repoById={repoById}
+              userById={userById}
               currentUser={user}
               onSendPrompt={onSendPrompt}
               onMenuClick={() => setDrawerOpen(true)}
@@ -143,10 +141,10 @@ export const MobileApp: React.FC<MobileAppProps> = ({
           element={
             <MobileCommentsPage
               client={client}
-              boards={boards}
-              comments={comments}
-              worktrees={worktrees}
-              users={users}
+              boardById={boardById}
+              commentById={commentById}
+              worktreeById={worktreeById}
+              userById={userById}
               currentUser={user}
               onMenuClick={() => setDrawerOpen(true)}
               onSendComment={onSendComment}

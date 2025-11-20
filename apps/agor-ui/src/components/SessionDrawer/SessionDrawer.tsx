@@ -8,10 +8,12 @@ import type {
   PermissionScope,
   Repo,
   Session,
+  SpawnConfig,
   User,
   Worktree,
 } from '@agor/core/types';
 import { SessionStatus, TaskStatus } from '@agor/core/types';
+import { normalizeRawSdkResponse } from '@agor/core/utils/sdk-normalizer';
 import {
   ApiOutlined,
   BranchesOutlined,
@@ -29,7 +31,6 @@ import {
   Button,
   Divider,
   Drawer,
-  Input,
   Space,
   Spin,
   Tag,
@@ -46,17 +47,16 @@ import { compileTemplate } from '../../utils/templates';
 import { AutocompleteTextarea } from '../AutocompleteTextarea';
 import { ConversationView } from '../ConversationView';
 import { EnvironmentPill } from '../EnvironmentPill';
+import { ForkSpawnModal } from '../ForkSpawnModal';
 import { CreatedByTag } from '../metadata';
 import { PermissionModeSelector } from '../PermissionModeSelector';
 import {
   ContextWindowPill,
-  ForkPill,
   IssuePill,
   MessageCountPill,
   PullRequestPill,
   RepoPill,
   SessionIdPill,
-  SpawnPill,
   TimerPill,
   TokenCountPill,
 } from '../Pill';
@@ -79,17 +79,16 @@ interface SessionDrawerProps {
   client: AgorClient | null;
   session: Session | null;
   worktree?: Worktree | null; // Pre-selected worktree for this session
-  users?: User[];
+  userById?: Map<string, User>;
   currentUserId?: string;
-  repos?: Repo[];
-  worktrees?: Worktree[]; // Still needed for other potential uses
-  mcpServers?: MCPServer[];
+  repoById?: Map<string, Repo>;
+  mcpServerById?: Map<string, MCPServer>;
   sessionMcpServerIds?: string[];
   open: boolean;
   onClose: () => void;
   onSendPrompt?: (prompt: string, permissionMode?: PermissionMode) => void;
   onFork?: (prompt: string) => void;
-  onSubsession?: (prompt: string) => void;
+  onSubsession?: (config: string | Partial<SpawnConfig>) => void;
   onPermissionDecision?: (
     sessionId: string,
     requestId: string,
@@ -111,11 +110,10 @@ const SessionDrawer = ({
   client,
   session,
   worktree = null,
-  users = [],
+  userById = new Map(),
   currentUserId,
-  repos = [],
-  worktrees = [],
-  mcpServers = [],
+  repoById = new Map(),
+  mcpServerById = new Map(),
   sessionMcpServerIds = [],
   open,
   onClose,
@@ -185,10 +183,11 @@ const SessionDrawer = ({
   const [scrollToBottom, setScrollToBottom] = React.useState<(() => void) | null>(null);
   const [isStopping, setIsStopping] = React.useState(false);
   const [queuedMessages, setQueuedMessages] = React.useState<Message[]>([]);
+  const [spawnModalOpen, setSpawnModalOpen] = React.useState(false);
 
   // Fetch tasks for this session to calculate token totals
-  const currentUser = users?.find(u => u.user_id === currentUserId) || null;
-  const { tasks } = useTasks(client, session?.session_id || null, currentUser);
+  const currentUser = currentUserId ? userById.get(currentUserId) || null : null;
+  const { tasks } = useTasks(client, session?.session_id || null, currentUser, open);
 
   // Fetch queued messages for this session
   React.useEffect(() => {
@@ -216,7 +215,7 @@ const SessionDrawer = ({
 
     const handleQueued = (message: Message) => {
       if (message.session_id === session.session_id) {
-        setQueuedMessages(prev => {
+        setQueuedMessages((prev) => {
           const updated = [...prev, message].sort(
             (a, b) => (a.queue_position ?? 0) - (b.queue_position ?? 0)
           );
@@ -231,8 +230,8 @@ const SessionDrawer = ({
       // Only process if it's a queued message for this session
       if (message.status === 'queued' && message.session_id === session.session_id) {
         console.log('[SessionDrawer] Removing queued message from UI:', message.message_id);
-        setQueuedMessages(prev => {
-          const filtered = prev.filter(m => m.message_id !== message.message_id);
+        setQueuedMessages((prev) => {
+          const filtered = prev.filter((m) => m.message_id !== message.message_id);
           console.log('[SessionDrawer] Queue after removal:', filtered);
           return filtered;
         });
@@ -253,65 +252,60 @@ const SessionDrawer = ({
   }, [client, session]); // Re-run when client or session changes
 
   // Calculate token totals and breakdown across all tasks (from raw SDK responses)
-  // IMPORTANT: Normalize tokens based on agentic_tool since different tools report differently:
-  // - Codex: input_tokens INCLUDES cached tokens (cache_read_tokens is a subset)
-  // - Claude/Gemini: input_tokens EXCLUDES cached tokens
+  // Use normalizer to handle different SDK formats consistently
   const tokenBreakdown = React.useMemo(() => {
+    if (!session?.agentic_tool) {
+      return { total: 0, input: 0, output: 0, cacheRead: 0, cacheCreation: 0, cost: 0 };
+    }
+
     return tasks.reduce(
       (acc, task) => {
-        const tokenUsage = task.raw_sdk_response?.tokenUsage;
-        if (!tokenUsage) return acc;
+        if (!task.raw_sdk_response) return acc;
 
-        const rawInput = tokenUsage.input_tokens || 0;
-        const rawOutput = tokenUsage.output_tokens || 0;
-        const cacheRead = tokenUsage.cache_read_tokens || 0;
-
-        // Normalize input tokens based on agentic tool
-        const normalizedInput =
-          session?.agentic_tool === 'codex'
-            ? rawInput - cacheRead // For Codex: subtract cached portion
-            : rawInput; // For Claude/Gemini: already fresh
+        // Normalize SDK response to get consistent token counts
+        const normalized = normalizeRawSdkResponse(task.raw_sdk_response, session.agentic_tool);
 
         return {
-          total: acc.total + normalizedInput + rawOutput,
-          input: acc.input + normalizedInput,
-          output: acc.output + rawOutput,
-          cacheRead: acc.cacheRead + cacheRead,
-          cacheCreation: acc.cacheCreation + (tokenUsage.cache_creation_tokens || 0),
-          cost: acc.cost, // Cost calculation removed - can be computed on the fly if needed
+          total: acc.total + normalized.tokenUsage.totalTokens,
+          input: acc.input + normalized.tokenUsage.inputTokens,
+          output: acc.output + normalized.tokenUsage.outputTokens,
+          cacheRead: acc.cacheRead + normalized.tokenUsage.cacheReadTokens,
+          cacheCreation: acc.cacheCreation + normalized.tokenUsage.cacheCreationTokens,
+          cost: acc.cost + (normalized.costUsd || 0),
         };
       },
       { total: 0, input: 0, output: 0, cacheRead: 0, cacheCreation: 0, cost: 0 }
     );
   }, [tasks, session?.agentic_tool]);
 
-  // Get latest context window from most recent task (directly from SDK response)
+  // Get latest context window from most recent task (uses computed_context_window)
   const latestContextWindow = React.useMemo(() => {
-    // Find most recent task with raw SDK response
+    if (!session?.agentic_tool) return null;
+
+    // Find most recent task with computed context window
     for (let i = tasks.length - 1; i >= 0; i--) {
       const task = tasks[i];
-      const sdkResponse = task.raw_sdk_response;
-      // Only Claude, Codex, and Gemini provide contextWindow (OpenCode doesn't)
-      if (
-        sdkResponse &&
-        'contextWindow' in sdkResponse &&
-        sdkResponse.contextWindow !== undefined &&
-        'contextWindowLimit' in sdkResponse &&
-        sdkResponse.contextWindowLimit
-      ) {
-        return {
-          used: sdkResponse.contextWindow,
-          limit: sdkResponse.contextWindowLimit,
-          taskMetadata: {
-            model: task.model,
-            duration_ms: task.duration_ms,
-            raw_sdk_response: task.raw_sdk_response,
-          },
-        };
+      if (task.computed_context_window !== undefined && task.raw_sdk_response) {
+        // Get context window limit from normalizer
+        const normalized = normalizeRawSdkResponse(task.raw_sdk_response, session.agentic_tool);
+
+        // Show pill even without limit (will display as "?")
+        if (task.computed_context_window > 0) {
+          return {
+            used: task.computed_context_window, // Use stored computed value
+            limit: normalized.contextWindowLimit || 0, // Allow 0 limit
+            taskMetadata: {
+              model: task.model,
+              duration_ms: task.duration_ms,
+              agentic_tool: session.agentic_tool,
+              raw_sdk_response: task.raw_sdk_response,
+            },
+          };
+        }
       }
     }
     return null;
-  }, [tasks]);
+  }, [tasks, session?.agentic_tool]);
 
   // Calculate gradient for footer background
   const footerGradient = React.useMemo(() => {
@@ -413,7 +407,7 @@ const SessionDrawer = ({
 
         // Optimistically update the UI immediately (don't wait for WebSocket event)
         if (response.message) {
-          setQueuedMessages(prev => {
+          setQueuedMessages((prev) => {
             const updated = [...prev, response.message].sort(
               (a, b) => (a.queue_position ?? 0) - (b.queue_position ?? 0)
             );
@@ -489,6 +483,67 @@ const SessionDrawer = ({
     }
   };
 
+  const handleSpawnModalConfirm = async (config: string | Partial<SpawnConfig>) => {
+    // Render the template with the SpawnConfig and send it as a prompt to the parent agent
+    // The parent agent will then use its context to create a rich prompt and spawn via MCP
+    if (typeof config === 'string') {
+      // Simple string prompt (shouldn't happen from modal, but handle it)
+      const metaPrompt = compiledSpawnSubsessionTemplate({ userPrompt: config });
+      await onSendPrompt?.(metaPrompt, permissionMode);
+    } else {
+      // Full SpawnConfig from advanced modal - render template with all config
+      const hasConfig =
+        config.agent !== undefined ||
+        config.permissionMode !== undefined ||
+        config.modelConfig !== undefined ||
+        config.codexSandboxMode !== undefined ||
+        config.codexApprovalPolicy !== undefined ||
+        config.codexNetworkAccess !== undefined ||
+        (config.mcpServerIds?.length ?? 0) > 0 ||
+        config.enableCallback !== undefined ||
+        config.includeLastMessage !== undefined ||
+        config.includeOriginalPrompt !== undefined ||
+        config.extraInstructions !== undefined;
+
+      // Import the full template compiler from ForkSpawnModal
+      // (We'll use the same Handlebars instance)
+      const Handlebars = await import('handlebars');
+
+      // Register helper to check if value is defined (not undefined)
+      // This allows us to distinguish between false and undefined
+      Handlebars.registerHelper('isDefined', (value) => value !== undefined);
+
+      const compiledTemplate = Handlebars.compile(spawnSubsessionTemplate);
+
+      const metaPrompt = compiledTemplate({
+        userPrompt: config.prompt || '',
+        hasConfig,
+        agenticTool: config.agent,
+        permissionMode: config.permissionMode,
+        modelConfig: config.modelConfig,
+        codexSandboxMode: config.codexSandboxMode,
+        codexApprovalPolicy: config.codexApprovalPolicy,
+        codexNetworkAccess: config.codexNetworkAccess,
+        mcpServerIds: config.mcpServerIds,
+        hasCallbackConfig:
+          config.enableCallback !== undefined ||
+          config.includeLastMessage !== undefined ||
+          config.includeOriginalPrompt !== undefined,
+        callbackConfig: {
+          enableCallback: config.enableCallback,
+          includeLastMessage: config.includeLastMessage,
+          includeOriginalPrompt: config.includeOriginalPrompt,
+        },
+        extraInstructions: config.extraInstructions,
+      });
+
+      await onSendPrompt?.(metaPrompt, permissionMode);
+    }
+
+    setSpawnModalOpen(false);
+    setInputValue(''); // Clear input after spawning
+  };
+
   const handlePermissionModeChange = (newMode: PermissionMode) => {
     setPermissionMode(newMode);
 
@@ -555,14 +610,11 @@ const SessionDrawer = ({
     }
   };
 
-  const isForked = !!session.genealogy.forked_from_session_id;
-  const isSpawned = !!session.genealogy.parent_session_id;
-
   // Check if session is currently running (disable prompts to avoid confusion)
   const isRunning = session.status === SessionStatus.RUNNING;
 
   // Get repo from worktree (worktree is passed from parent)
-  const repo = worktree ? repos.find(r => r.repo_id === worktree.repo_id) : null;
+  const repo = worktree ? repoById.get(worktree.repo_id) || null : null;
 
   return (
     <Drawer
@@ -605,7 +657,7 @@ const SessionDrawer = ({
                 <CreatedByTag
                   createdBy={session.created_by}
                   currentUserId={currentUserId}
-                  users={users}
+                  userById={userById}
                   prefix="Created by"
                 />
               </div>
@@ -656,22 +708,9 @@ const SessionDrawer = ({
       }}
     >
       {/* All pills in one line */}
-      {(isForked || isSpawned || worktree || sessionMcpServerIds.length > 0) && (
+      {(worktree || sessionMcpServerIds.length > 0) && (
         <div style={{ marginBottom: token.sizeUnit }}>
           <Space size={8} wrap>
-            {/* Genealogy Tags */}
-            {isForked && session.genealogy.forked_from_session_id && (
-              <ForkPill
-                fromSessionId={session.genealogy.forked_from_session_id}
-                taskId={session.genealogy.fork_point_task_id}
-              />
-            )}
-            {isSpawned && session.genealogy.parent_session_id && (
-              <SpawnPill
-                fromSessionId={session.genealogy.parent_session_id}
-                taskId={session.genealogy.spawn_point_task_id}
-              />
-            )}
             {/* Worktree Info */}
             {worktree && repo && (
               <RepoPill
@@ -702,9 +741,9 @@ const SessionDrawer = ({
             {worktree?.pull_request_url && <PullRequestPill prUrl={worktree.pull_request_url} />}
             {/* MCP Servers */}
             {sessionMcpServerIds
-              .map(serverId => mcpServers.find(s => s.mcp_server_id === serverId))
+              .map((serverId) => mcpServerById.get(serverId))
               .filter(Boolean)
-              .map(server => (
+              .map((server) => (
                 <Tag key={server?.mcp_server_id} color="purple" icon={<ApiOutlined />}>
                   {server?.display_name || server?.name}
                 </Tag>
@@ -733,12 +772,15 @@ const SessionDrawer = ({
         sessionId={session.session_id}
         agentic_tool={session.agentic_tool}
         sessionModel={session.model_config?.model}
-        users={users}
+        userById={userById}
         currentUserId={currentUserId}
         onScrollRef={setScrollToBottom}
         onPermissionDecision={onPermissionDecision}
+        worktreeName={worktree?.name}
         scheduledFromWorktree={session.scheduled_from_worktree}
         scheduledRunAt={session.scheduled_run_at}
+        isActive={open}
+        genealogy={session.genealogy}
       />
 
       {/* Queued Messages Drawer - Above Footer */}
@@ -797,7 +839,8 @@ const SessionDrawer = ({
                     size="small"
                     icon={<CopyOutlined />}
                     onClick={() => {
-                      const textToCopy = msg.content_preview || (typeof msg.content === 'string' ? msg.content : '');
+                      const textToCopy =
+                        msg.content_preview || (typeof msg.content === 'string' ? msg.content : '');
                       navigator.clipboard.writeText(textToCopy);
                       message.success('Message copied to clipboard');
                     }}
@@ -817,7 +860,9 @@ const SessionDrawer = ({
                         });
 
                         // Optimistically remove from UI
-                        setQueuedMessages(prev => prev.filter(m => m.message_id !== msg.message_id));
+                        setQueuedMessages((prev) =>
+                          prev.filter((m) => m.message_id !== msg.message_id)
+                        );
 
                         // Delete via messages service directly
                         // The backend will validate it's a queued message
@@ -888,7 +933,7 @@ const SessionDrawer = ({
             onChange={setInputValue}
             placeholder="Send a prompt, fork, or create a subsession... (type @ for autocomplete)"
             autoSize={{ minRows: 1, maxRows: 10 }}
-            onKeyPress={e => {
+            onKeyPress={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 // Allow sending/queueing when there's input (queues if running, sends if idle)
@@ -899,7 +944,7 @@ const SessionDrawer = ({
             }}
             client={client}
             sessionId={session?.session_id || null}
-            users={users}
+            userById={userById}
           />
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Space size={0}>
@@ -985,6 +1030,13 @@ const SessionDrawer = ({
                     loading={isStopping}
                   />
                 </Tooltip>
+                <Tooltip title="Advanced Spawn Options">
+                  <Button
+                    icon={<SettingOutlined />}
+                    onClick={() => setSpawnModalOpen(true)}
+                    disabled={connectionDisabled || isRunning || !inputValue.trim()}
+                  />
+                </Tooltip>
                 <Tooltip title={isRunning ? 'Session is running...' : 'Fork Session'}>
                   <Button
                     icon={<ForkOutlined />}
@@ -1012,6 +1064,18 @@ const SessionDrawer = ({
           </Space>
         </Space>
       </div>
+
+      {/* Advanced Spawn Modal */}
+      <ForkSpawnModal
+        open={spawnModalOpen}
+        action="spawn"
+        session={session}
+        currentUser={currentUserId ? userById.get(currentUserId) || null : null}
+        mcpServerById={mcpServerById}
+        initialPrompt={inputValue}
+        onConfirm={handleSpawnModalConfirm}
+        onCancel={() => setSpawnModalOpen(false)}
+      />
     </Drawer>
   );
 };

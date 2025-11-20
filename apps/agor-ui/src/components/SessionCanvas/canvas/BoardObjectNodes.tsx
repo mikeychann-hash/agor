@@ -2,7 +2,7 @@
  * Custom React Flow node components for board objects (text labels, zones, etc.)
  */
 
-import type { BoardComment, BoardObject } from '@agor/core/types';
+import type { BoardComment, BoardObject, User } from '@agor/core/types';
 import { DeleteOutlined, LockOutlined, SettingOutlined, UnlockOutlined } from '@ant-design/icons';
 import { ColorPicker, theme } from 'antd';
 import type { Color } from 'antd/es/color-picker';
@@ -69,7 +69,7 @@ const saveRecentColor = (color: string) => {
   try {
     const recent = getRecentColors();
     // Remove duplicate if exists
-    const filtered = recent.filter(c => c.toLowerCase() !== color.toLowerCase());
+    const filtered = recent.filter((c) => c.toLowerCase() !== color.toLowerCase());
     // Add to front, limit to 12 recent colors
     const updated = [color, ...filtered].slice(0, 12);
     localStorage.setItem(RECENT_COLORS_KEY, JSON.stringify(updated));
@@ -274,15 +274,15 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
         {/* Toolbar - ALWAYS rendered, visibility controlled by CSS only */}
         <div
           className="nodrag nopan"
-          onPointerDown={e => {
+          onPointerDown={(e) => {
             e.preventDefault();
             e.stopPropagation();
           }}
-          onPointerUp={e => {
+          onPointerUp={(e) => {
             e.preventDefault();
             e.stopPropagation();
           }}
-          onClick={e => {
+          onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
           }}
@@ -310,10 +310,10 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
           {/* Border Color Picker */}
           <div
             className="nodrag nopan"
-            onPointerDown={e => {
+            onPointerDown={(e) => {
               e.stopPropagation();
             }}
-            onPointerUp={e => {
+            onPointerUp={(e) => {
               e.stopPropagation();
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
@@ -378,10 +378,10 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
           {/* Background Color Picker */}
           <div
             className="nodrag nopan"
-            onPointerDown={e => {
+            onPointerDown={(e) => {
               e.stopPropagation();
             }}
-            onPointerUp={e => {
+            onPointerUp={(e) => {
               e.stopPropagation();
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
@@ -407,7 +407,7 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
                 {
                   label: 'Presets',
                   colors: colors.map(
-                    c =>
+                    (c) =>
                       `${c}${Math.round(ZONE_CONTENT_OPACITY * 255)
                         .toString(16)
                         .padStart(2, '0')}`
@@ -451,16 +451,16 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
           {/* Lock/Unlock Button */}
           <button
             type="button"
-            onPointerDown={e => {
+            onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
             }}
-            onPointerUp={e => {
+            onPointerUp={(e) => {
               e.preventDefault();
               e.stopPropagation();
               handleToggleLock();
             }}
-            onClick={e => {
+            onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
             }}
@@ -495,16 +495,16 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
           />
           <button
             type="button"
-            onPointerDown={e => {
+            onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
             }}
-            onPointerUp={e => {
+            onPointerUp={(e) => {
               e.preventDefault();
               e.stopPropagation();
               setConfigModalOpen(true);
             }}
-            onClick={e => {
+            onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
             }}
@@ -527,24 +527,24 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
           </button>
           <button
             type="button"
-            onPointerDown={e => {
+            onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
             }}
-            onPointerUp={e => {
+            onPointerUp={(e) => {
               e.preventDefault();
               e.stopPropagation();
               setDeleteModalOpen(true);
             }}
-            onClick={e => {
+            onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
             }}
-            onMouseEnter={e => {
+            onMouseEnter={(e) => {
               e.currentTarget.style.color = token.colorError;
               e.currentTarget.style.borderColor = token.colorError;
             }}
-            onMouseLeave={e => {
+            onMouseLeave={(e) => {
               e.currentTarget.style.color = token.colorTextSecondary;
               e.currentTarget.style.borderColor = token.colorBorder;
             }}
@@ -578,7 +578,7 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
               ref={labelInputRef}
               type="text"
               value={label}
-              onChange={e => setLabel(e.target.value)}
+              onChange={(e) => setLabel(e.target.value)}
               onBlur={handleSaveLabel}
               onKeyDown={handleKeyDown}
               className="nodrag" // Prevent node drag when typing
@@ -633,7 +633,7 @@ const ZoneNodeComponent = ({ data, selected }: { data: ZoneNodeData; selected?: 
       <DeleteZoneModal
         open={deleteModalOpen}
         onCancel={() => setDeleteModalOpen(false)}
-        onConfirm={deleteAssociatedSessions => {
+        onConfirm={(deleteAssociatedSessions) => {
           setDeleteModalOpen(false);
           if (data.onDelete) {
             data.onDelete(data.objectId, deleteAssociatedSessions);
@@ -655,7 +655,7 @@ export const ZoneNode = React.memo(ZoneNodeComponent);
 interface CommentNodeData {
   comment: BoardComment;
   replyCount: number;
-  user?: import('@agor/core/types').User;
+  user?: User;
   parentLabel?: string; // Label of parent zone/worktree if pinned
   parentColor?: string; // Color of parent zone if pinned
   onClick?: (commentId: string) => void;

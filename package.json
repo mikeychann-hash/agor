@@ -1,7 +1,8 @@
 {
   "name": "agor",
-  "version": "0.7.1",
+  "version": "0.1.0",
   "private": true,
+  "//": "This is the monorepo root. Published package version is in packages/agor-live/package.json",
   "description": "Next-gen agent orchestration platform",
   "keywords": [
     "ai",
@@ -19,7 +20,7 @@
     "docs:dev": "pnpm --filter @agor/docs dev",
     "docs:build": "pnpm --filter @agor/docs build",
     "docs:generate": "pnpm --filter @agor/docs generate",
-    "lint": "biome check .",
+    "lint": "biome check --diagnostic-level=error .",
     "lint:fix": "biome check --write .",
     "format": "prettier --write .",
     "test": "turbo run test",
@@ -31,7 +32,9 @@
     "cli:link": "pnpm -C apps/agor-cli link --global",
     "cli:unlink": "pnpm -C apps/agor-cli unlink --global",
     "agor": "NODE_NO_WARNINGS=1 pnpm --filter @agor/cli exec tsx bin/dev.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "sync:agor-live-deps": "node scripts/sync-agor-live-deps.mjs",
+    "check:agor-live-deps": "node scripts/sync-agor-live-deps.mjs --check"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.6",
@@ -51,6 +54,8 @@
   },
   "pnpm": {
     "overrides": {
+      "@esbuild-kit/core-utils>esbuild": "0.25.4",
+      "glob": "^11.1.0",
       "npm-run-path": "^5.3.0"
     }
   }

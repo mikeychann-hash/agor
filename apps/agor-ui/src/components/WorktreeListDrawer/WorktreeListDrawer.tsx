@@ -14,8 +14,8 @@ interface WorktreeListDrawerProps {
   boards: Board[];
   currentBoardId: string;
   onBoardChange: (boardId: string) => void;
-  worktrees: Worktree[];
-  sessions: Session[];
+  worktreeById: Map<string, Worktree>;
+  sessionsByWorktree: Map<string, Session[]>;
   onSessionClick: (sessionId: string) => void;
 }
 
@@ -25,31 +25,35 @@ export const WorktreeListDrawer: React.FC<WorktreeListDrawerProps> = ({
   boards,
   currentBoardId,
   onBoardChange,
-  worktrees,
-  sessions,
+  worktreeById,
+  sessionsByWorktree,
   onSessionClick,
 }) => {
   const { token } = useToken();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Get current board
-  const currentBoard = boards.find(b => b.board_id === currentBoardId);
+  const currentBoard = boards.find((b) => b.board_id === currentBoardId);
 
   // Filter sessions by current board (worktree-centric model)
   const boardSessions = useMemo(() => {
-    // Get worktrees for this board
-    const boardWorktrees = worktrees.filter(wt => wt.board_id === currentBoardId);
-    const boardWorktreeIds = new Set(boardWorktrees.map(wt => wt.worktree_id));
+    // Get worktree IDs for this board by iterating the Map
+    const boardWorktreeIds: string[] = [];
+    for (const worktree of worktreeById.values()) {
+      if (worktree.board_id === currentBoardId) {
+        boardWorktreeIds.push(worktree.worktree_id);
+      }
+    }
 
-    // Get sessions for these worktrees, sorted by last_updated desc
-    return sessions
-      .filter(session => session.worktree_id && boardWorktreeIds.has(session.worktree_id))
+    // Get sessions for these worktrees using O(1) Map lookups, sorted by last_updated desc
+    return boardWorktreeIds
+      .flatMap((worktreeId) => sessionsByWorktree.get(worktreeId) || [])
       .sort((a, b) => new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime());
-  }, [sessions, worktrees, currentBoardId]);
+  }, [sessionsByWorktree, worktreeById, currentBoardId]);
 
   // Filter sessions by search query
   const filteredSessions = boardSessions.filter(
-    session =>
+    (session) =>
       session.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       session.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       session.agentic_tool.toLowerCase().includes(searchQuery.toLowerCase())
@@ -70,7 +74,7 @@ export const WorktreeListDrawer: React.FC<WorktreeListDrawerProps> = ({
 
   // Get worktree name for session
   const getWorktreeName = (worktreeId: string) => {
-    return worktrees.find(wt => wt.worktree_id === worktreeId)?.name || 'Unknown';
+    return worktreeById.get(worktreeId)?.name || 'Unknown';
   };
 
   return (
@@ -98,7 +102,7 @@ export const WorktreeListDrawer: React.FC<WorktreeListDrawerProps> = ({
           style={{ width: '100%' }}
           value={currentBoardId}
           onChange={onBoardChange}
-          options={boards.map(board => ({
+          options={boards.map((board) => ({
             label: `${board.icon || '📋'} ${board.name}`,
             value: board.board_id,
           }))}
@@ -116,7 +120,7 @@ export const WorktreeListDrawer: React.FC<WorktreeListDrawerProps> = ({
           placeholder="Search sessions..."
           prefix={<SearchOutlined />}
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={(e) => setSearchQuery(e.target.value)}
           allowClear
         />
       </div>
@@ -126,17 +130,17 @@ export const WorktreeListDrawer: React.FC<WorktreeListDrawerProps> = ({
         <List
           dataSource={filteredSessions}
           locale={{ emptyText: 'No sessions in this board' }}
-          renderItem={session => (
+          renderItem={(session) => (
             <List.Item
               style={{
                 cursor: 'pointer',
                 padding: '12px 24px',
                 transition: 'background 0.2s',
               }}
-              onMouseEnter={e => {
+              onMouseEnter={(e) => {
                 e.currentTarget.style.background = token.colorBgTextHover;
               }}
-              onMouseLeave={e => {
+              onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent';
               }}
               onClick={() => {

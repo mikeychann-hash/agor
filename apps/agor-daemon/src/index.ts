@@ -55,7 +55,9 @@ import {
   MessagesRepository,
   RepoRepository,
   SessionMCPServerRepository,
+  type SessionMCPServerRow,
   SessionRepository,
+  select,
   sessionMcpServers,
   TaskRepository,
   WorktreeRepository,
@@ -93,18 +95,14 @@ import type {
   Message,
   Paginated,
   Params,
+  RawSdkResponse,
   Session,
   SessionID,
   Task,
   User,
 } from '@agor/core/types';
 import { SessionStatus, TaskStatus } from '@agor/core/types';
-import {
-  getContextWindowLimit,
-  getSessionContextUsage,
-} from '@agor/core/utils/context-window';
 import { NotFoundError } from '@agor/core/utils/errors';
-import type { TokenUsage } from '@agor/core/utils/pricing';
 // Import Claude SDK's PermissionMode type for ClaudeTool method signatures
 // (Agor's PermissionMode is a superset of all tool permission modes)
 import type { PermissionMode as ClaudePermissionMode } from '@anthropic-ai/claude-agent-sdk';
@@ -175,7 +173,15 @@ interface FeathersSocket extends Socket {
 // Expand ~ to home directory in database path
 import { expandPath, extractDbFilePath } from '@agor/core/utils/path';
 
-const DB_PATH = expandPath(process.env.AGOR_DB_PATH || 'file:~/.agor/agor.db');
+// Determine database URL based on dialect preference
+// Priority:
+// 1. If AGOR_DB_DIALECT=postgresql, use DATABASE_URL (required for Postgres)
+// 2. Otherwise, use AGOR_DB_PATH or default SQLite path
+// This prevents using DATABASE_URL when Postgres profile isn't active
+const DB_PATH =
+  process.env.AGOR_DB_DIALECT === 'postgresql'
+    ? process.env.DATABASE_URL || 'postgresql://localhost:5432/agor'
+    : expandPath(process.env.AGOR_DB_PATH || 'file:~/.agor/agor.db');
 
 /**
  * Initialize Gemini API key with OAuth fallback support
@@ -320,7 +326,7 @@ async function main() {
         /^https?:\/\/localhost(:\d+)?$/,
       ];
 
-      const isAllowed = allowedPatterns.some(pattern => pattern.test(origin));
+      const isAllowed = allowedPatterns.some((pattern) => pattern.test(origin));
 
       if (isAllowed) {
         callback(null, true);
@@ -439,7 +445,7 @@ async function main() {
         maxHttpBufferSize: 1e6, // 1MB max message size
         transports: ['websocket', 'polling'], // Prefer WebSocket
       },
-      io => {
+      (io) => {
         // Store Socket.io server instance for shutdown
         socketServer = io;
 
@@ -503,7 +509,7 @@ async function main() {
         });
 
         // Configure Socket.io for cursor presence events
-        io.on('connection', socket => {
+        io.on('connection', (socket) => {
           activeConnections++;
           const user = (socket as FeathersSocket).feathers?.user;
           console.log(
@@ -554,7 +560,7 @@ async function main() {
           });
 
           // Track disconnections
-          socket.on('disconnect', reason => {
+          socket.on('disconnect', (reason) => {
             activeConnections--;
             console.log(
               `🔌 Socket.io disconnected: ${socket.id} (reason: ${reason}, remaining: ${activeConnections})`
@@ -562,7 +568,7 @@ async function main() {
           });
 
           // Handle socket errors
-          socket.on('error', error => {
+          socket.on('error', (error) => {
             console.error(`❌ Socket.io error on ${socket.id}:`, error);
           });
         });
@@ -586,7 +592,6 @@ async function main() {
   // Join all new connections to 'everybody' channel initially
   app.on('connection', (connection: unknown) => {
     app.channel('everybody').join(connection as never);
-    console.log('🔌 New connection joined everybody channel');
   });
 
   // Note: The 'login' event is fired by FeathersJS authentication service
@@ -637,26 +642,29 @@ async function main() {
   // Initialize database (auto-create if it doesn't exist)
   console.log(`📦 Connecting to database: ${DB_PATH}`);
 
-  // Extract file path from DB_PATH (remove 'file:' prefix and expand ~)
-  const dbFilePath = extractDbFilePath(DB_PATH);
-  const dbDir = dbFilePath.substring(0, dbFilePath.lastIndexOf('/'));
+  // Only handle file system setup for SQLite (file: URLs)
+  if (DB_PATH.startsWith('file:')) {
+    // Extract file path from DB_PATH (remove 'file:' prefix and expand ~)
+    const dbFilePath = extractDbFilePath(DB_PATH);
+    const dbDir = dbFilePath.substring(0, dbFilePath.lastIndexOf('/'));
 
-  // Ensure database directory exists
-  const { mkdir, access } = await import('node:fs/promises');
-  const { constants } = await import('node:fs');
+    // Ensure database directory exists
+    const { mkdir, access } = await import('node:fs/promises');
+    const { constants } = await import('node:fs');
 
-  try {
-    await access(dbDir, constants.F_OK);
-  } catch {
-    console.log(`📁 Creating database directory: ${dbDir}`);
-    await mkdir(dbDir, { recursive: true });
-  }
+    try {
+      await access(dbDir, constants.F_OK);
+    } catch {
+      console.log(`📁 Creating database directory: ${dbDir}`);
+      await mkdir(dbDir, { recursive: true });
+    }
 
-  // Check if database file exists (create message if needed)
-  try {
-    await access(dbFilePath, constants.F_OK);
-  } catch {
-    console.log('🆕 Database does not exist - will create on first connection');
+    // Check if database file exists (create message if needed)
+    try {
+      await access(dbFilePath, constants.F_OK);
+    } catch {
+      console.log('🆕 Database does not exist - will create on first connection');
+    }
   }
 
   // Create database with foreign keys enabled
@@ -672,7 +680,7 @@ async function main() {
     console.error('❌ Database migrations required!');
     console.error('');
     console.error(`   Found ${migrationStatus.pending.length} pending migration(s):`);
-    migrationStatus.pending.forEach(tag => {
+    migrationStatus.pending.forEach((tag) => {
       console.error(`     - ${tag}`);
     });
     console.error('');
@@ -697,7 +705,8 @@ async function main() {
 
   // Register core services
   // NOTE: Pass app instance for user preferences access (needed for cross-tool spawning and ready_for_prompt updates)
-  app.use('/sessions', createSessionsService(db, app));
+  const sessionsService = createSessionsService(db, app) as unknown as SessionsServiceImpl;
+  app.use('/sessions', sessionsService);
   app.use('/tasks', createTasksService(db, app));
   app.use('/leaderboard', createLeaderboardService(db));
   const messagesService = createMessagesService(db) as unknown as MessagesServiceImpl;
@@ -778,8 +787,8 @@ async function main() {
     async find() {
       // Return all session-MCP relationships
       // This allows the UI to fetch all relationships in one call
-      const rows = await db.select().from(sessionMcpServers).all();
-      return rows.map(row => ({
+      const rows = await select(db).from(sessionMcpServers).all();
+      return rows.map((row: SessionMCPServerRow) => ({
         session_id: row.session_id,
         mcp_server_id: row.mcp_server_id,
         enabled: Boolean(row.enabled),
@@ -904,7 +913,7 @@ async function main() {
         (validateQuery as any)(userQueryValidator),
       ],
       find: [
-        context => {
+        (context) => {
           const params = context.params as AuthenticatedParams;
 
           if (!params.provider) {
@@ -927,13 +936,13 @@ async function main() {
         },
       ],
       get: [
-        context => {
+        (context) => {
           ensureMinimumRole(context.params as AuthenticatedParams, 'member', 'view users');
           return context;
         },
       ],
       create: [
-        async context => {
+        async (context) => {
           const params = context.params as AuthenticatedParams;
 
           if (!params.provider) {
@@ -949,7 +958,7 @@ async function main() {
         },
       ],
       patch: [
-        context => {
+        (context) => {
           const params = context.params as AuthenticatedParams;
           const userId = context.id as string;
 
@@ -974,7 +983,7 @@ async function main() {
   // Publish service events to all connected clients
   // All services have requireAuth hooks, so only authenticated users can access them
   // This means any connection that successfully calls a service is authenticated
-  app.publish(() => {
+  app.publish((data, context) => {
     // Broadcast to all connected clients (they're all authenticated due to requireAuth)
     return app.channel('everybody');
   });
@@ -989,7 +998,7 @@ async function main() {
       ],
       create: [
         requireMinimumRole('member', 'create sessions'),
-        async context => {
+        async (context) => {
           // Inject user_id if authenticated, otherwise use 'anonymous'
           const user = (context.params as { user?: { user_id: string; email: string } }).user;
           const userId = user?.user_id || 'anonymous';
@@ -1003,7 +1012,7 @@ async function main() {
           );
 
           if (Array.isArray(context.data)) {
-            context.data.forEach(item => {
+            context.data.forEach((item) => {
               if (!item.created_by) (item as Record<string, unknown>).created_by = userId;
             });
           } else if (context.data && !context.data.created_by) {
@@ -1040,7 +1049,7 @@ async function main() {
     },
     after: {
       create: [
-        async context => {
+        async (context) => {
           // Skip MCP setup if MCP server is disabled
           if (config.daemon?.mcpEnabled === false) {
             return context;
@@ -1098,7 +1107,7 @@ async function main() {
           return context;
         },
         // Create OpenCode session if agentic_tool is 'opencode'
-        async context => {
+        async (context) => {
           const session = context.result as Session;
 
           if (session.agentic_tool === 'opencode') {
@@ -1167,7 +1176,7 @@ async function main() {
       ],
       create: [
         requireMinimumRole('member', 'create tasks'),
-        async context => {
+        async (context) => {
           // Inject user_id if authenticated, otherwise use 'anonymous'
           const user = (context.params as { user?: { user_id: string; email: string } }).user;
           const userId = user?.user_id || 'anonymous';
@@ -1181,7 +1190,7 @@ async function main() {
           );
 
           if (Array.isArray(context.data)) {
-            context.data.forEach(item => {
+            context.data.forEach((item) => {
               if (!item.created_by) (item as Record<string, unknown>).created_by = userId;
             });
           } else if (context.data && !context.data.created_by) {
@@ -1204,14 +1213,14 @@ async function main() {
       ],
       create: [
         requireMinimumRole('member', 'create boards'),
-        async context => {
+        async (context) => {
           // Inject user_id if authenticated, otherwise use 'anonymous'
           const userId =
             (context.params as { user?: { user_id: string; email: string } }).user?.user_id ||
             'anonymous';
 
           if (Array.isArray(context.data)) {
-            context.data.forEach(item => {
+            context.data.forEach((item) => {
               if (!item.created_by) (item as Record<string, unknown>).created_by = userId;
             });
           } else if (context.data && !context.data.created_by) {
@@ -1222,7 +1231,7 @@ async function main() {
       ],
       patch: [
         requireMinimumRole('member', 'update boards'),
-        async context => {
+        async (context) => {
           // Handle atomic board object operations via _action parameter
           const contextData = context.data || {};
           const { _action, objectId, objectData, objects, deleteAssociatedSessions } =
@@ -1621,7 +1630,7 @@ async function main() {
 
   if (config.opencode?.enabled !== false) {
     // Check OpenCode server availability on startup (non-blocking)
-    opencodeTool.checkInstalled().then(isAvailable => {
+    opencodeTool.checkInstalled().then((isAvailable) => {
       if (!isAvailable) {
         console.warn('⚠️  OpenCode server not available at', openCodeServerUrl);
         console.warn('   Start OpenCode with: opencode serve --port 4096');
@@ -1640,8 +1649,7 @@ async function main() {
     },
   });
 
-  // Configure custom methods for sessions service
-  const sessionsService = app.service('sessions') as unknown as SessionsServiceImpl;
+  // Configure custom methods for sessions service (using sessionsService from line 700)
   app.use('/sessions/:id/fork', {
     async create(data: { prompt: string; task_id?: string }, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'fork sessions');
@@ -1650,21 +1658,40 @@ async function main() {
       console.log(`🔀 Forking session: ${id.substring(0, 8)}`);
       const forkedSession = await sessionsService.fork(id, data, params);
       console.log(`✅ Fork created: ${forkedSession.session_id.substring(0, 8)}`);
+
+      // Manually broadcast the event to all connected clients
+      // Internal service calls don't trigger automatic event publishing even with provider param
+      console.log('📡 [FORK] Manually broadcasting created event to all clients');
+
+      // Manually publish to Socket.io using app.io
+      // Note: We only emit to Socket.io, not the service, to avoid duplicate events
+      if (app.io) {
+        app.io.emit('sessions created', forkedSession);
+      }
+
       return forkedSession;
     },
   });
 
   app.use('/sessions/:id/spawn', {
-    async create(
-      data: { prompt: string; title?: string; agent?: string; task_id?: string },
-      params: RouteParams
-    ) {
+    async create(data: Partial<import('@agor/core/types').SpawnConfig>, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'spawn sessions');
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
       console.log(`🌱 Spawning session from: ${id.substring(0, 8)}`);
       const spawnedSession = await sessionsService.spawn(id, data, params);
       console.log(`✅ Spawn created: ${spawnedSession.session_id.substring(0, 8)}`);
+
+      // Manually broadcast the event to all connected clients
+      // Internal service calls don't trigger automatic event publishing even with provider param
+      console.log('📡 [SPAWN] Manually broadcasting created event to all clients');
+
+      // Manually publish to Socket.io using app.io
+      // Note: We only emit to Socket.io, not the service, to avoid duplicate events
+      if (app.io) {
+        app.io.emit('sessions created', spawnedSession);
+      }
+
       return spawnedSession;
     },
   });
@@ -1682,18 +1709,19 @@ async function main() {
 
   /**
    * Helper: Safely patch an entity, returning false if it was deleted mid-execution
+   * IMPORTANT: Uses app.service() to trigger WebSocket event broadcasting
    */
   async function safePatch<T>(
-    service: {
-      get: (id: string) => Promise<T>;
-      patch: (id: string, data: Partial<T>) => Promise<T>;
-    },
+    serviceName: string,
     id: string,
     data: Partial<T>,
-    entityType: string
+    entityType: string,
+    params?: RouteParams
   ): Promise<boolean> {
     try {
-      await service.patch(id, data);
+      // IMPORTANT: Use app.service() instead of service instance to go through
+      // FeathersJS service layer and trigger app.publish() for WebSocket events
+      await app.service(serviceName).patch(id, data, params || {});
       return true;
     } catch (error) {
       // Handle entity deletion mid-execution (NotFoundError from DrizzleService)
@@ -1798,10 +1826,19 @@ async function main() {
       );
 
       // Update session with new task immediately and set status to running
-      await sessionsService.patch(id, {
-        tasks: [...session.tasks, task.task_id],
-        status: SessionStatus.RUNNING,
-      });
+      console.log(
+        `🔄 [Prompt] Setting session ${id.substring(0, 8)} to RUNNING (was: ${session.status})`
+      );
+      // IMPORTANT: Use app.service() instead of sessionsService to go through
+      // FeathersJS service layer and trigger app.publish() for WebSocket events
+      await app.service('sessions').patch(
+        id,
+        {
+          tasks: [...session.tasks, task.task_id],
+          status: SessionStatus.RUNNING,
+        },
+        params
+      );
 
       // Create streaming callbacks for real-time UI updates
       // Custom events are registered via app.use('/messages', service, { events: [...] })
@@ -1822,7 +1859,7 @@ async function main() {
             chunk,
           });
         },
-        onStreamEnd: messageId => {
+        onStreamEnd: (messageId) => {
           console.debug(
             `📡 [${new Date().toISOString()}] Streaming end: ${messageId.substring(0, 8)}`
           );
@@ -1855,7 +1892,7 @@ async function main() {
             chunk,
           });
         },
-        onThinkingEnd: messageId => {
+        onThinkingEnd: (messageId) => {
           console.debug(
             `📡 [${new Date().toISOString()}] Thinking end: ${messageId.substring(0, 8)}`
           );
@@ -1875,6 +1912,7 @@ async function main() {
         let executeMethod: Promise<{
           userMessageId: import('@agor/core/types').MessageID;
           assistantMessageIds: import('@agor/core/types').MessageID[];
+          rawSdkResponse?: unknown; // Raw SDK event (unmutated)
         }>;
 
         if (session.agentic_tool === 'codex') {
@@ -1942,11 +1980,12 @@ async function main() {
               task.task_id,
               useStreaming ? streamingCallbacks : undefined
             ) || Promise.reject(new Error('OpenCode executeTask not available'))
-          ).then(result => {
+          ).then((result) => {
             console.log('[Daemon] OpenCodeTool.executeTask completed:', result);
             return {
               userMessageId: `user-${task.task_id}` as import('@agor/core/types').MessageID,
               assistantMessageIds: [],
+              rawSdkResponse: undefined,
             };
           });
         } else {
@@ -1968,12 +2007,22 @@ async function main() {
         }
 
         executeMethod
-          .then(async result => {
+          .then(async (result) => {
             try {
               // PHASE 3: Mark task as completed and update message count
               // (Messages already created with task_id, no need to patch)
               const endTimestamp = new Date().toISOString();
               const totalMessages = 1 + result.assistantMessageIds.length; // user + assistants
+
+              // Check if execution was stopped early (Codex/Gemini specific)
+              // If wasStopped is true, the stop handler will set session to IDLE
+              // Skip normal completion to avoid race condition
+              if ('wasStopped' in result && result.wasStopped) {
+                console.log(
+                  `⏭️  Task ${task.task_id.substring(0, 8)} was stopped - skipping normal completion (stop handler will update session)`
+                );
+                return;
+              }
 
               // Check if task still exists and get current status
               const currentTask = await entityExists(tasksService, task.task_id);
@@ -1997,7 +2046,7 @@ async function main() {
 
                 // Still update message range for completeness
                 await safePatch(
-                  tasksService,
+                  'tasks',
                   task.task_id,
                   {
                     message_range: {
@@ -2007,19 +2056,15 @@ async function main() {
                       end_timestamp: endTimestamp,
                     },
                   },
-                  'Task'
+                  'Task',
+                  params
                 );
               } else {
                 // Safe to mark as completed
 
                 // Store raw SDK response - single source of truth for token accounting
-                const rawSdkResponse: import('@agor/core/types').RawSdkResponse | undefined =
-                  result
-                    ? {
-                        tool: session.agentic_tool,
-                        ...result,
-                      } as import('@agor/core/types').RawSdkResponse
-                    : undefined;
+                // No 'tool' discriminator - use session.agentic_tool to determine SDK type
+                const rawSdkResponse: RawSdkResponse | undefined = result?.rawSdkResponse;
 
                 // Calculate tool_use_count from all messages in this task
                 let toolUseCount = 0;
@@ -2042,8 +2087,25 @@ async function main() {
                   // Continue with toolUseCount = 0
                 }
 
+                // Capture git state at task end for transition tracking
+                let gitStateAtEnd = 'unknown';
+                if (session.worktree_id) {
+                  try {
+                    const worktree = await worktreesService.get(session.worktree_id, params);
+                    gitStateAtEnd = await getGitState(worktree.path);
+                  } catch (error) {
+                    console.warn(
+                      `Failed to get end git state for worktree ${session.worktree_id}:`,
+                      error
+                    );
+                  }
+                }
+
+                console.log(
+                  `📝 [Completion] Updating task ${task.task_id.substring(0, 8)} to COMPLETED...`
+                );
                 const updated = await safePatch(
-                  tasksService,
+                  'tasks',
                   task.task_id,
                   {
                     status: TaskStatus.COMPLETED,
@@ -2067,48 +2129,105 @@ async function main() {
 
                     // Store raw SDK response - single source of truth
                     raw_sdk_response: rawSdkResponse,
+
+                    // Compute and store context window (cumulative tokens)
+                    // Must be computed BEFORE patching so it's included in the same DB write
+                    // Pass rawSdkResponse directly - each tool handles it appropriately:
+                    // - Codex/Gemini: extract cumulative tokens from current response
+                    // - Claude Code: sum previous tasks + current task
+                    computed_context_window: await (async () => {
+                      try {
+                        if (!rawSdkResponse) return undefined;
+
+                        if (session.agentic_tool === 'claude-code') {
+                          // Claude Code: computeContextWindow handles everything (previous + current)
+                          const total =
+                            (await claudeTool.computeContextWindow?.(
+                              session.session_id,
+                              task.task_id,
+                              rawSdkResponse
+                            )) || 0;
+                          return total;
+                        }
+
+                        if (session.agentic_tool === 'codex') {
+                          // Codex: SDK provides cumulative tokens, just extract from response
+                          const total =
+                            (await codexTool.computeContextWindow?.(
+                              session.session_id,
+                              task.task_id,
+                              rawSdkResponse
+                            )) || 0;
+                          return total;
+                        }
+
+                        if (session.agentic_tool === 'gemini') {
+                          // Gemini: SDK provides cumulative tokens, just extract from response
+                          const total =
+                            (await geminiTool.computeContextWindow?.(
+                              session.session_id,
+                              task.task_id,
+                              rawSdkResponse
+                            )) || 0;
+                          return total;
+                        }
+
+                        return undefined;
+                      } catch (error) {
+                        console.error(
+                          `❌ Failed to compute context window for task ${task.task_id}:`,
+                          error
+                        );
+                        return undefined;
+                      }
+                    })(),
+
+                    // Git state transition tracking
+                    git_state: {
+                      ...task.git_state,
+                      sha_at_end: gitStateAtEnd,
+                    },
                   },
-                  'Task'
+                  'Task',
+                  params
                 );
 
                 if (updated) {
-                  console.log(`✅ Task ${task.task_id} completed successfully`);
+                  console.log(
+                    `✅ [Completion] Task ${task.task_id.substring(0, 8)} marked as COMPLETED`
+                  );
+                } else {
+                  console.warn(
+                    `⚠️  [Completion] Task ${task.task_id.substring(0, 8)} update returned false (may have been deleted)`
+                  );
                 }
               }
 
-              // Calculate session-level context window usage from all tasks
-              // Algorithm from https://codelynx.dev/posts/calculate-claude-code-context
-              const allTasks = await tasksService.find({
-                query: { session_id: id },
-                paginate: false,
-              });
-              const tasksArray = Array.isArray(allTasks) ? allTasks : [];
+              // Token accounting is handled via raw_sdk_response and normalizers
 
-              const currentContextUsage = getSessionContextUsage(tasksArray as Task[]);
-              const contextWindowLimit = getContextWindowLimit(tasksArray as Task[]);
-
-              if (currentContextUsage !== undefined) {
-                const percentage = contextWindowLimit
-                  ? ((currentContextUsage / contextWindowLimit) * 100).toFixed(1)
-                  : 'N/A';
-                console.log(
-                  `📊 Session context: ${currentContextUsage.toLocaleString()}/${contextWindowLimit?.toLocaleString() || '?'} (${percentage}%)`
-                );
-              }
-
-              await safePatch(
-                sessionsService,
+              console.log(
+                `📝 [Completion] Updating session ${id.substring(0, 8)} to IDLE with ready_for_prompt=true...`
+              );
+              const sessionUpdated = await safePatch(
+                'sessions',
                 id,
                 {
                   message_count: session.message_count + totalMessages,
                   status: SessionStatus.IDLE,
-                  current_context_usage: currentContextUsage,
-                  context_window_limit: contextWindowLimit,
-                  last_context_update_at:
-                    currentContextUsage !== undefined ? new Date().toISOString() : undefined,
+                  ready_for_prompt: true, // Set atomically with status to avoid race condition
+                  // Token accounting handled via normalizeRawSdkResponse() - no session-level storage needed
                 },
-                'Session'
+                'Session',
+                params
               );
+
+              if (sessionUpdated) {
+                console.log(`✅ [Completion] Session ${id.substring(0, 8)} marked as IDLE`);
+              } else {
+                console.warn(
+                  `⚠️  [Completion] Session ${id.substring(0, 8)} update returned false (may have been deleted)`
+                );
+              }
 
               // Check for queued messages and auto-process next one
               // NOTE: Only process queue if task completed successfully
@@ -2142,10 +2261,10 @@ async function main() {
             } catch (error) {
               console.error(`❌ Error completing task ${task.task_id}:`, error);
               // Try to mark task as failed (may also fail if deleted)
-              await safePatch(tasksService, task.task_id, { status: TaskStatus.FAILED }, 'Task');
+              await safePatch('tasks', task.task_id, { status: TaskStatus.FAILED }, 'Task', params);
             }
           })
-          .catch(async error => {
+          .catch(async (error) => {
             console.error(`❌ Error executing prompt for task ${task.task_id}:`, error);
 
             // Check if error might be due to stale/invalid Agent SDK resume session
@@ -2180,7 +2299,7 @@ async function main() {
               );
               console.warn(`   Clearing session ID - next prompt will start fresh`);
 
-              await safePatch(sessionsService, id, { sdk_session_id: undefined }, 'Session');
+              await safePatch('sessions', id, { sdk_session_id: undefined }, 'Session', params);
             } else if (isExitCode1 && hasResumeSession && !isLikelyConfigIssue) {
               // Generic exit code 1 with resume session (not explicitly stale)
               console.warn(
@@ -2190,7 +2309,7 @@ async function main() {
                 `   Session should have been validated before SDK call - clearing as safety measure`
               );
 
-              await safePatch(sessionsService, id, { sdk_session_id: undefined }, 'Session');
+              await safePatch('sessions', id, { sdk_session_id: undefined }, 'Session', params);
             } else if (isExitCode1 && hasResumeSession && isLikelyConfigIssue) {
               console.error(`❌ Exit code 1 due to configuration issue:`);
               console.error(`   ${errorMessage.substring(0, 200)}`);
@@ -2203,16 +2322,26 @@ async function main() {
 
             // Mark task as failed with error message and set session back to idle
             await safePatch(
-              tasksService,
+              'tasks',
               task.task_id,
               {
                 status: TaskStatus.FAILED,
                 report: errorMessage, // Save error message so UI can display it
               },
-              'Task'
+              'Task',
+              params
             );
 
-            await safePatch(sessionsService, id, { status: SessionStatus.IDLE }, 'Session');
+            await safePatch(
+              'sessions',
+              id,
+              {
+                status: SessionStatus.IDLE,
+                ready_for_prompt: true, // Set atomically with status to avoid race condition
+              },
+              'Session',
+              params
+            );
           });
       });
 
@@ -2315,9 +2444,16 @@ async function main() {
       // PHASE 3: Update final status based on stop result
       if (result.success) {
         // Update session status back to idle
-        await sessionsService.patch(id, {
-          status: SessionStatus.IDLE,
-        });
+        // IMPORTANT: Use app.service() instead of sessionsService to go through
+        // FeathersJS service layer and trigger app.publish() for WebSocket events
+        await app.service('sessions').patch(
+          id,
+          {
+            status: SessionStatus.IDLE,
+            ready_for_prompt: true, // Set atomically with status
+          },
+          params
+        );
 
         // Update task status to 'stopped'
         if (runningTasksArray.length > 0) {
@@ -2330,6 +2466,18 @@ async function main() {
             },
           });
           console.log(`✅ Task ${latestTask.task_id.substring(0, 8)} stopped`);
+        }
+
+        // PHASE 4: Process next queued message if any
+        // This ensures queued messages aren't stuck when stopping
+        try {
+          await processNextQueuedMessage(id as SessionID, params);
+        } catch (error) {
+          console.error(
+            `⚠️  Failed to process queued message after stop for session ${id.substring(0, 8)}:`,
+            error
+          );
+          // Don't fail the stop request if queue processing fails
         }
       } else {
         // Stop failed, revert to running
@@ -2361,7 +2509,7 @@ async function main() {
       if (!sessionId) throw new Error('Session ID required');
       if (!data.prompt) throw new Error('Prompt required');
 
-      const session = await sessionsService.get(sessionId, params);
+      const _session = await sessionsService.get(sessionId, params);
 
       // Create queued message
       const messageRepo = new MessagesRepository(db);
@@ -2442,7 +2590,7 @@ async function main() {
         );
         return;
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(
         `⚠️  Queued message ${nextMessage.message_id.substring(0, 8)} no longer exists, skipping`
       );
@@ -2472,6 +2620,16 @@ async function main() {
 
     console.log(`✅ Queued message triggered for session ${sessionId.substring(0, 8)}`);
   }
+
+  // Inject queue processor into sessions service
+  // Used by callback system to immediately process queued callbacks
+  sessionsService.setQueueProcessor(async (sessionId: SessionID, params?: RouteParams) => {
+    try {
+      await processNextQueuedMessage(sessionId, params || {});
+    } catch (error) {
+      console.error(`❌ [Sessions] Failed to process queued message:`, error);
+    }
+  });
 
   // Permission decision endpoint
   app.use('/sessions/:id/permission-decision', {
@@ -2523,6 +2681,12 @@ async function main() {
 
   // Configure custom methods for repos service
   const reposService = app.service('repos') as unknown as ReposServiceImpl;
+  app.use('/repos/local', {
+    async create(data: { path: string; slug?: string }, params: RouteParams) {
+      ensureMinimumRole(params, 'member', 'add local repositories');
+      return reposService.addLocalRepository(data, params);
+    },
+  });
   app.use('/repos/clone', {
     async create(data: { url: string; name?: string; destination?: string }, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'clone repositories');
@@ -2846,9 +3010,22 @@ async function main() {
       const isAuthenticated = (params as any)?.user !== undefined;
 
       if (isAuthenticated) {
+        // Prepare database info with dialect and masked credentials
+        const dialect = process.env.AGOR_DB_DIALECT === 'postgresql' ? 'postgresql' : 'sqlite';
+        let databaseInfo: { dialect: string; url?: string; path?: string };
+
+        if (dialect === 'postgresql') {
+          // Mask password in PostgreSQL URL
+          const maskedUrl = DB_PATH.replace(/:([^:@]+)@/, ':****@');
+          databaseInfo = { dialect, url: maskedUrl };
+        } else {
+          // Show file path for SQLite
+          databaseInfo = { dialect, path: DB_PATH };
+        }
+
         return {
           ...publicResponse,
-          database: DB_PATH,
+          database: databaseInfo,
           auth: {
             ...publicResponse.auth,
             // biome-ignore lint/suspicious/noExplicitAny: FeathersJS request params are untyped
@@ -3009,9 +3186,17 @@ async function main() {
   if (orphanedSessions.length > 0) {
     console.log(`   Found ${orphanedSessions.length} orphaned session(s) with RUNNING status`);
     for (const session of orphanedSessions) {
-      await sessionsService.patch(session.session_id, {
-        status: SessionStatus.IDLE,
-      });
+      // IMPORTANT: Use app.service() instead of sessionsService to go through
+      // FeathersJS service layer and trigger app.publish() for WebSocket events
+      // For internal/system operations, pass empty params object
+      await app.service('sessions').patch(
+        session.session_id,
+        {
+          status: SessionStatus.IDLE,
+          ready_for_prompt: true, // Set atomically with status
+        },
+        {}
+      );
       console.log(
         `   ✓ Marked session ${session.session_id.substring(0, 8)} as idle (was: ${session.status})`
       );
@@ -3031,9 +3216,17 @@ async function main() {
       const session = await sessionsService.get(sessionId as Id);
       // If session is still marked as RUNNING after orphaned task cleanup, set to IDLE
       if (session.status === SessionStatus.RUNNING) {
-        await sessionsService.patch(sessionId as Id, {
-          status: SessionStatus.IDLE,
-        });
+        // IMPORTANT: Use app.service() instead of sessionsService to go through
+        // FeathersJS service layer and trigger app.publish() for WebSocket events
+        // For internal/system operations, pass empty params object
+        await app.service('sessions').patch(
+          sessionId as Id,
+          {
+            status: SessionStatus.IDLE,
+            ready_for_prompt: true, // Set atomically with status
+          },
+          {}
+        );
         console.log(
           `   ✓ Marked session ${sessionId.substring(0, 8)} as idle (had orphaned tasks)`
         );
@@ -3124,9 +3317,9 @@ async function main() {
         // Disconnect all active clients first
         socketServer.disconnectSockets();
         // Give sockets a moment to disconnect
-        await new Promise<void>(resolve => setTimeout(resolve, 100));
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
         // Now close the server with a timeout
-        await new Promise<void>(resolve => {
+        await new Promise<void>((resolve) => {
           const timeout = setTimeout(() => {
             console.warn('⚠️  Server close timeout, forcing exit');
             resolve();
@@ -3141,7 +3334,7 @@ async function main() {
       } else {
         // Fallback: close HTTP server directly if Socket.io wasn't initialized
         await new Promise<void>((resolve, reject) => {
-          server.close(err => {
+          server.close((err) => {
             if (err) {
               console.error('❌ Error closing server:', err);
               reject(err);
@@ -3165,7 +3358,7 @@ async function main() {
 }
 
 // Start the daemon
-main().catch(error => {
+main().catch((error) => {
   console.error('Failed to start daemon:', error);
   process.exit(1);
 });

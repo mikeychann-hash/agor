@@ -2,15 +2,16 @@ import type { AgorClient } from '@agor/core/api';
 import type { Board, BoardComment, User, Worktree } from '@agor/core/types';
 import { Alert } from 'antd';
 import { useParams } from 'react-router-dom';
+import { mapToArray } from '@/utils/mapHelpers';
 import { CommentsPanel } from '../CommentsPanel';
 import { MobileHeader } from './MobileHeader';
 
 interface MobileCommentsPageProps {
   client: AgorClient | null;
-  boards: Board[];
-  comments: BoardComment[];
-  worktrees: Worktree[];
-  users: User[];
+  boardById: Map<string, Board>;
+  commentById: Map<string, BoardComment>;
+  worktreeById: Map<string, Worktree>;
+  userById: Map<string, User>;
   currentUser?: User | null;
   onMenuClick?: () => void;
   onSendComment: (boardId: string, content: string) => void;
@@ -22,10 +23,10 @@ interface MobileCommentsPageProps {
 
 export const MobileCommentsPage: React.FC<MobileCommentsPageProps> = ({
   client,
-  boards,
-  comments,
-  worktrees,
-  users,
+  boardById,
+  commentById,
+  worktreeById,
+  userById,
   currentUser,
   onMenuClick,
   onSendComment,
@@ -36,8 +37,8 @@ export const MobileCommentsPage: React.FC<MobileCommentsPageProps> = ({
 }) => {
   const { boardId } = useParams<{ boardId: string }>();
 
-  const board = boards.find((b) => b.board_id === boardId);
-  const boardComments = comments.filter((c) => c.board_id === boardId);
+  const board = boardId ? boardById.get(boardId) : undefined;
+  const boardComments = mapToArray(commentById).filter((c: BoardComment) => c.board_id === boardId);
 
   if (!boardId) {
     return (
@@ -68,10 +69,10 @@ export const MobileCommentsPage: React.FC<MobileCommentsPageProps> = ({
           client={client}
           boardId={boardId}
           comments={boardComments}
-          users={users}
+          userById={userById}
           currentUserId={currentUser?.user_id || 'anonymous'}
           boardObjects={board?.objects}
-          worktrees={worktrees}
+          worktreeById={worktreeById}
           onSendComment={(content) => onSendComment(boardId, content)}
           onReplyComment={onReplyComment}
           onResolveComment={onResolveComment}

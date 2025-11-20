@@ -24,19 +24,13 @@ import {
   type Message,
   type MessageID,
   MessageRole,
-  type Session,
   type SessionID,
   type TaskID,
   TaskStatus,
 } from '../../types';
-import { calculateModelContextWindowUsage } from '../../utils/context-window';
-import type { TokenUsage } from '../../utils/pricing';
-import { calculateTokenCost } from '../../utils/pricing';
-import type {
-  ClaudeCodeSdkResponse,
-  NormalizedSdkResponse,
-  RawSdkResponse,
-} from '../../types/sdk-response';
+import type { NormalizedSdkResponse, RawSdkResponse } from '../../types/sdk-response';
+// Removed import of calculateModelContextWindowUsage - inlined instead
+import type { TokenUsage } from '../../types/token-usage';
 import type { ImportOptions, ITool, SessionData, ToolCapabilities } from '../base';
 import { loadClaudeSession } from './import/load-session';
 import { transcriptsToMessages } from './import/message-converter';
@@ -49,7 +43,6 @@ import {
 } from './message-builder';
 import type { ProcessedEvent } from './message-processor';
 import { ClaudePromptService } from './prompt-service';
-import { safeCreateMessage } from './safe-message-service';
 
 /**
  * Service interface for creating messages via FeathersJS
@@ -201,6 +194,7 @@ export class ClaudeTool implements ITool {
     contextWindowLimit?: number;
     model?: string;
     modelUsage?: unknown;
+    rawSdkResponse?: import('@anthropic-ai/claude-agent-sdk/sdk').SDKResultMessage;
   }> {
     if (!this.promptService || !this.messagesRepo) {
       throw new Error('ClaudeTool not initialized with repositories for live execution');
@@ -261,6 +255,7 @@ export class ClaudeTool implements ITool {
     let contextWindow: number | undefined;
     let contextWindowLimit: number | undefined;
     let modelUsage: unknown | undefined;
+    let rawSdkResponse: import('@anthropic-ai/claude-agent-sdk/sdk').SDKResultMessage | undefined;
 
     for await (const event of this.promptService.promptSessionStreaming(
       sessionId,
@@ -315,7 +310,7 @@ export class ClaudeTool implements ITool {
 
         // Emit to streaming callbacks for message-level UI updates
         // Thinking blocks are part of assistant messages, but tracked separately
-        if (streamingCallbacks && streamingCallbacks.onThinkingChunk) {
+        if (streamingCallbacks?.onThinkingChunk) {
           // Start thinking stream if needed (separate from text stream)
           if (!currentThinkingMessageId) {
             currentThinkingMessageId = generateId() as MessageID;
@@ -339,7 +334,7 @@ export class ClaudeTool implements ITool {
 
       // Handle thinking complete
       if (event.type === 'thinking_complete') {
-        if (streamingCallbacks && streamingCallbacks.onThinkingEnd && currentThinkingMessageId) {
+        if (streamingCallbacks?.onThinkingEnd && currentThinkingMessageId) {
           streamingCallbacks.onThinkingEnd(currentThinkingMessageId);
           // Keep ID around for potential merging with text message later
           // Don't reset to null - we may need it for the complete message
@@ -399,6 +394,11 @@ export class ClaudeTool implements ITool {
         }
       }
 
+      // Capture raw SDK response for token accounting
+      if (event.type === 'result') {
+        rawSdkResponse = event.raw_sdk_message;
+      }
+
       // Capture metadata from result events (SDK may not type this properly)
       if ('token_usage' in event && event.token_usage) {
         tokenUsage = extractTokenUsage(event.token_usage);
@@ -408,55 +408,8 @@ export class ClaudeTool implements ITool {
       }
       if ('model_usage' in event && event.model_usage) {
         // Save full model usage for later (per-model breakdown)
+        // Token accounting now handled by ClaudeCodeNormalizer.normalizeMultiModel()
         modelUsage = event.model_usage;
-
-        // Extract context window data from model usage
-        const modelUsageTyped = event.model_usage as Record<
-          string,
-          {
-            inputTokens: number;
-            outputTokens: number;
-            cacheReadInputTokens?: number;
-            cacheCreationInputTokens?: number;
-            contextWindow: number;
-          }
-        >;
-        // Sum ALL token fields across ALL models
-        // When multiple models are used (e.g., Sonnet + Haiku for tools/thinking),
-        // all their tokens contribute to the total
-        let totalInput = 0;
-        let totalOutput = 0;
-        let totalCacheRead = 0;
-        let totalCacheCreation = 0;
-        let totalUsage = 0;
-        let maxLimit = 0;
-        for (const modelData of Object.values(modelUsageTyped)) {
-          totalInput += modelData.inputTokens || 0;
-          totalOutput += modelData.outputTokens || 0;
-          totalCacheRead += modelData.cacheReadInputTokens || 0;
-          totalCacheCreation += modelData.cacheCreationInputTokens || 0;
-
-          const usage = calculateModelContextWindowUsage(modelData);
-          const limit = modelData.contextWindow || 0;
-          totalUsage += usage; // Sum across all models
-          maxLimit = Math.max(maxLimit, limit); // Track largest context window limit
-        }
-
-        // Override tokenUsage with summed values across all models
-        // (SDK's top-level token_usage only reflects primary model)
-        tokenUsage = {
-          input_tokens: totalInput,
-          output_tokens: totalOutput,
-          cache_read_tokens: totalCacheRead,
-          cache_creation_tokens: totalCacheCreation,
-          total_tokens: totalInput + totalOutput,
-        };
-
-        contextWindow = totalUsage;
-        contextWindowLimit = maxLimit;
-        console.log(
-          `🔍 [ClaudeTool] Context window: ${contextWindow}/${contextWindowLimit} (${((contextWindow / contextWindowLimit) * 100).toFixed(1)}%)`
-        );
       }
 
       // Handle partial streaming events (token-level chunks)
@@ -603,6 +556,7 @@ export class ClaudeTool implements ITool {
       contextWindowLimit,
       model: resolvedModel,
       modelUsage,
+      rawSdkResponse,
     };
   }
 
@@ -663,6 +617,7 @@ export class ClaudeTool implements ITool {
     contextWindowLimit?: number;
     model?: string;
     modelUsage?: unknown;
+    rawSdkResponse?: import('@anthropic-ai/claude-agent-sdk/sdk').SDKResultMessage;
   }> {
     if (!this.promptService || !this.messagesRepo) {
       throw new Error('ClaudeTool not initialized with repositories for live execution');
@@ -694,6 +649,7 @@ export class ClaudeTool implements ITool {
     let contextWindow: number | undefined;
     let contextWindowLimit: number | undefined;
     let modelUsage: unknown | undefined;
+    let rawSdkResponse: import('@anthropic-ai/claude-agent-sdk/sdk').SDKResultMessage | undefined;
 
     for await (const event of this.promptService.promptSessionStreaming(
       sessionId,
@@ -712,6 +668,11 @@ export class ClaudeTool implements ITool {
         await this.captureAgentSessionId(sessionId, capturedAgentSessionId);
       }
 
+      // Capture raw SDK response for token accounting
+      if (event.type === 'result') {
+        rawSdkResponse = event.raw_sdk_message;
+      }
+
       // Capture metadata from result events (SDK may not type this properly)
       if ('token_usage' in event && event.token_usage) {
         tokenUsage = extractTokenUsage(event.token_usage);
@@ -721,55 +682,8 @@ export class ClaudeTool implements ITool {
       }
       if ('model_usage' in event && event.model_usage) {
         // Save full model usage for later (per-model breakdown)
+        // Token accounting now handled by ClaudeCodeNormalizer.normalizeMultiModel()
         modelUsage = event.model_usage;
-
-        // Extract context window data from model usage
-        const modelUsageTyped = event.model_usage as Record<
-          string,
-          {
-            inputTokens: number;
-            outputTokens: number;
-            cacheReadInputTokens?: number;
-            cacheCreationInputTokens?: number;
-            contextWindow: number;
-          }
-        >;
-        // Sum ALL token fields across ALL models
-        // When multiple models are used (e.g., Sonnet + Haiku for tools/thinking),
-        // all their tokens contribute to the total
-        let totalInput = 0;
-        let totalOutput = 0;
-        let totalCacheRead = 0;
-        let totalCacheCreation = 0;
-        let totalUsage = 0;
-        let maxLimit = 0;
-        for (const modelData of Object.values(modelUsageTyped)) {
-          totalInput += modelData.inputTokens || 0;
-          totalOutput += modelData.outputTokens || 0;
-          totalCacheRead += modelData.cacheReadInputTokens || 0;
-          totalCacheCreation += modelData.cacheCreationInputTokens || 0;
-
-          const usage = calculateModelContextWindowUsage(modelData);
-          const limit = modelData.contextWindow || 0;
-          totalUsage += usage; // Sum across all models
-          maxLimit = Math.max(maxLimit, limit); // Track largest context window limit
-        }
-
-        // Override tokenUsage with summed values across all models
-        // (SDK's top-level token_usage only reflects primary model)
-        tokenUsage = {
-          input_tokens: totalInput,
-          output_tokens: totalOutput,
-          cache_read_tokens: totalCacheRead,
-          cache_creation_tokens: totalCacheCreation,
-          total_tokens: totalInput + totalOutput,
-        };
-
-        contextWindow = totalUsage;
-        contextWindowLimit = maxLimit;
-        console.log(
-          `🔍 [ClaudeTool] Context window: ${contextWindow}/${contextWindowLimit} (${((contextWindow / contextWindowLimit) * 100).toFixed(1)}%)`
-        );
       }
 
       // Skip partial events in non-streaming mode
@@ -842,6 +756,7 @@ export class ClaudeTool implements ITool {
       contextWindowLimit,
       model: resolvedModel,
       modelUsage,
+      rawSdkResponse,
     };
   }
 
@@ -891,55 +806,94 @@ export class ClaudeTool implements ITool {
   /**
    * Normalize Claude SDK response to common format
    *
-   * Converts Claude-specific fields to normalized structure.
+   * @deprecated This method is deprecated - use normalizeRawSdkResponse() from utils/sdk-normalizer instead
+   * This stub remains for API compatibility but should not be used.
    */
-  normalizedSdkResponse(rawResponse: RawSdkResponse): NormalizedSdkResponse {
-    if (rawResponse.tool !== 'claude-code') {
-      throw new Error(`Expected claude-code response, got ${rawResponse.tool}`);
-    }
+  normalizedSdkResponse(_rawResponse: RawSdkResponse): NormalizedSdkResponse {
+    throw new Error(
+      'normalizedSdkResponse() is deprecated - use normalizeRawSdkResponse() from utils/sdk-normalizer instead'
+    );
+  }
 
-    const claudeResponse = rawResponse as ClaudeCodeSdkResponse;
+  /**
+   * Compute token count from a Claude SDK raw response
+   *
+   * Sums across ALL models (Haiku for tools, Sonnet for responses, etc.)
+   * since they all contribute to the context window.
+   *
+   * @param rawResponse - Raw SDK response from Claude Agent SDK
+   * @returns Total tokens (input + output) across all models
+   */
+  private computeContextTokensFromRawResponse(rawResponse: unknown): number {
+    const response = rawResponse as import('../../types/sdk-response').ClaudeCodeSdkResponseTyped;
 
-    // Extract token usage with defaults
-    const tokenUsage = claudeResponse.tokenUsage || {
-      input_tokens: 0,
-      output_tokens: 0,
-      total_tokens: 0,
-      cache_read_tokens: 0,
-      cache_creation_tokens: 0,
-    };
-
-    // Build per-model usage if available
-    let perModelUsage: NormalizedSdkResponse['perModelUsage'];
-    if (claudeResponse.modelUsage) {
-      perModelUsage = {};
-      for (const [modelId, usage] of Object.entries(claudeResponse.modelUsage)) {
-        perModelUsage[modelId] = {
-          inputTokens: usage.inputTokens || 0,
-          outputTokens: usage.outputTokens || 0,
-          cacheReadTokens: usage.cacheReadInputTokens || 0,
-          cacheCreationTokens: usage.cacheCreationInputTokens || 0,
-          contextWindowLimit: usage.contextWindow || 0,
-        };
+    // If modelUsage exists, sum across all models
+    if (response.modelUsage && typeof response.modelUsage === 'object') {
+      let total = 0;
+      for (const modelData of Object.values(response.modelUsage)) {
+        const input = modelData.inputTokens || 0;
+        const output = modelData.outputTokens || 0;
+        total += input + output;
       }
+      return total;
     }
 
-    return {
-      userMessageId: claudeResponse.userMessageId,
-      assistantMessageIds: claudeResponse.assistantMessageIds,
-      tokenUsage: {
-        inputTokens: tokenUsage.input_tokens || 0,
-        outputTokens: tokenUsage.output_tokens || 0,
-        totalTokens: tokenUsage.total_tokens || tokenUsage.input_tokens! + tokenUsage.output_tokens! || 0,
-        cacheReadTokens: tokenUsage.cache_read_tokens || 0,
-        cacheCreationTokens: tokenUsage.cache_creation_tokens || 0,
-      },
-      contextWindow: claudeResponse.contextWindow,
-      contextWindowLimit: claudeResponse.contextWindowLimit,
-      model: claudeResponse.model,
-      durationMs: claudeResponse.durationMs,
-      agentSessionId: claudeResponse.agentSessionId,
-      perModelUsage,
-    };
+    // Fallback to top-level usage (older SDK or single model)
+    const inputTokens = response.usage?.input_tokens || 0;
+    const outputTokens = response.usage?.output_tokens || 0;
+    return inputTokens + outputTokens;
+  }
+
+  /**
+   * Compute cumulative context window usage for a Claude Code session
+   *
+   * Algorithm:
+   * 1. Check if CURRENT task has compaction (if so, return only current task tokens)
+   * 2. Include current task tokens (if provided via currentRawSdkResponse)
+   * 3. Loop through previous tasks from DB (most recent to oldest)
+   * 4. Stop when we encounter a compaction event (context was reset)
+   * 5. Sum tokens across ALL models for each task
+   *
+   * Note: The current task is not yet in the DB when this is called, so we receive
+   * its raw response separately via currentRawSdkResponse parameter.
+   *
+   * @param sessionId - Session ID to compute context for
+   * @param currentTaskId - Current task ID (used to check if it has compaction)
+   * @param currentRawSdkResponse - Raw SDK response for the current task (not yet in DB)
+   * @returns Promise resolving to computed context window usage in tokens
+   */
+  async computeContextWindow(
+    sessionId: string,
+    currentTaskId?: string,
+    currentRawSdkResponse?: unknown
+  ): Promise<number> {
+    // IMPORTANT: When currentRawSdkResponse is provided (during task completion),
+    // we MUST NOT query the database because this is called during task UPDATE
+    // operations. Querying the database during a pending UPDATE causes deadlocks
+    // in PostgreSQL due to read-while-write in the same transaction.
+    //
+    // For Claude Code, we need to sum previous tasks + current task, but we can't
+    // safely query previous tasks during the UPDATE. The solution is to compute
+    // incrementally: store cumulative tokens in each task, then just use the
+    // current task's tokens.
+    //
+    // TODO: In the future, we should store cumulative tokens in raw_sdk_response
+    // or compute them before the UPDATE begins.
+    if (currentRawSdkResponse) {
+      const currentTaskTokens = this.computeContextTokensFromRawResponse(currentRawSdkResponse);
+      console.log(
+        `✅ Computed context window for Claude Code session ${sessionId}: ${currentTaskTokens} tokens (from current task only - safe mode)`
+      );
+      return currentTaskTokens;
+    }
+
+    // IMPORTANT: Do NOT query database when currentRawSdkResponse is not provided
+    // This prevents deadlocks in PostgreSQL when called during task UPDATE operations.
+    // The caller should ALWAYS provide currentRawSdkResponse during task completion.
+    console.warn(
+      `⚠️  computeContextWindow called without currentRawSdkResponse for session ${sessionId}. ` +
+        'This should not happen during task completion. Returning 0 to avoid database deadlock.'
+    );
+    return 0;
   }
 }

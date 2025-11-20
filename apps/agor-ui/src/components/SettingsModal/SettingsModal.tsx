@@ -29,20 +29,23 @@ export interface SettingsModalProps {
   onClose: () => void;
   client: AgorClient | null; // Still needed for WorktreeModal
   currentUser?: User | null; // Current logged-in user
-  boards: Board[];
+  boardById: Map<string, Board>;
   boardObjects: BoardEntityObject[];
-  repos: Repo[];
-  worktrees: Worktree[];
-  sessions: Session[];
-  users: User[];
-  mcpServers: MCPServer[];
+  repoById: Map<string, Repo>;
+  worktreeById: Map<string, Worktree>;
+  sessionById: Map<string, Session>; // O(1) ID lookups - efficient, stable references
+  sessionsByWorktree: Map<string, Session[]>; // O(1) worktree filtering
+  userById: Map<string, User>;
+  mcpServerById: Map<string, MCPServer>;
   activeTab?: string; // Control which tab is shown when modal opens
   onTabChange?: (tabKey: string) => void;
   editUserId?: string; // Auto-open edit modal for this user (for "User Settings" shortcut)
+  onClearEditUserId?: () => void; // Callback to clear editUserId
   onCreateBoard?: (board: Partial<Board>) => void;
   onUpdateBoard?: (boardId: string, updates: Partial<Board>) => void;
   onDeleteBoard?: (boardId: string) => void;
   onCreateRepo?: (data: { url: string; slug: string; default_branch: string }) => void;
+  onCreateLocalRepo?: (data: { path: string; slug?: string }) => void;
   onUpdateRepo?: (repoId: string, updates: Partial<Repo>) => void;
   onDeleteRepo?: (repoId: string) => void;
   onArchiveOrDeleteWorktree?: (
@@ -81,20 +84,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   client,
   currentUser,
-  boards,
+  boardById,
   boardObjects,
-  repos,
-  worktrees,
-  sessions,
-  users,
-  mcpServers,
+  repoById,
+  worktreeById,
+  sessionsByWorktree,
+  userById,
+  mcpServerById,
   activeTab = 'boards',
   onTabChange,
   editUserId,
+  onClearEditUserId,
   onCreateBoard,
   onUpdateBoard,
   onDeleteBoard,
   onCreateRepo,
+  onCreateLocalRepo,
   onUpdateRepo,
   onDeleteRepo,
   onArchiveOrDeleteWorktree,
@@ -118,8 +123,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleWorktreeRowClick = (worktree: Worktree) => {
     // Snapshot the data when opening modal
     setSelectedWorktree(worktree);
-    setSelectedRepo(repos.find(r => r.repo_id === worktree.repo_id) || null);
-    setWorktreeSessions(sessions.filter(s => s.worktree_id === worktree.worktree_id));
+    setSelectedRepo(repoById.get(worktree.repo_id) || null);
+    setWorktreeSessions(sessionsByWorktree.get(worktree.worktree_id) || []);
     setWorktreeModalOpen(true);
   };
 
@@ -161,9 +166,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             label: 'Boards',
             children: (
               <BoardsTable
-                boards={boards}
-                sessions={sessions}
-                worktrees={worktrees}
+                boardById={boardById}
+                sessionsByWorktree={sessionsByWorktree}
+                worktreeById={worktreeById}
                 onCreate={onCreateBoard}
                 onUpdate={onUpdateBoard}
                 onDelete={onDeleteBoard}
@@ -175,8 +180,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             label: 'Repositories',
             children: (
               <ReposTable
-                repos={repos}
+                repoById={repoById}
                 onCreate={onCreateRepo}
+                onCreateLocal={onCreateLocalRepo}
                 onUpdate={onUpdateRepo}
                 onDelete={onDeleteRepo}
               />
@@ -187,10 +193,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             label: 'Worktrees & Environments',
             children: (
               <WorktreesTable
-                worktrees={worktrees}
-                repos={repos}
-                boards={boards}
-                sessions={sessions}
+                worktreeById={worktreeById}
+                repoById={repoById}
+                boardById={boardById}
+                sessionsByWorktree={sessionsByWorktree}
                 onArchiveOrDelete={onArchiveOrDeleteWorktree}
                 onUnarchive={onUnarchiveWorktree}
                 onCreate={onCreateWorktree}
@@ -205,7 +211,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             label: 'MCP Servers',
             children: (
               <MCPServersTable
-                mcpServers={mcpServers}
+                mcpServerById={mcpServerById}
                 onCreate={onCreateMCPServer}
                 onUpdate={onUpdateMCPServer}
                 onDelete={onDeleteMCPServer}
@@ -222,12 +228,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             label: 'Users',
             children: (
               <UsersTable
-                users={users}
-                mcpServers={mcpServers}
+                userById={userById}
+                mcpServerById={mcpServerById}
                 onCreate={onCreateUser}
                 onUpdate={onUpdateUser}
                 onDelete={onDeleteUser}
                 editUserId={editUserId}
+                onClearEditUserId={onClearEditUserId}
               />
             ),
           },
@@ -236,6 +243,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             label: 'About',
             children: (
               <AboutTab
+                client={client}
                 connected={client?.io?.connected ?? false}
                 connectionError={undefined}
                 isAdmin={currentUser?.role === 'admin'}
@@ -250,8 +258,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         worktree={selectedWorktree}
         repo={selectedRepo}
         sessions={worktreeSessions}
-        boards={boards}
+        boardById={boardById}
         boardObjects={boardObjects}
+        mcpServerById={mcpServerById}
         client={client}
         onUpdateWorktree={onUpdateWorktree}
         onUpdateRepo={onUpdateRepo}

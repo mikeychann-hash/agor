@@ -2,13 +2,14 @@
  * AudioSettingsTab - Configure task completion chime settings
  */
 
-import type { ChimeSound, UpdateUserInput, User } from '@agor/core/types';
+import type { User } from '@agor/core/types';
 import { PlayCircleOutlined, SoundOutlined } from '@ant-design/icons';
 import {
   Button,
   Card,
   Col,
   Form,
+  Input,
   InputNumber,
   message,
   Row,
@@ -46,7 +47,7 @@ export const AudioSettingsTab: React.FC<AudioSettingsTabProps> = ({ user, form }
     setIsPlaying(true);
     try {
       await previewChimeSound(chime, volume);
-    } catch (error) {
+    } catch (_error) {
       message.error('Failed to play preview. Check browser permissions.');
     } finally {
       // Reset after a short delay (chimes are ~1-2 seconds)
@@ -105,7 +106,7 @@ export const AudioSettingsTab: React.FC<AudioSettingsTabProps> = ({ user, form }
                       1: '100%',
                     }}
                     disabled={!form.getFieldValue('enabled')}
-                    tooltip={{ formatter: value => `${Math.round((value || 0) * 100)}%` }}
+                    tooltip={{ formatter: (value) => `${Math.round((value || 0) * 100)}%` }}
                   />
                 </Form.Item>
               )}
@@ -126,7 +127,7 @@ export const AudioSettingsTab: React.FC<AudioSettingsTabProps> = ({ user, form }
                         <Select
                           style={{ flex: 1 }}
                           disabled={!enabled}
-                          options={getAvailableChimes().map(chime => ({
+                          options={getAvailableChimes().map((chime) => ({
                             label: getChimeDisplayName(chime),
                             value: chime,
                           }))}
@@ -156,14 +157,20 @@ export const AudioSettingsTab: React.FC<AudioSettingsTabProps> = ({ user, form }
                   label="Minimum Task Duration"
                   tooltip="Only play chime for tasks that take longer than this. Set to 0 to always play."
                 >
-                  <InputNumber
-                    min={0}
-                    max={60}
-                    step={1}
-                    addonAfter="seconds"
-                    style={{ width: '100%' }}
-                    disabled={!form.getFieldValue('enabled')}
-                  />
+                  <Space.Compact style={{ width: '100%' }}>
+                    <InputNumber
+                      min={0}
+                      max={60}
+                      step={1}
+                      style={{ width: '100%' }}
+                      disabled={!form.getFieldValue('enabled')}
+                    />
+                    <Input
+                      value="seconds"
+                      disabled
+                      style={{ width: 80, textAlign: 'center', pointerEvents: 'none' }}
+                    />
+                  </Space.Compact>
                 </Form.Item>
               )}
             </Form.Item>

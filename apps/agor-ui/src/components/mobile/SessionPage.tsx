@@ -9,10 +9,10 @@ import { MobilePromptInput } from './MobilePromptInput';
 
 interface SessionPageProps {
   client: AgorClient | null;
-  sessions: Session[];
-  worktrees: Worktree[];
-  repos: Repo[];
-  users: User[];
+  sessionById: Map<string, Session>; // O(1) ID lookups
+  worktreeById: Map<string, Worktree>;
+  repoById: Map<string, Repo>;
+  userById: Map<string, User>;
   currentUser?: User | null;
   onSendPrompt?: (sessionId: string, prompt: string, permissionMode?: PermissionMode) => void;
   onMenuClick?: () => void;
@@ -22,10 +22,10 @@ interface SessionPageProps {
 
 export const SessionPage: React.FC<SessionPageProps> = ({
   client,
-  sessions,
-  worktrees,
-  repos,
-  users,
+  sessionById,
+  worktreeById,
+  repoById,
+  userById,
   currentUser,
   onSendPrompt,
   onMenuClick,
@@ -34,8 +34,8 @@ export const SessionPage: React.FC<SessionPageProps> = ({
 }) => {
   const { sessionId } = useParams<{ sessionId: string }>();
 
-  const session = sessions.find(s => s.session_id === sessionId);
-  const worktree = session ? worktrees.find(w => w.worktree_id === session.worktree_id) : null;
+  const session = sessionId ? sessionById.get(sessionId) : undefined;
+  const worktree = session?.worktree_id ? worktreeById.get(session.worktree_id) || null : null;
 
   if (!sessionId) {
     return (
@@ -108,11 +108,12 @@ export const SessionPage: React.FC<SessionPageProps> = ({
           sessionId={session.session_id}
           agentic_tool={session.agentic_tool}
           sessionModel={session.model_config?.model}
-          users={users}
+          userById={userById}
           currentUserId={currentUser?.user_id}
           onPermissionDecision={handlePermissionDecision}
           scheduledFromWorktree={session.scheduled_from_worktree}
           scheduledRunAt={session.scheduled_run_at}
+          genealogy={session.genealogy}
           emptyStateMessage="Tap the menu icon to browse boards and sessions"
         />
       </div>

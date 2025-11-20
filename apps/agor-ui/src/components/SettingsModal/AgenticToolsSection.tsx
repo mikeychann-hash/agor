@@ -14,20 +14,9 @@ import {
   LoadingOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import {
-  Alert,
-  Button,
-  Form,
-  Input,
-  message,
-  Space,
-  Spin,
-  Switch,
-  Tabs,
-  Tooltip,
-  theme,
-} from 'antd';
+import { Alert, Button, Form, Input, Space, Spin, Switch, Tabs, Tooltip, theme } from 'antd';
 import { useEffect, useState } from 'react';
+import { useThemedMessage } from '../../utils/message';
 import { ApiKeyFields, type ApiKeyStatus } from '../ApiKeyFields';
 
 export interface AgenticToolsSectionProps {
@@ -91,6 +80,7 @@ const ApiKeyTabContent: React.FC<{
 
 export const AgenticToolsSection: React.FC<AgenticToolsSectionProps> = ({ client }) => {
   const { token } = theme.useToken();
+  const { showSuccess, showError } = useThemedMessage();
 
   // Shared API keys state
   const [loadingKeys, setLoadingKeys] = useState(true);
@@ -109,6 +99,11 @@ export const AgenticToolsSection: React.FC<AgenticToolsSectionProps> = ({ client
   const [opencodeConnected, setOpencodeConnected] = useState<boolean | null>(null);
   const [opencodeTesting, setOpencodeTesting] = useState(false);
   const [loadingOpencode, setLoadingOpencode] = useState(true);
+  const defaultCodexHome = '~/.agor/codex';
+  const [codexHome, setCodexHome] = useState(defaultCodexHome);
+  const [initialCodexHome, setInitialCodexHome] = useState(defaultCodexHome);
+  const [loadingCodexConfig, setLoadingCodexConfig] = useState(true);
+  const [savingCodexHome, setSavingCodexHome] = useState(false);
 
   // Load API keys configuration
   useEffect(() => {
@@ -164,12 +159,35 @@ export const AgenticToolsSection: React.FC<AgenticToolsSectionProps> = ({ client
     loadOpenCode();
   }, [client]);
 
+  // Load Codex configuration
+  useEffect(() => {
+    if (!client) return;
+
+    const loadCodex = async () => {
+      try {
+        setLoadingCodexConfig(true);
+        const config = (await client.service('config').get('codex')) as { home?: string } | null;
+        const home = config?.home || defaultCodexHome;
+        setCodexHome(home);
+        setInitialCodexHome(home);
+      } catch (err) {
+        console.error('Failed to load Codex config:', err);
+        setCodexHome(defaultCodexHome);
+        setInitialCodexHome(defaultCodexHome);
+      } finally {
+        setLoadingCodexConfig(false);
+      }
+    };
+
+    loadCodex();
+  }, [client]);
+
   // Save API key
   const handleSaveKey = async (field: keyof ApiKeyStatus, value: string) => {
     if (!client) return;
 
     try {
-      setSavingKeys(prev => ({ ...prev, [field]: true }));
+      setSavingKeys((prev) => ({ ...prev, [field]: true }));
       setKeysError(null);
 
       await client.service('config').patch(null, {
@@ -178,13 +196,13 @@ export const AgenticToolsSection: React.FC<AgenticToolsSectionProps> = ({ client
         },
       });
 
-      setKeyStatus(prev => ({ ...prev, [field]: true }));
+      setKeyStatus((prev) => ({ ...prev, [field]: true }));
     } catch (err) {
       console.error(`Failed to save ${field}:`, err);
       setKeysError(err instanceof Error ? err.message : `Failed to save ${field}`);
       throw err;
     } finally {
-      setSavingKeys(prev => ({ ...prev, [field]: false }));
+      setSavingKeys((prev) => ({ ...prev, [field]: false }));
     }
   };
 
@@ -193,7 +211,7 @@ export const AgenticToolsSection: React.FC<AgenticToolsSectionProps> = ({ client
     if (!client) return;
 
     try {
-      setSavingKeys(prev => ({ ...prev, [field]: true }));
+      setSavingKeys((prev) => ({ ...prev, [field]: true }));
       setKeysError(null);
 
       await client.service('config').patch(null, {
@@ -202,13 +220,39 @@ export const AgenticToolsSection: React.FC<AgenticToolsSectionProps> = ({ client
         },
       });
 
-      setKeyStatus(prev => ({ ...prev, [field]: false }));
+      setKeyStatus((prev) => ({ ...prev, [field]: false }));
     } catch (err) {
       console.error(`Failed to clear ${field}:`, err);
       setKeysError(err instanceof Error ? err.message : `Failed to clear ${field}`);
       throw err;
     } finally {
-      setSavingKeys(prev => ({ ...prev, [field]: false }));
+      setSavingKeys((prev) => ({ ...prev, [field]: false }));
+    }
+  };
+
+  const handleSaveCodexHome = async () => {
+    if (!client) return;
+
+    const trimmed = codexHome.trim();
+    if (!trimmed) {
+      showError('Codex home directory cannot be empty');
+      return;
+    }
+
+    try {
+      setSavingCodexHome(true);
+      await client.service('config').patch(null, {
+        codex: {
+          home: trimmed,
+        },
+      });
+      setInitialCodexHome(trimmed);
+      showSuccess('Codex home updated');
+    } catch (err) {
+      console.error('Failed to save Codex home:', err);
+      showError(err instanceof Error ? err.message : 'Failed to save Codex home');
+    } finally {
+      setSavingCodexHome(false);
     }
   };
 
@@ -242,15 +286,16 @@ export const AgenticToolsSection: React.FC<AgenticToolsSectionProps> = ({ client
         },
       });
 
-      message.success('OpenCode settings saved successfully');
+      showSuccess('OpenCode settings saved successfully');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to save OpenCode settings';
-      message.error(errorMsg);
+      showError(errorMsg);
       console.error('Failed to save OpenCode settings:', err);
     }
   };
 
-  const loading = loadingKeys || loadingOpencode;
+  const codexHomeChanged = codexHome !== initialCodexHome;
+  const loading = loadingKeys || loadingOpencode || loadingCodexConfig;
 
   if (loading) {
     return (
@@ -285,15 +330,53 @@ export const AgenticToolsSection: React.FC<AgenticToolsSectionProps> = ({ client
             key: 'codex',
             label: 'Codex',
             children: (
-              <ApiKeyTabContent
-                keyField="OPENAI_API_KEY"
-                keyStatus={keyStatus}
-                keysError={keysError}
-                savingKeys={savingKeys}
-                onSave={handleSaveKey}
-                onClear={handleClearKey}
-                onClearError={() => setKeysError(null)}
-              />
+              <div
+                style={{
+                  paddingTop: token.paddingMD,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: token.marginXL,
+                }}
+              >
+                <ApiKeyTabContent
+                  keyField="OPENAI_API_KEY"
+                  keyStatus={keyStatus}
+                  keysError={keysError}
+                  savingKeys={savingKeys}
+                  onSave={handleSaveKey}
+                  onClear={handleClearKey}
+                  onClearError={() => setKeysError(null)}
+                />
+
+                <Form layout="vertical">
+                  <Form.Item
+                    label="Codex home directory"
+                    extra="Agor sets CODEX_HOME before launching Codex. Point this at another directory to reuse an existing Codex configuration."
+                  >
+                    <Input
+                      value={codexHome}
+                      onChange={(event) => setCodexHome(event.target.value)}
+                      placeholder={defaultCodexHome}
+                    />
+                  </Form.Item>
+                  <Space>
+                    <Button
+                      type="primary"
+                      onClick={handleSaveCodexHome}
+                      disabled={!codexHomeChanged}
+                      loading={savingCodexHome}
+                    >
+                      Save Codex home
+                    </Button>
+                    <Button
+                      onClick={() => setCodexHome(defaultCodexHome)}
+                      disabled={codexHome === defaultCodexHome}
+                    >
+                      Reset to default
+                    </Button>
+                  </Space>
+                </Form>
+              </div>
             ),
           },
           {
@@ -367,24 +450,25 @@ export const AgenticToolsSection: React.FC<AgenticToolsSectionProps> = ({ client
                         label="OpenCode Server URL"
                         help="URL where OpenCode server is running (started with 'opencode serve')"
                       >
-                        <Input
-                          placeholder="http://localhost:4096"
-                          value={opencodeServerUrl}
-                          onChange={e => setOpencodeServerUrl(e.target.value)}
-                          addonAfter={
-                            <Tooltip title="Test connection to OpenCode server">
-                              <Button
-                                size="small"
-                                type="text"
-                                loading={opencodeTesting}
-                                icon={opencodeTesting ? <LoadingOutlined /> : undefined}
-                                onClick={handleTestOpenCodeConnection}
-                              >
-                                Test
-                              </Button>
-                            </Tooltip>
-                          }
-                        />
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Input
+                            placeholder="http://localhost:4096"
+                            value={opencodeServerUrl}
+                            onChange={(e) => setOpencodeServerUrl(e.target.value)}
+                            style={{ width: '100%' }}
+                          />
+                          <Tooltip title="Test connection to OpenCode server">
+                            <Button
+                              size="small"
+                              type="text"
+                              loading={opencodeTesting}
+                              icon={opencodeTesting ? <LoadingOutlined /> : undefined}
+                              onClick={handleTestOpenCodeConnection}
+                            >
+                              Test
+                            </Button>
+                          </Tooltip>
+                        </Space.Compact>
                       </Form.Item>
 
                       {/* Connection Status */}

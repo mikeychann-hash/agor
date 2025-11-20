@@ -20,12 +20,14 @@ interface UseTasksResult {
  * @param client - Agor client instance
  * @param sessionId - Session ID to fetch tasks for
  * @param user - Current user (for audio preferences)
+ * @param enabled - When false, skip fetching/subscribing (cached tasks remain)
  * @returns Tasks array, loading state, error, and refetch function
  */
 export function useTasks(
   client: AgorClient | null,
   sessionId: SessionID | null,
-  user: User | null = null
+  user: User | null = null,
+  enabled = true
 ): UseTasksResult {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
@@ -35,6 +37,10 @@ export function useTasks(
   const fetchTasks = useCallback(async () => {
     if (!client || !sessionId) {
       setTasks([]);
+      return;
+    }
+
+    if (!enabled) {
       return;
     }
 
@@ -59,11 +65,11 @@ export function useTasks(
     } finally {
       setLoading(false);
     }
-  }, [client, sessionId]);
+  }, [client, sessionId, enabled]);
 
   // Subscribe to real-time task updates
   useEffect(() => {
-    if (!client || !sessionId) return;
+    if (!client || !sessionId || !enabled) return;
 
     // Initial fetch
     fetchTasks();
@@ -74,25 +80,32 @@ export function useTasks(
     const handleTaskCreated = (task: Task) => {
       // Only add if it belongs to this session
       if (task.session_id === sessionId) {
-        setTasks(prev => {
+        setTasks((prev) => {
           // Check if task already exists (avoid duplicates)
-          if (prev.some(t => t.task_id === task.task_id)) {
+          if (prev.some((t) => t.task_id === task.task_id)) {
             return prev;
           }
-          // Insert in correct position based on created_at
-          const newTasks = [...prev, task];
-          return newTasks.sort(
-            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          );
+          // Tasks are created chronologically, so new tasks always go at the end
+          // No need to re-sort - DB already sorted initial load by created_at ascending
+          return [...prev, task];
         });
       }
     };
 
     const handleTaskPatched = (task: Task) => {
       if (task.session_id === sessionId) {
-        setTasks(prev => {
-          // Find the previous task state to detect transitions
-          const oldTask = prev.find(t => t.task_id === task.task_id);
+        setTasks((prev) => {
+          // Find index and previous task state
+          const index = prev.findIndex((t) => t.task_id === task.task_id);
+
+          // Task not found - shouldn't happen but handle gracefully
+          if (index === -1) return prev;
+
+          const oldTask = prev[index];
+
+          // Check if task actually changed (reference equality)
+          if (oldTask === task) return prev;
+
           const wasRunning = oldTask?.status === TaskStatus.RUNNING;
           const isNowDone =
             task.status === TaskStatus.COMPLETED || task.status === TaskStatus.FAILED;
@@ -102,14 +115,17 @@ export function useTasks(
             playTaskCompletionChime(task, user?.preferences?.audio);
           }
 
-          return prev.map(t => (t.task_id === task.task_id ? task : t));
+          // Create new array with updated task at same position
+          const newTasks = [...prev];
+          newTasks[index] = task;
+          return newTasks;
         });
       }
     };
 
     const handleTaskRemoved = (task: Task) => {
       if (task.session_id === sessionId) {
-        setTasks(prev => prev.filter(t => t.task_id !== task.task_id));
+        setTasks((prev) => prev.filter((t) => t.task_id !== task.task_id));
       }
     };
 
@@ -125,7 +141,7 @@ export function useTasks(
       tasksService.removeListener('updated', handleTaskPatched);
       tasksService.removeListener('removed', handleTaskRemoved);
     };
-  }, [client, sessionId, fetchTasks, user]);
+  }, [client, sessionId, fetchTasks, user, enabled]);
 
   return {
     tasks,

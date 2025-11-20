@@ -31,11 +31,19 @@ const TEST_DB_PATH = 'file:/tmp/agor-test.db';
 async function cleanup() {
   const db = createDatabase({ url: TEST_DB_PATH });
   const { sql } = await import('drizzle-orm');
+  const { isSQLiteDatabase } = await import('../database-wrapper');
 
-  await db.run(sql`DROP TABLE IF EXISTS tasks`);
-  await db.run(sql`DROP TABLE IF EXISTS sessions`);
-  await db.run(sql`DROP TABLE IF EXISTS boards`);
-  await db.run(sql`DROP TABLE IF EXISTS repos`);
+  if (isSQLiteDatabase(db)) {
+    await db.run(sql`DROP TABLE IF EXISTS tasks`);
+    await db.run(sql`DROP TABLE IF EXISTS sessions`);
+    await db.run(sql`DROP TABLE IF EXISTS boards`);
+    await db.run(sql`DROP TABLE IF EXISTS repos`);
+  } else {
+    await db.execute(sql`DROP TABLE IF EXISTS tasks`);
+    await db.execute(sql`DROP TABLE IF EXISTS sessions`);
+    await db.execute(sql`DROP TABLE IF EXISTS boards`);
+    await db.execute(sql`DROP TABLE IF EXISTS repos`);
+  }
 }
 
 async function testIdGeneration() {
@@ -229,6 +237,7 @@ async function testRepoRepository(db: ReturnType<typeof createDatabase>) {
   const repoData = await repo.create({
     slug: 'test-repo',
     name: 'Test Repository',
+    repo_type: 'remote',
     remote_url: 'https://github.com/test/test-repo.git',
     local_path: '/Users/test/.agor/repos/test-repo',
     default_branch: 'main',
