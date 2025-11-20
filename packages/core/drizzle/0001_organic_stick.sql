@@ -1,1 +1,0 @@
-ALTER TABLE `messages` ADD `parent_tool_use_id` text;

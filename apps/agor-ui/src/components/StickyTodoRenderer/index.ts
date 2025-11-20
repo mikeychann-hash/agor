@@ -1,1 +1,0 @@
-export { StickyTodoRenderer } from './StickyTodoRenderer';

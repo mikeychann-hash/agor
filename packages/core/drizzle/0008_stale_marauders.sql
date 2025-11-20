@@ -1,1 +1,0 @@
-ALTER TABLE `tasks` ADD `started_at` integer;

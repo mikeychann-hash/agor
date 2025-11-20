@@ -1,1 +1,0 @@
-export { TerminalModal } from './TerminalModal';

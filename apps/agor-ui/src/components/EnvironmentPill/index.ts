@@ -1,1 +1,0 @@
-export { EnvironmentPill } from './EnvironmentPill';
